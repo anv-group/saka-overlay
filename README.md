@@ -20,6 +20,57 @@ Aplikasi ini secara otomatis mendeteksi kotak awalan huruf giliran Anda di layar
 
 ---
 
+## 🚀 Cara Instalasi & Menjalankan
+
+### 📋 Prasyarat Sistem
+- **Sistem Operasi:** Windows 10 atau Windows 11 (64-bit).
+- **Python:** Versi **3.10** ke atas ([Download Python](https://www.python.org/downloads/)).
+  > [!IMPORTANT]
+  > Saat menginstal Python di Windows, **wajib centang opsi "Add python.exe to PATH"** di layar awal installer agar perintah python dapat dijalankan langsung dari mana saja.
+
+---
+
+### 📥 Langkah Instalasi & Menjalankan
+
+1. **Clone atau Unduh Repositori:**
+   ```powershell
+   git clone https://github.com/anv-group/sambung-kata-overlay.git
+   cd sambung-kata-overlay
+   ```
+   *(Atau klik tombol **Code** > **Download ZIP** di halaman GitHub lalu ekstrak foldernya).*
+
+2. **Jalankan Aplikasi:**
+
+   **Cara 1 — Paling Praktis (1-Klik):**
+   - Cukup klik ganda file **`run.bat`**.
+   - Skrip batch akan secara otomatis memeriksa Python, menginstal seluruh dependensi dari `requirements.txt` jika belum terpasang, dan langsung meluncurkan aplikasi GUI.
+
+   **Cara 2 — Lewat Terminal / PowerShell:**
+   ```powershell
+   # 1. (Opsional tapi disarankan) Buat virtual environment
+   python -m venv venv
+   .\venv\Scripts\activate
+
+   # 2. Instal dependensi
+   pip install -r requirements.txt
+
+   # 3. Jalankan aplikasi GUI
+   python main.py
+   ```
+
+   **Cara 3 — Mode CLI (Konsol / Terminal Saja):**
+   ```powershell
+   python main_cli.py
+   ```
+
+3. **Pengujian Akurasi (Opsional):**
+   Untuk memverifikasi keakuratan engine OCR terhadap 92 sampel gambar nyata Roblox:
+   ```powershell
+   python test_accuracy.py
+   ```
+
+---
+
 ## 🎯 Panduan Fitur & Tombol Aplikasi
 
 | Tombol / Fitur | Fungsi & Cara Pakai |
