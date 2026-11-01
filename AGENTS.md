@@ -1,0 +1,201 @@
+# 🤖 DOKUMENTASI PEMELIHARAAN PROJECT (AGENTS.md)
+> **Untuk AI Coding Agent & Developer Masa Depan**  
+> Dokumen ini adalah panduan komprehensif arsitektur, alur logika, aturan kritis, dan prosedur pengujian untuk memelihara dan mengembangkan proyek **Roblox Sambung Kata Assistant & Auto Solver**.
+
+---
+
+## 📌 1. Ringkasan Proyek & Target Game
+
+- **Nama Project:** Roblox Sambung Kata Assistant & Auto Solver
+- **Direktori Utama:** `C:\Users\Alden\Documents\VSCode\sambung-kata`
+- **Target Game:** Roblox Sambung Kata (`https://www.roblox.com/games/130342654546662/Sambung-Kata`)
+- **Mekanisme Game:**
+  1. Game menampilkan kotak putih bersudut melengkung (*rounded rectangle*) dengan font hitam berukuran besar di tengah layar.
+  2. Teks di dalam kotak tersebut adalah **AWALAN KATA (PREFIX)** berupa 1, 2, atau 3 huruf (contoh: `M`, `BU`, `EX`, `BUK`, `GOH`, dll.).
+  3. Pemain harus mengetikkan kata bahasa Indonesia yang **berawalan** huruf tersebut sebelum waktu habis.
+- **Strategi Utama Bot:**
+  - 💥 **Menyerang (Offensive):** Memprioritaskan kata valid yang berakhiran huruf mematikan, terutama **X** (contoh: `SEX`, `COMPLEX`, `PARADOX`, `DETOX`), diikuti huruf sulit lainnya (**Z, Q, V, J, W, F**) agar lawan berikutnya terjebak atau kehabisan kata.
+  - 🛡️ **Bertahan (Defensive):** Jika lawan menjebak dengan awalan sulit (seperti `X`, `IX`, `Q`, `EXO`), bot langsung menyediakan kata bertahan yang terdaftar di kamus resmi/Roblox.
+
+---
+
+## 🏗️ 2. Arsitektur File & Komponen
+
+```
+sambung-kata/
+├── app_gui.py           # GUI Utama (Tkinter Dark Theme, Always-on-top, Hotkey F2)
+├── main.py              # Entry point GUI (menjalankan app_gui.py)
+├── main_cli.py          # Entry point Terminal / Headless mode
+├── ocr_engine.py        # Core Vision & OCR: Dual-Engine (Template Matching + RapidOCR)
+├── solver.py            # Mesin pencari kata berawalan prefix dengan sistem tier prioritas
+├── region_selector.py   # DPI-aware transparent overlay untuk seleksi ROI di monitor 1920x1200
+├── config.py            # Utilitas load/save konfigurasi JSON
+├── config.json          # Menyimpan area ROI layar, interval scan, dan opsi auto-copy
+├── blacklist.txt        # Daftar kata yang di-blacklist (kata valid KBBI namun ditolak oleh server Roblox)
+├── kamus_lengkap.txt    # 147,870+ kata (Hasil Hybrid Merge: KBBI v6 + contek-sambungkata.web.id + istilah Roblox + jebakan X/Z)
+├── requirements.txt     # Dependensi Python
+├── run.bat              # Batch script 1-klik untuk user Windows
+├── test_accuracy.py     # Suite pengujian regresi otomatis (92 sampel benchmark)
+├── README.md            # Dokumentasi panduan untuk pengguna akhir
+├── AGENTS.md            # Dokumen ini (panduan teknis untuk AI Agent)
+└── sample/              # Direktori dataset sampel gambar nyata game
+    ├── 1/               # Sampel 1 huruf (A, F, G, I, K, L, M, N, O, P, Q, R, S, T, Y)
+    ├── 2/               # Sampel 2 huruf (AI, AL, AN, DA, EI, EX, IH, IK, JI, MI, NG, UH, UK)
+    ├── 3/               # Sampel 3 huruf (ANA, ANG, ARE, EXO, ING, KIR, NGI, NUM, ...)
+    ├── tidak_dikenali/  # Subfolder auto-save untuk deteksi berkeyakinan rendah (< 48%)
+    ├── tidak_dikenali_corrected/ # 11 sampel benchmark tantangan tinggi
+    └── kurang_tepat/    # Sampel salah deteksi yang disimpan manual oleh user (F2)
+```
+
+---
+
+## 🧠 3. Logika & Strategi OCR Engine (`ocr_engine.py`)
+
+Font Roblox Sambung Kata memiliki karakteristik khusus (garis tebal, spasi rapat, dan sering terjadi kemiripan glyph). Oleh karena itu digunakan **Dual-Engine Architecture**:
+
+```mermaid
+flowchart TD
+    Capture["Screenshot ROI Layar"] --> CropBox["Ekstraksi Kontur Kotak Putih (Threshold >= 180)"]
+    CropBox --> CheckWidth{"Lebar Kotak (bw) < 90px &<br/>Komponen <= 2 &<br/>Lebar Tiap Komponen < 48px?"}
+    CheckWidth -- "YA (1 atau 2 Huruf)" --> TemplateMatch["Template Matcher + Aturan Struktur"]
+    CheckWidth -- "TIDAK (3 Huruf / Huruf Menempel)" --> MultiPadRapid["RapidOCR Multi-Padding Adaptif [8, 0, 15, 20]"]
+    
+    TemplateMatch --> StructRules["Disambiguasi Bentuk:<br/>- D vs O vs U<br/>- G vs O<br/>- Q vs O<br/>- W vs U<br/>- I (Tebal <= 12px)"]
+    StructRules --> Result["Hasil Teks + Confidence"]
+    MultiPadRapid --> Result
+    
+    Result --> ConfCheck{"Keyakinan Rendah?"}
+    ConfCheck -- "YA (< 48% / 65%)" --> AutoSave["Auto-save ke sample/tidak_dikenali/"]
+    ConfCheck -- "TIDAK" --> ReturnText["Kembalikan Teks ke Solver & GUI"]
+```
+
+### A. Preprocessing Kotak Putih
+- Roblox menampilkan kotak putih dengan intensitas grayscale $> 180$.
+- `cv2.threshold(gray, 180, 255)` + `cv2.findContours` memotong persis kotak putih prompt, mengabaikan latar belakang arena Roblox.
+
+### B. Jalur 1 & 2 Huruf: Template Matching + Disambiguasi Struktur
+Digunakan untuk 1 atau 2 huruf karena WinOCR/Tesseract sering mengabaikan huruf tunggal:
+1. **Huruf `I`**: Di font Roblox, `I` adalah garis vertikal tunggal tipis. Jika lebar komponen $\le 12\text{ px}$, **pasti `I`**.
+2. **Huruf `D` vs `O` vs `U`**:
+   - `D`: 4 kolom kiri memiliki densitas pekat vertikal (`left_mean > 190`) DAN bagian atas tengah tertutup horizontal (`top_center > 120`).
+   - `U`: Bagian atas tengahnya berongga/terbuka (`top_center < 80`).
+3. **Huruf `G` vs `C` vs `O`**:
+   - `G` dan `C` sama-sama terbuka di kuadran kanan atas (`ur_mean < 110`), sedangkan `O` tertutup.
+   - Pembeda `G` vs `C`: `G` memiliki tiang/stem vertikal tebal di kuadran kanan bawah (`x > 70%`, `y: 45%-75%`, `r_stem > 90`). Sedangkan `C` sama sekali tidak memiliki tiang di sisi kanan (`r_stem < 60`).
+4. **Huruf `Q` vs `O`**:
+   - `Q`: Memiliki ekor diagonal di sudut kanan bawah (`tail.mean() > 115` atau tinggi $\ge 41\text{ px}$).
+5. **Huruf `W` vs `U`**:
+   - `W`: Memiliki dua lembah dan lebar fisik $\ge 32\text{ px}$.
+   - `U`: Hanya satu lembah dengan lebar fisik $\le 27\text{ px}$.
+
+### C. Jalur 3 Huruf: Template Matching Komponen Terpisah + Fallback RapidOCR
+1. **Komponen Terpisah (3 Huruf Bersih)**:
+   - Jika `len(comps) == 3` dan lebar masing-masing komponen $< 44\text{ px}$ (seperti `HOI`, `ANA`, `GOH`), template matching dijalankan terlebih dahulu. Jika rata-rata confidence $\ge 0.75$, hasil template matching langsung digunakan (menghindari kesalahan urutan pembacaan seperti `HOI` terbaca `1OH`).
+2. **Huruf Menempel / Ambigu (Contoh: `KAR`)**:  
+   Pada kata seperti `KAR`, ujung kaki `K` dan kaki diagonal `A` saling bersentuhan tipis. `connectedComponents` hanya mendeteksi 2 komponen (komponen pertama selebar 54px).  
+   *Aturan:* Jika `len(comps) < 3` namun `bw > 90` atau ada komponen dengan lebar $> 48\text{ px}$, sistem beralih ke RapidOCR.
+3. **Multi-Padding Adaptif (`[8, 0, 15, 20]`)**:  
+   Detektor DBNet pada RapidOCR sangat sensitif terhadap padding kotak:
+   - `pad = 8`: Padding ideal untuk kata normal (`GOH`, `GAL`, `HAI`). Mencegah huruf pertama terpotong.
+   - `pad = 0`: Direct unpadded crop. Sangat penting untuk kata seperti `OXO` di mana penambahan border luar justru mengacaukan deteksi.
+   - `pad = 15`: Margin menengah.
+   - `pad = 20`: Margin lebar untuk kata yang sangat padat/ringkas seperti `DIH` (lebar 95px).
+
+### D. Kalibrasi Ambang Batas Keyakinan (*Confidence Level*)
+- **Template Matcher (1–2 huruf):** Skor rata-rata 0.70 – 0.98. Jika skor $< 0.65$, tandai `is_low_confidence = True`.
+- **RapidOCR (3 huruf):** Rata-rata skor pengenalan kata adalah 0.50 – 0.75. Jangan gunakan ambang 0.65 (akan menimbulkan false positive warning pada kata benar seperti `AMA`, `ASA`, `HAI`). Ambang batas yang tepat adalah **`< 0.48`**.
+
+---
+
+## 🎯 4. Mekanisme Kalibrasi Manual (`sample/kurang_tepat`)
+
+Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca teks yang salah namun memiliki nilai *confidence* yang tinggi (sehingga tidak masuk ke `sample/tidak_dikenali`).
+
+- **Tombol UI & Hotkey:** Tombol `🚩 Deteksi Salah (F2)` dan shortcut keyboard `F2`.
+- **Alur Kerja:**
+  1. Tombol atau tombol `F2` ditekan: screenshot area langsung diambil dan disimpan seketika (< 5ms) ke folder `sample/kurang_tepat/` tanpa popup dialog (non-blocking).
+  2. Notifikasi toast halus muncul di bagian bawah layar.
+  3. Format nama file: `YYYYMMDD_HHMMSS_<TERDETEKSI>_<conf>pct.png`.
+  4. Pengguna dapat melanjutkan bermain tanpa kehilangan fokus keyboard atau waktu giliran game.
+  5. **Jendela Pendataan Koreksi (`📝 Koreksi (N)`):** Setelah selesai bermain, pengguna mengklik tombol `📝 Koreksi` untuk membuka antarmuka visual pendataan. Mendukung dua sumber sampel:
+     - `🚩 Kurang Tepat` (hasil tangkapan manual F2 di `sample/kurang_tepat/`)
+     - `⚠️ Tidak Dikenali` (hasil auto-save keyakinan rendah di `sample/tidak_dikenali/`)
+     Gambar ditampilkan diperbesar, pengguna mengetik awalan yang benar lalu menekan `Enter`. File otomatis di-*rename* menjadi `YYYYMMDD_HHMMSS_<TERDETEKSI>_seharusnya_<BENAR>_<conf>pct.png` dan berpindah ke sampel berikutnya secara berurutan.
+     - **Shortcut `Del` (Tanpa Konfirmasi):** Pengguna dapat menekan tombol `Del` (Delete) di keyboard atau mengklik `🗑️ Hapus Sampel (Del)` untuk menghapus file sampel seketika tanpa popup konfirmasi, mempercepat pembersihan sampel sampah/blank.
+
+---
+
+## ⚡ 5. Logika Solver & Kamus (`solver.py`)
+
+1. **Struktur Prioritas Kata**:
+   - **Mode Standar / Normal / Brutal**:
+     - **Tier 1 (💥 JEBAKAN X):** Kata yang berakhiran `X` (contoh: `SEX`, `COMPLEX`, `PARADOX`, `DETOX`, `BOX`, `FAX`, `BODREX`).
+     - **Tier 2 (⚡ JEBAKAN SULIT):** Kata yang berakhiran konsonan sulit: `Z`, `Q`, `V`, `J`, `W`, `F`.
+     - **Tier 3 (🛡️ NORMAL):** Kata standar KBBI, diurutkan dari yang terpendek agar cepat diketik.
+   - **🌿 Mode Santai (`mode_santai=True`):**
+     - Dikhususkan untuk room Roblox Mode Santai yang melarang huruf `X`, `Q`, dan `F`.
+     - Seluruh kata yang berakhiran `X, Q, F` atau mengandung huruf `X` / `Q` disaring ketat dan dibuang.
+     - Prioritas dialihkan ke konsonan sulit yang masih diizinkan: `Z`, `V`, `J`, `W`, disusul kata santai (*comfortable casual words*) dengan badge `🌿 SANTAI`.
+2. **Validasi Vokal**:
+   - Setiap kata wajib memiliki minimal 1 huruf vokal (`A, I, U, E, O`) untuk menyaring singkatan atau akronim aneh yang tidak diterima oleh kamus game Roblox.
+3. **Kamus Lengkap (`kamus_lengkap.txt`)**:
+   - Berisi **147,870+ kata** hasil penggabungan cerdas (*Hybrid Merge*):
+     - Seluruh database 108,344 kata dari `contek-sambungkata.web.id` (mencakup kata gaul Roblox seperti `aho`, `alo`, `wibu`, dan kata berimbuhan `dipandang`, `terbaiknya`, dll.).
+     - Seluruh kosakata baku KBBI VI dan istilah ilmiah/serapan.
+     - Kosakata serapan/game yang terbukti valid di Roblox (seperti `sex`, `roblox`, `noob`, `pro`).
+     - Pembersihan kata bahasa Inggris non-Indonesia murni yang ditolak game (contoh: `climax` dibersihkan karena Roblox memakai `klimaks`).
+4. **Sistem Blacklist Kata (`blacklist.txt`)**:
+   - Menyimpan daftar kata yang tidak boleh direkomendasikan bot karena ditolak atau disensor oleh Roblox (misal: `hoax`).
+   - Disimpan dalam file teks datar `blacklist.txt` (satu kata per baris, case-insensitive).
+   - Di-*load* ke dalam memori sebagai `set` Python untuk filtering instan $O(1)$ di `solver.py`.
+   - Dapat ditambah langsung dari GUI via tombol `❌` di setiap kartu kata dan dapat dibatalkan via tombol `↩️ Batalkan` (Undo).
+   - Jendela **`🚫 Blocklist`** di GUI memungkinkan pemain melihat semua kata terblokir, mencari kata tertentu, menghapus kata dari blocklist, menambah kata secara manual, serta membuka file `blacklist.txt` di Notepad.
+   - Saat dibuka, fokus kursor otomatis berada di kolom input kata. Menekan `Enter` seketika memblokir kata tersebut dan menutup popup (*Enter-to-close*).
+   - Menjaga integritas file utama `kamus_lengkap.txt` tanpa menghapus data aslinya.
+5. **Penambahan Kata Manual (`add_word`)**:
+   - Pemain dapat menambahkan kata baru via tombol `➕ Kamus` di GUI.
+   - Saat dibuka, fokus kursor otomatis berada di kolom input kata. Menekan `Enter` seketika memvalidasi, menyimpan ke kamus, dan menutup popup (*Enter-to-close*).
+   - Kata divalidasi (alfabet murni, min 2 huruf, wajib punya vokal `AIUEO`).
+   - Disimpan secara persisten ke `kamus_lengkap.txt` dan diindeks langsung ke memori solver ($O(1)$) tanpa perlu restart aplikasi.
+   - Jika kata sebelumnya berada di `blacklist.txt`, status blacklist otomatis dibatalkan/dipulihkan.
+
+---
+
+## 🧪 6. Prosedur Pengujian Regresi Wajib
+
+Setiap kali Anda (AI Agent) mengubah kode di `ocr_engine.py`, `solver.py`, atau pipeline image processing, **ANDA WAJIB MENJALANKAN SUITE PENGUJIAN REGRESI**:
+
+```powershell
+python test_accuracy.py
+```
+
+### Standar Kelulusan:
+- Total dataset uji: **92 sampel gambar nyata Roblox**
+- **Wajib 100% Pass (92/92 Lolos Bersih)** tanpa ada penurunan akurasi atau peringatan keyakinan rendah (*false low confidence*).
+
+---
+
+## ⚠️ 7. Jebakan Kritis Lingkungan Windows (Gotchas)
+
+1. **Penskalaan DPI Windows (1920x1200 / Scaling > 100%)**:
+   - Jika `ctypes.windll.shcore.SetProcessDpiAwareness(2)` tidak dipanggil sebelum membuat Tkinter window, koordinat `mss.grab` dan koordinat overlay Tkinter akan meleset hingga 25-50%, menyebabkan area kotak seleksi terpotong.
+2. **Encoding Konsol Windows (cp1252 vs UTF-8)**:
+   - Terminal Windows PowerShell default menggunakan encoding `cp1252`. Jangan melakukan `print()` karakter emoji tingkat tinggi di skrip CLI tanpa membungkus `sys.stdout.reconfigure(encoding='utf-8')`, atau program akan crash dengan `UnicodeEncodeError`.
+3. **Sintaks PowerShell String Quoting**:
+   - Saat menjalankan perintah python inline dari PowerShell via sub-process/CLI, hindari kutip ganda bersarang (`python -c "print(\"...\")"` sering pecah). Selalu buat skrip Python sementara atau gunakan file skrip terdedikasi.
+4. **Pustaka WinOCR**:
+   - WinOCR memanfaatkan engine Windows Media OCR bawaan. Sangat bagus untuk kalimat panjang, namun kamus internal Windows Media OCR secara sengaja memblokir pengenalan 1 huruf latin (menganggapnya sebagai noise). Jangan gunakan WinOCR untuk 1 huruf.
+
+---
+
+## 📋 8. Panduan Menangani Sampel Baru dari User
+
+Jika pengguna melaporkan gambar di `sample/kurang_tepat/` atau `sample/tidak_dikenali/`:
+1. Buka dan periksa gambar menggunakan skrip inspeksi OpenCV.
+2. Identifikasi apakah kegagalan terjadi di:
+   - **Bounding box detection:** Apakah threshold 180 menangkap kotak dengan pas?
+   - **Connected components:** Apakah huruf menempel seperti `KAR`?
+   - **Padding:** Cek apakah pengujian pada `pad = [8, 0, 15, 20]` menghasilkan teks yang benar.
+   - **Aturan bentuk:** Apakah perlu aturan baru untuk membedakan huruf tertentu?
+3. Terapkan perbaikan di `ocr_engine.py`.
+4. Jalankan `python test_accuracy.py` untuk memastikan seluruh 88+ sampel lama tetap lulus 100%.

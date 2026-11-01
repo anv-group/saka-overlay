@@ -1,0 +1,1875 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+from PIL import Image, ImageTk
+import threading
+import time
+import os
+import re
+import ctypes
+
+def enable_dpi_awareness():
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+enable_dpi_awareness()
+
+from solver import SambungKataSolver
+from ocr_engine import OCREngine
+from config import load_config, save_config
+from region_selector import RegionSelector
+
+class SambungKataApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Sambung Kata Assistant")
+        self.root.geometry("420x620")
+        self.root.minsize(360, 500)
+        self.root.attributes("-topmost", True)
+        self.root.configure(bg="#1e1e2e")
+
+        self.config = load_config()
+        self.solver = SambungKataSolver("kamus_lengkap.txt")
+        self.ocr = OCREngine(self.config)
+
+        self.is_scanning = False
+        self.scan_thread = None
+        self.last_detected_word = ""
+
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self._build_ui()
+
+    def _build_ui(self):
+        # Header Frame
+        header = tk.Frame(self.root, bg="#181825", padx=12, pady=10)
+        header.pack(fill=tk.X)
+
+        title_lbl = tk.Label(
+            header,
+            text="⚔️ Roblox Sambung Kata Bot",
+            font=("Segoe UI", 13, "bold"),
+            fg="#cdd6f4",
+            bg="#181825"
+        )
+        title_lbl.pack(side=tk.LEFT)
+
+        self.status_lbl = tk.Label(
+            header,
+            text="● SIAP",
+            font=("Segoe UI", 10, "bold"),
+            fg="#a6adc8",
+            bg="#181825"
+        )
+        self.status_lbl.pack(side=tk.RIGHT)
+
+        # Toolbar Frame
+        toolbar = tk.Frame(self.root, bg="#1e1e2e", padx=10, pady=8)
+        toolbar.pack(fill=tk.X)
+
+        self.btn_toggle = tk.Button(
+            toolbar,
+            text="▶️ Mulai Auto-Scan",
+            font=("Segoe UI", 10, "bold"),
+            bg="#a6e3a1",
+            fg="#11111b",
+            activebackground="#94e2d5",
+            command=self.toggle_scan,
+            relief=tk.FLAT,
+            padx=10,
+            pady=4
+        )
+        self.btn_toggle.pack(side=tk.LEFT, padx=3)
+
+        self.btn_roi = tk.Button(
+            toolbar,
+            text="🎯 Set Area",
+            font=("Segoe UI", 10),
+            bg="#89b4fa",
+            fg="#11111b",
+            activebackground="#b4befe",
+            command=self.open_region_selector,
+            relief=tk.FLAT,
+            padx=8,
+            pady=4
+        )
+        self.btn_roi.pack(side=tk.LEFT, padx=2)
+
+        self.btn_preview = tk.Button(
+            toolbar,
+            text="👁️ Tes",
+            font=("Segoe UI", 10),
+            bg="#b4befe",
+            fg="#11111b",
+            activebackground="#cdd6f4",
+            command=self.preview_selected_area,
+            relief=tk.FLAT,
+            padx=6,
+            pady=4
+        )
+        self.btn_preview.pack(side=tk.LEFT, padx=2)
+
+        self.btn_blocklist = tk.Button(
+            toolbar,
+            text="🚫 Blocklist",
+            font=("Segoe UI", 10),
+            bg="#f38ba8",
+            fg="#11111b",
+            activebackground="#eba0ac",
+            command=self.open_blacklist_window,
+            relief=tk.FLAT,
+            padx=6,
+            pady=4
+        )
+        self.btn_blocklist.pack(side=tk.LEFT, padx=2)
+
+        area = self.config.get("screen_area", {})
+        self.lbl_coords = tk.Label(
+            self.root,
+            text=f"Area: X={area.get('left',0)} Y={area.get('top',0)} | {area.get('width',0)}x{area.get('height',0)} px",
+            font=("Segoe UI", 8),
+            fg="#6c7086",
+            bg="#1e1e2e"
+        )
+        self.lbl_coords.pack(anchor=tk.W, padx=12, pady=1)
+
+        # Opsi Pengaturan Cepat
+        opts_frame = tk.Frame(self.root, bg="#1e1e2e")
+        opts_frame.pack(fill=tk.X, padx=12, pady=2)
+
+        self.auto_copy_var = tk.BooleanVar(value=self.config.get("auto_copy_top_word", False))
+        chk_copy = tk.Checkbutton(
+            opts_frame,
+            text="📋 Auto-copy sisa kata",
+            variable=self.auto_copy_var,
+            command=self.on_toggle_autocopy,
+            font=("Segoe UI", 9),
+            fg="#bac2de",
+            bg="#1e1e2e",
+            selectcolor="#313244",
+            activebackground="#1e1e2e",
+            activeforeground="#cdd6f4"
+        )
+        chk_copy.pack(side=tk.LEFT)
+
+        self.mode_santai_var = tk.BooleanVar(value=self.config.get("mode_santai", False))
+        self.chk_santai = tk.Checkbutton(
+            opts_frame,
+            text="🌿 Mode Santai (Tanpa X, Q, F)",
+            variable=self.mode_santai_var,
+            command=self.on_toggle_mode_santai,
+            font=("Segoe UI", 9, "bold"),
+            fg="#a6e3a1",
+            bg="#1e1e2e",
+            selectcolor="#313244",
+            activebackground="#1e1e2e",
+            activeforeground="#a6e3a1"
+        )
+        self.chk_santai.pack(side=tk.RIGHT)
+
+        # Baris Opsi Kecepatan Scan
+        speed_frame = tk.Frame(self.root, bg="#1e1e2e")
+        speed_frame.pack(fill=tk.X, padx=12, pady=(1, 3))
+
+        lbl_speed = tk.Label(
+            speed_frame,
+            text="Kecepatan Scan:",
+            font=("Segoe UI", 9),
+            fg="#a6adc8",
+            bg="#1e1e2e"
+        )
+        lbl_speed.pack(side=tk.LEFT)
+
+        self.speed_options = [
+            (0.10, "⚡ 100ms (Ekstrem)"),
+            (0.15, "⚡ 150ms (Kilat)"),
+            (0.25, "🚀 250ms (Cepat)"),
+            (0.50, "🐢 500ms (Santai)")
+        ]
+        curr_interval = self.config.get("scan_interval_sec", 0.15)
+        btn_text = "⚡ 150ms (Kilat)"
+        for sec, text in self.speed_options:
+            if abs(sec - curr_interval) < 0.03:
+                btn_text = text
+                break
+
+        self.btn_speed = tk.Button(
+            speed_frame,
+            text=btn_text,
+            font=("Segoe UI", 8, "bold"),
+            bg="#313244",
+            fg="#fab387",
+            activebackground="#45475a",
+            activeforeground="#f9e2af",
+            relief=tk.FLAT,
+            padx=8,
+            pady=1,
+            cursor="hand2",
+            command=self.cycle_scan_speed
+        )
+        self.btn_speed.pack(side=tk.LEFT, padx=6)
+
+        # Area Info Deteksi
+        info_frame = tk.LabelFrame(
+            self.root,
+            text=" Status Deteksi Layar ",
+            font=("Segoe UI", 9, "bold"),
+            fg="#89dceb",
+            bg="#1e1e2e",
+            padx=10,
+            pady=6
+        )
+        info_frame.pack(fill=tk.X, padx=10, pady=4)
+
+        self.lbl_detected = tk.Label(
+            info_frame,
+            text="Awalan Terdeteksi: -",
+            font=("Segoe UI", 10),
+            fg="#cdd6f4",
+            bg="#1e1e2e",
+            anchor=tk.W
+        )
+        self.lbl_detected.pack(fill=tk.X)
+
+        self.lbl_target = tk.Label(
+            info_frame,
+            text="Mencari Kata Awalan: -",
+            font=("Segoe UI", 11, "bold"),
+            fg="#f9e2af",
+            bg="#1e1e2e",
+            anchor=tk.W
+        )
+        self.lbl_target.pack(fill=tk.X)
+
+        # Baris Keyakinan & Tombol Lapor Deteksi Salah
+        conf_btn_row = tk.Frame(info_frame, bg="#1e1e2e")
+        conf_btn_row.pack(fill=tk.X, pady=(2, 0))
+
+        self.lbl_conf = tk.Label(
+            conf_btn_row,
+            text="Tingkat Keyakinan: -",
+            font=("Segoe UI", 9),
+            fg="#a6adc8",
+            bg="#1e1e2e",
+            anchor=tk.W
+        )
+        self.lbl_conf.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.report_hotkey = self.config.get("report_hotkey", "F2").upper()
+
+        self.btn_kurang_tepat = tk.Button(
+            conf_btn_row,
+            text=f"🚩 Deteksi Salah ({self.report_hotkey})",
+            font=("Segoe UI", 8, "bold"),
+            bg="#eba0ac",
+            fg="#11111b",
+            activebackground="#f38ba8",
+            relief=tk.FLAT,
+            padx=7,
+            pady=2,
+            command=self.on_report_kurang_tepat
+        )
+        self.btn_kurang_tepat.pack(side=tk.RIGHT, padx=2)
+
+        self.btn_koreksi = tk.Button(
+            conf_btn_row,
+            text="📝 Koreksi (0)",
+            font=("Segoe UI", 8, "bold"),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=2,
+            cursor="hand2",
+            command=self.open_koreksi_window
+        )
+        self.btn_koreksi.pack(side=tk.RIGHT, padx=2)
+
+        # Shortcut lokal Tkinter
+        self.root.bind(f"<{self.report_hotkey}>", lambda e: self.on_report_kurang_tepat())
+
+        # Global Hotkey menggunakan keyboard library agar bisa ditekan saat fokus di game Roblox
+        try:
+            import keyboard
+            keyboard.add_hotkey(self.report_hotkey.lower(), lambda: self.root.after(0, self.on_report_kurang_tepat))
+        except Exception as e:
+            print(f"[!] Warning: Gagal mendaftarkan global hotkey {self.report_hotkey}: {e}")
+
+        # Frame Peringatan Keyakinan Rendah & Alternatif
+        self.warning_frame = tk.Frame(info_frame, bg="#313244", padx=6, pady=4)
+        
+        self.lbl_warning_msg = tk.Label(
+            self.warning_frame,
+            text="⚠️ Keyakinan Rendah! Gambar disimpan ke sample/tidak_dikenali",
+            font=("Segoe UI", 8, "bold"),
+            fg="#fab387",
+            bg="#313244",
+            anchor=tk.W
+        )
+        self.lbl_warning_msg.pack(fill=tk.X)
+
+        self.alt_container = tk.Frame(self.warning_frame, bg="#313244")
+        self.alt_container.pack(fill=tk.X, pady=2)
+
+        # Toast / Clipboard Notifikasi & Undo Frame
+        self.toast_frame = tk.Frame(self.root, bg="#1e1e2e")
+        self.toast_frame.pack(fill=tk.X, padx=10, pady=1)
+
+        self.lbl_toast = tk.Label(
+            self.toast_frame,
+            text="",
+            font=("Segoe UI", 9, "italic"),
+            fg="#a6e3a1",
+            bg="#1e1e2e"
+        )
+        self.lbl_toast.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.btn_undo = tk.Button(
+            self.toast_frame,
+            text="↩️ Batalkan",
+            font=("Segoe UI", 8, "bold"),
+            bg="#fab387",
+            fg="#11111b",
+            activebackground="#f9e2af",
+            activeforeground="#11111b",
+            relief=tk.FLAT,
+            padx=6,
+            pady=0,
+            cursor="hand2"
+        )
+        self._toast_timer = None
+
+        # Daftar Rekomendasi Jawaban
+        is_santai_init = self.config.get("mode_santai", False)
+        recom_title = " Rekomendasi Kata (🌿 Mode Santai) " if is_santai_init else " Rekomendasi Kata (Klik untuk Salin) "
+        recom_fg = "#a6e3a1" if is_santai_init else "#f38ba8"
+        self.recom_frame = tk.LabelFrame(
+            self.root,
+            text=recom_title,
+            font=("Segoe UI", 9, "bold"),
+            fg=recom_fg,
+            bg="#1e1e2e",
+            padx=6,
+            pady=6
+        )
+        self.recom_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+
+        # Canvas & Scrollbar untuk daftar kata
+        self.canvas = tk.Canvas(self.recom_frame, bg="#181825", highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(self.recom_frame, orient=tk.VERTICAL, command=self.canvas.yview)
+        self.scrollable_frame = tk.Frame(self.canvas, bg="#181825")
+
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig(self.canvas_window, width=e.width))
+
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Manual Input Bar
+        manual_frame = tk.Frame(self.root, bg="#181825", padx=10, pady=8)
+        manual_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        lbl_manual = tk.Label(
+            manual_frame,
+            text="Ketik Manual:",
+            font=("Segoe UI", 9),
+            fg="#a6adc8",
+            bg="#181825"
+        )
+        lbl_manual.pack(side=tk.LEFT, padx=4)
+
+        self.entry_manual = tk.Entry(
+            manual_frame,
+            font=("Segoe UI", 10),
+            bg="#313244",
+            fg="#cdd6f4",
+            insertbackground="#cdd6f4",
+            relief=tk.FLAT
+        )
+        self.entry_manual.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+        self.entry_manual.bind("<Return>", self.on_manual_submit)
+
+        btn_cari = tk.Button(
+            manual_frame,
+            text="Cari",
+            font=("Segoe UI", 9, "bold"),
+            bg="#cba6f7",
+            fg="#11111b",
+            relief=tk.FLAT,
+            command=self.on_manual_submit,
+            padx=8
+        )
+        btn_cari.pack(side=tk.LEFT, padx=2)
+
+        btn_tambah_kamus = tk.Button(
+            manual_frame,
+            text="➕ Kamus",
+            font=("Segoe UI", 9, "bold"),
+            bg="#a6e3a1",
+            fg="#11111b",
+            activebackground="#94e2d5",
+            relief=tk.FLAT,
+            command=self.open_add_word_dialog,
+            padx=8
+        )
+        btn_tambah_kamus.pack(side=tk.LEFT, padx=2)
+        self._update_koreksi_badge()
+
+    def on_toggle_autocopy(self):
+        val = self.auto_copy_var.get()
+        self.config["auto_copy_top_word"] = val
+        save_config(self.config)
+        if val:
+            self.show_toast("📋 Auto-copy sisa kata AKTIF (Tinggal Ctrl+V di Roblox)")
+        else:
+            self.show_toast("Auto-copy sisa kata dinonaktifkan")
+
+    def on_toggle_mode_santai(self):
+        is_santai = self.mode_santai_var.get()
+        self.config["mode_santai"] = is_santai
+        save_config(self.config)
+
+        if is_santai:
+            self.show_toast("🌿 Mode Santai AKTIF (Huruf X, Q, F dikecualikan)")
+            self.recom_frame.config(text=" Rekomendasi Kata (🌿 Mode Santai) ", fg="#a6e3a1")
+        else:
+            self.show_toast("⚔️ Mode Normal AKTIF (Jebakan X/Z/Q/F aktif)")
+            self.recom_frame.config(text=" Rekomendasi Kata (Klik untuk Salin) ", fg="#f38ba8")
+
+        if self.last_detected_word:
+            self.update_results(self.last_detected_word)
+
+    def open_region_selector(self):
+        RegionSelector(self.on_region_selected)
+
+    def on_region_selected(self, area):
+        self.config["screen_area"] = area
+        save_config(self.config)
+        self.ocr.update_config(self.config)
+        self.lbl_coords.config(
+            text=f"Area: X={area.get('left',0)} Y={area.get('top',0)} | {area.get('width',0)}x{area.get('height',0)} px"
+        )
+        self.show_toast(f"Area disimpan: {area['width']}x{area['height']} px")
+        self.preview_selected_area()
+
+    def preview_selected_area(self):
+        """Menampilkan kotak merah transparan sekejap di layar untuk mengonfirmasi area deteksi"""
+        area = self.config.get("screen_area", {})
+        l, t = area.get("left", 0), area.get("top", 0)
+        w, h = area.get("width", 100), area.get("height", 50)
+
+        preview_win = tk.Toplevel()
+        preview_win.overrideredirect(True)
+        preview_win.geometry(f"{w}x{h}+{l}+{t}")
+        preview_win.attributes("-topmost", True)
+        preview_win.attributes("-alpha", 0.45)
+        preview_win.configure(bg="#f38ba8")
+
+        lbl = tk.Label(
+            preview_win,
+            text=f"AREA DETEKSI ({w}x{h})",
+            font=("Segoe UI", 9, "bold"),
+            fg="#11111b",
+            bg="#f38ba8"
+        )
+        lbl.pack(expand=True)
+
+        # Tutup otomatis setelah 1.2 detik
+        preview_win.after(1200, preview_win.destroy)
+
+    def toggle_scan(self):
+        if not self.is_scanning:
+            self.is_scanning = True
+            self.btn_toggle.config(text="⏸️ Hentikan Scan", bg="#f38ba8")
+            self.status_lbl.config(text="● MEMANTAU LAYAR", fg="#a6e3a1")
+            self.scan_thread = threading.Thread(target=self._scan_loop, daemon=True)
+            self.scan_thread.start()
+        else:
+            self.is_scanning = False
+            self.btn_toggle.config(text="▶️ Mulai Auto-Scan", bg="#a6e3a1")
+            self.status_lbl.config(text="● BERHENTI", fg="#f38ba8")
+
+    def cycle_scan_speed(self):
+        curr = self.config.get("scan_interval_sec", 0.15)
+        curr_idx = 1
+        for i, (sec, _) in enumerate(self.speed_options):
+            if abs(sec - curr) < 0.03:
+                curr_idx = i
+                break
+        next_idx = (curr_idx + 1) % len(self.speed_options)
+        next_sec, next_label = self.speed_options[next_idx]
+        self.config["scan_interval_sec"] = next_sec
+        save_config(self.config)
+        self.btn_speed.config(text=next_label)
+        self.show_toast(f"Kecepatan scan: {next_label}")
+
+    def _scan_loop(self):
+        while self.is_scanning:
+            interval = self.config.get("scan_interval_sec", 0.15)
+            try:
+                res_data = self.ocr.scan_once()
+                if res_data.get("saved_path"):
+                    self.root.after(0, self._update_koreksi_badge)
+                detected_text = res_data.get("text", "")
+                if detected_text and detected_text != self.last_detected_word:
+                    self.last_detected_word = detected_text
+                    self.root.after(0, self.update_results, res_data)
+            except Exception as e:
+                pass
+            time.sleep(interval)
+
+    def on_report_kurang_tepat(self):
+        """
+        Langsung mengambil screenshot seketika dan menyimpannya ke folder sample/kurang_tepat
+        tanpa dialog popup agar pemain tidak terganggu saat bermain cepat.
+        """
+        current_detected = self.last_detected_word
+        current_conf = 1.0
+        if isinstance(getattr(self, "last_res_data", None), dict):
+            current_conf = self.last_res_data.get("confidence", 1.0)
+        elif self.ocr.last_detection_result:
+            current_conf = self.ocr.last_detection_result.get("confidence", 1.0)
+
+        # Jika belum ada screenshot aktif di engine, ambil langsung dari screen_area
+        if self.ocr.last_captured_image is None:
+            area = self.config.get("screen_area")
+            if area:
+                self.ocr.last_captured_image = self.ocr.capture_screen_area(area)
+
+        if self.ocr.last_captured_image is None:
+            self.show_toast("⚠️ Belum ada area layar yang diatur! Set area dulu lewat '🎯 Set Area'")
+            return
+
+        saved_path = self.ocr.save_to_kurang_tepat(
+            detected_text=current_detected,
+            confidence=current_conf,
+            correct_text=None
+        )
+
+        if saved_path:
+            fn = os.path.basename(saved_path)
+            self._update_koreksi_badge()
+            self.show_toast(f"📸 Tersimpan ke kurang_tepat: '{fn}'")
+        else:
+            self.show_toast("⚠️ Gagal menyimpan screenshot deteksi salah")
+
+    def on_manual_submit(self, event=None):
+        text = self.entry_manual.get().strip()
+        if text:
+            self.update_results(text)
+
+    def update_results(self, res_data):
+        self.last_res_data = res_data
+        # res_data bisa berupa string (manual) atau dict (dari ocr)
+        if isinstance(res_data, str):
+            prefix = res_data
+            conf = 1.0
+            is_low = False
+            alts = []
+            saved_path = None
+        else:
+            prefix = res_data.get("text", "")
+            conf = res_data.get("confidence", 1.0)
+            is_low = res_data.get("is_low_confidence", False)
+            alts = res_data.get("alternatives", [])
+            saved_path = res_data.get("saved_path", None)
+
+        prefix_clean = "".join([c for c in prefix.upper() if c.isalpha()])
+        if not prefix_clean:
+            return
+
+        self.last_detected_word = prefix_clean
+
+        self.lbl_detected.config(text=f"Awalan Terdeteksi: '{prefix_clean}'")
+        self.lbl_target.config(text=f"Mencari Kata Awalan: '{prefix_clean}'")
+
+        # Tampilkan status keyakinan (Confidence Level)
+        pct = int(conf * 100)
+        if is_low:
+            self.lbl_conf.config(text=f"Akurasi: {pct}% [⚠️ Rendah]", fg="#fab387")
+            msg = "⚠️ Keyakinan Rendah!"
+            if saved_path:
+                msg += " Cuplikan disimpan ke sample/tidak_dikenali"
+            self.lbl_warning_msg.config(text=msg)
+
+            # Bersihkan dan buat tombol alternatif
+            for widget in self.alt_container.winfo_children():
+                widget.destroy()
+
+            if alts:
+                lbl_alt_title = tk.Label(
+                    self.alt_container,
+                    text="Mungkin maksudnya:",
+                    font=("Segoe UI", 8),
+                    fg="#cdd6f4",
+                    bg="#313244"
+                )
+                lbl_alt_title.pack(side=tk.LEFT, padx=3)
+
+                for alt_char in alts:
+                    btn_alt = tk.Button(
+                        self.alt_container,
+                        text=alt_char,
+                        font=("Segoe UI", 8, "bold"),
+                        bg="#f9e2af",
+                        fg="#11111b",
+                        relief=tk.FLAT,
+                        padx=5,
+                        pady=1,
+                        command=lambda ch=alt_char: self.update_results(ch)
+                    )
+                    btn_alt.pack(side=tk.LEFT, padx=2)
+
+            self.warning_frame.pack(fill=tk.X, pady=3)
+        else:
+            self.lbl_conf.config(text=f"Akurasi: {pct}% [✅ Tinggi]", fg="#a6e3a1")
+            self.warning_frame.pack_forget()
+
+        # Bersihkan list kata sebelumnya
+        for widget in self.scrollable_frame.winfo_children():
+            widget.destroy()
+
+        is_santai = self.mode_santai_var.get()
+        results = self.solver.cari_jawaban(prefix_clean, limit=14, mode_santai=is_santai)
+
+        if not results:
+            msg_not_found = f"Tidak ditemukan kata berawalan '{prefix_clean}' (Mode Santai: tanpa X/Q/F)." if is_santai else f"Tidak ditemukan kata di kamus berawalan '{prefix_clean}'."
+            lbl_empty = tk.Label(
+                self.scrollable_frame,
+                text=msg_not_found,
+                font=("Segoe UI", 9, "italic"),
+                fg="#f38ba8",
+                bg="#181825",
+                pady=10
+            )
+            lbl_empty.pack(fill=tk.X)
+            return
+
+        # Auto copy sisa kata pertama jika fitur aktif
+        if self.auto_copy_var.get() and results:
+            top_word = results[0]["kata"]
+            top_upper = top_word.upper()
+            sisa_top = top_upper[len(prefix_clean):] if top_upper.startswith(prefix_clean) else top_upper
+            self.copy_to_clipboard(sisa_top, full_word=top_word, show_toast_flag=False)
+            self.show_toast(f"Otomatis tersalin sisa kata: '{sisa_top}' (dari '{top_upper}')")
+
+        for item in results:
+            self._create_word_card(item, prefix_clean)
+
+    def _create_word_card(self, item, prefix=None):
+        kata = item["kata"]
+        tipe = item["tipe"]
+        deskripsi = item["deskripsi"]
+
+        prefix_upper = (prefix or "").upper()
+        kata_upper = kata.upper()
+        if prefix_upper and kata_upper.startswith(prefix_upper):
+            sisa = kata_upper[len(prefix_upper):]
+        else:
+            sisa = kata_upper
+
+        if tipe == "JEBAKAN_X":
+            card_bg = "#45475a"
+            badge_bg = "#f38ba8"
+            badge_fg = "#11111b"
+            badge_text = "💥 JEBAKAN X"
+        elif tipe == "JEBAKAN_SULIT":
+            card_bg = "#313244"
+            badge_bg = "#fab387"
+            badge_fg = "#11111b"
+            badge_text = f"⚡ {deskripsi}"
+        else:
+            card_bg = "#1e1e2e"
+            badge_bg = "#a6e3a1"
+            badge_fg = "#11111b"
+            badge_text = "🌿 SANTAI" if deskripsi == "Kata Santai" else "🛡️ NORMAL"
+
+        card = tk.Frame(self.scrollable_frame, bg=card_bg, padx=8, pady=5, relief=tk.FLAT)
+        card.pack(fill=tk.X, padx=4, pady=3)
+
+        # Klik card menyalin sisa kata (agar jika dipaste langsung pas di Roblox)
+        card.bind("<Button-1>", lambda e, s=sisa, w=kata: self.copy_to_clipboard(s, full_word=w))
+
+        # Tampilkan kata penuh (seperti SEX, BUKU, COMPLEX)
+        lbl_kata = tk.Label(
+            card,
+            text=kata_upper,
+            font=("Segoe UI", 11, "bold"),
+            fg="#cdd6f4",
+            bg=card_bg
+        )
+        lbl_kata.pack(side=tk.LEFT, padx=4)
+        lbl_kata.bind("<Button-1>", lambda e, s=sisa, w=kata: self.copy_to_clipboard(s, full_word=w))
+
+        # Tombol Blacklist ❌ di paling kanan
+        btn_del = tk.Button(
+            card,
+            text="❌",
+            font=("Segoe UI", 8),
+            bg=card_bg,
+            fg="#f38ba8",
+            activebackground="#45475a",
+            activeforeground="#f38ba8",
+            relief=tk.FLAT,
+            bd=0,
+            padx=4,
+            pady=0,
+            cursor="hand2",
+            command=lambda k=kata: self.on_blacklist_word(k)
+        )
+        btn_del.pack(side=tk.RIGHT, padx=(2, 0))
+
+        # Badge tipe di sisi kanan
+        lbl_badge = tk.Label(
+            card,
+            text=badge_text,
+            font=("Segoe UI", 8, "bold"),
+            fg=badge_fg,
+            bg=badge_bg,
+            padx=6,
+            pady=1
+        )
+        lbl_badge.pack(side=tk.RIGHT, padx=4)
+        lbl_badge.bind("<Button-1>", lambda e, s=sisa, w=kata: self.copy_to_clipboard(s, full_word=w))
+
+    def on_blacklist_word(self, kata):
+        """Memasukkan kata ke blacklist dan merefresh rekomendasi"""
+        self.solver.blacklist_word(kata)
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+        self._bl_refresh_list()
+        self.show_toast(
+            f"🚫 '{kata.upper()}' masuk blacklist",
+            undo_callback=lambda k=kata: self.on_undo_blacklist(k)
+        )
+
+    def on_undo_blacklist(self, kata):
+        """Membatalkan blacklist kata (Undo)"""
+        self.solver.unblacklist_word(kata)
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+        self._bl_refresh_list()
+        self.show_toast(f"✅ '{kata.upper()}' dipulihkan ke kamus")
+
+    def open_blacklist_window(self):
+        """Membuka dialog popup untuk memeriksa dan mengelola daftar kata di blocklist"""
+        if hasattr(self, "blacklist_win") and self.blacklist_win and self.blacklist_win.winfo_exists():
+            self.blacklist_win.lift()
+            self.blacklist_win.focus_force()
+            if hasattr(self, "entry_bl_add") and self.entry_bl_add.winfo_exists():
+                self.entry_bl_add.focus_set()
+                self.entry_bl_add.select_range(0, tk.END)
+            return
+
+        self.blacklist_win = tk.Toplevel(self.root)
+        self.blacklist_win.title("🚫 Kelola Blocklist Kata")
+        self.blacklist_win.geometry("400x520")
+        self.blacklist_win.minsize(360, 440)
+        self.blacklist_win.attributes("-topmost", True)
+        self.blacklist_win.configure(bg="#1e1e2e")
+        self.blacklist_win.bind("<Escape>", lambda e: self.blacklist_win.destroy())
+
+        # Posisikan relatif terhadap window utama
+        try:
+            x = self.root.winfo_x() + 25
+            y = self.root.winfo_y() + 25
+            self.blacklist_win.geometry(f"400x520+{x}+{y}")
+        except Exception:
+            pass
+
+        # Header Frame
+        hdr = tk.Frame(self.blacklist_win, bg="#181825", padx=12, pady=10)
+        hdr.pack(fill=tk.X)
+
+        title_lbl = tk.Label(
+            hdr,
+            text="🚫 Daftar Blocklist Kata",
+            font=("Segoe UI", 12, "bold"),
+            fg="#f38ba8",
+            bg="#181825"
+        )
+        title_lbl.pack(side=tk.LEFT)
+
+        self.lbl_bl_count = tk.Label(
+            hdr,
+            text="0 kata",
+            font=("Segoe UI", 10, "bold"),
+            fg="#a6adc8",
+            bg="#181825"
+        )
+        self.lbl_bl_count.pack(side=tk.RIGHT)
+
+        sub_lbl = tk.Label(
+            self.blacklist_win,
+            text="Kata di bawah ditolak oleh Roblox dan tidak akan disarankan bot.",
+            font=("Segoe UI", 8),
+            fg="#6c7086",
+            bg="#1e1e2e",
+            padx=12,
+            pady=4
+        )
+        sub_lbl.pack(anchor=tk.W)
+
+        # Bar Tambah Kata Baru
+        add_frame = tk.Frame(self.blacklist_win, bg="#1e1e2e", padx=12, pady=4)
+        add_frame.pack(fill=tk.X)
+
+        lbl_tambah = tk.Label(
+            add_frame,
+            text="Tambah Kata:",
+            font=("Segoe UI", 9, "bold"),
+            fg="#cdd6f4",
+            bg="#1e1e2e"
+        )
+        lbl_tambah.pack(side=tk.LEFT, padx=(0, 4))
+
+        self.entry_bl_add = tk.Entry(
+            add_frame,
+            font=("Segoe UI", 9),
+            bg="#313244",
+            fg="#cdd6f4",
+            insertbackground="#cdd6f4",
+            relief=tk.FLAT
+        )
+        self.entry_bl_add.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+
+        btn_add = tk.Button(
+            add_frame,
+            text="➕ Blokir",
+            font=("Segoe UI", 9, "bold"),
+            bg="#f38ba8",
+            fg="#11111b",
+            activebackground="#eba0ac",
+            relief=tk.FLAT,
+            padx=8,
+            pady=2,
+            command=self._bl_add_word
+        )
+        btn_add.pack(side=tk.RIGHT)
+        self.entry_bl_add.bind("<Return>", lambda e: self._bl_add_word())
+
+        # Search / Filter Bar
+        search_frame = tk.Frame(self.blacklist_win, bg="#1e1e2e", padx=12, pady=4)
+        search_frame.pack(fill=tk.X)
+
+        lbl_filter = tk.Label(
+            search_frame,
+            text="🔍 Filter:",
+            font=("Segoe UI", 9),
+            fg="#a6adc8",
+            bg="#1e1e2e"
+        )
+        lbl_filter.pack(side=tk.LEFT, padx=(0, 4))
+
+        self.entry_bl_filter = tk.Entry(
+            search_frame,
+            font=("Segoe UI", 9),
+            bg="#313244",
+            fg="#cdd6f4",
+            insertbackground="#cdd6f4",
+            relief=tk.FLAT
+        )
+        self.entry_bl_filter.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+        self.entry_bl_filter.bind("<KeyRelease>", lambda e: self._bl_refresh_list())
+
+        # Listbox Frame dengan Scrollbar
+        list_frame = tk.Frame(self.blacklist_win, bg="#1e1e2e", padx=12, pady=4)
+        list_frame.pack(fill=tk.BOTH, expand=True)
+
+        bl_scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
+        self.bl_listbox = tk.Listbox(
+            list_frame,
+            font=("Segoe UI", 10),
+            bg="#181825",
+            fg="#cdd6f4",
+            selectbackground="#f38ba8",
+            selectforeground="#11111b",
+            activestyle="none",
+            relief=tk.FLAT,
+            highlightthickness=0,
+            yscrollcommand=bl_scroll.set,
+            selectmode=tk.EXTENDED
+        )
+        bl_scroll.config(command=self.bl_listbox.yview)
+
+        self.bl_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        bl_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.bl_listbox.bind("<Double-Button-1>", lambda e: self._bl_remove_selected())
+
+        # Bottom Action Bar
+        act_frame = tk.Frame(self.blacklist_win, bg="#181825", padx=12, pady=8)
+        act_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        btn_remove = tk.Button(
+            act_frame,
+            text="🗑️ Hapus dari Blocklist",
+            font=("Segoe UI", 9, "bold"),
+            bg="#a6e3a1",
+            fg="#11111b",
+            activebackground="#94e2d5",
+            relief=tk.FLAT,
+            padx=10,
+            pady=3,
+            command=self._bl_remove_selected
+        )
+        btn_remove.pack(side=tk.LEFT, padx=2)
+
+        btn_open_file = tk.Button(
+            act_frame,
+            text="📂 Buka File (.txt)",
+            font=("Segoe UI", 9),
+            bg="#89b4fa",
+            fg="#11111b",
+            activebackground="#b4befe",
+            relief=tk.FLAT,
+            padx=8,
+            pady=3,
+            command=self._bl_open_txt
+        )
+        btn_open_file.pack(side=tk.LEFT, padx=4)
+
+        btn_reload = tk.Button(
+            act_frame,
+            text="🔄 Muat Ulang",
+            font=("Segoe UI", 9),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=8,
+            pady=3,
+            command=self._bl_reload
+        )
+        btn_reload.pack(side=tk.RIGHT, padx=2)
+
+        self._bl_refresh_list()
+
+        # Pre-fill jika di manual entry ada kata yang diketik
+        if hasattr(self, "entry_manual"):
+            manual_text = self.entry_manual.get().strip().upper()
+            if manual_text:
+                self.entry_bl_add.insert(0, manual_text)
+
+        # Langsung fokus ke input teks tambah kata
+        self.entry_bl_add.focus_set()
+        self.entry_bl_add.select_range(0, tk.END)
+
+    def _bl_refresh_list(self):
+        """Memperbarui isi Listbox di jendela Blocklist"""
+        if not hasattr(self, "bl_listbox") or not self.bl_listbox.winfo_exists():
+            return
+        
+        filter_query = self.entry_bl_filter.get().strip().lower() if hasattr(self, "entry_bl_filter") else ""
+        all_words = self.solver.get_blacklisted_words()
+        
+        self.bl_listbox.delete(0, tk.END)
+        count = 0
+        for w in all_words:
+            if not filter_query or filter_query in w:
+                self.bl_listbox.insert(tk.END, w.upper())
+                count += 1
+                
+        total = len(all_words)
+        if hasattr(self, "lbl_bl_count"):
+            if filter_query:
+                self.lbl_bl_count.config(text=f"{count}/{total} kata")
+            else:
+                self.lbl_bl_count.config(text=f"{total} kata")
+
+    def _bl_add_word(self):
+        """Menambahkan kata baru ke blocklist via dialog dan langsung menutup popup"""
+        if not hasattr(self, "entry_bl_add"):
+            return
+        raw = self.entry_bl_add.get().strip().lower()
+        word = "".join([c for c in raw if c.isalpha()])
+        if not word:
+            return
+        
+        self.solver.blacklist_word(word)
+        self.entry_bl_add.delete(0, tk.END)
+        self._bl_refresh_list()
+        
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+        self.show_toast(f"🚫 '{word.upper()}' ditambahkan ke blocklist")
+
+        # Tutup popup seketika setelah menambahkan kata
+        if hasattr(self, "blacklist_win") and self.blacklist_win and self.blacklist_win.winfo_exists():
+            self.blacklist_win.destroy()
+
+    def _bl_remove_selected(self):
+        """Menghapus kata-kata yang dipilih dari blocklist"""
+        if not hasattr(self, "bl_listbox"):
+            return
+        selected_indices = self.bl_listbox.curselection()
+        if not selected_indices:
+            self.show_toast("Pilih kata yang ingin dihapus terlebih dahulu")
+            return
+            
+        selected_words = [self.bl_listbox.get(i).lower() for i in selected_indices]
+        for w in selected_words:
+            self.solver.unblacklist_word(w)
+            
+        self._bl_refresh_list()
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+            
+        removed_str = ", ".join([w.upper() for w in selected_words])
+        self.show_toast(f"✅ Dipulihkan ke kamus: {removed_str}")
+
+    def _bl_open_txt(self):
+        """Membuka file blacklist.txt dengan text editor default sistem"""
+        bl_path = os.path.abspath(self.solver.blacklist_path)
+        try:
+            os.startfile(bl_path)
+        except Exception as e:
+            self.show_toast(f"Gagal membuka file: {e}")
+
+    def _bl_reload(self):
+        """Memuat ulang blacklist dari file disk"""
+        self.solver.load_blacklist()
+        self._bl_refresh_list()
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+        self.show_toast("🔄 Blocklist dimuat ulang dari disk")
+
+    def copy_to_clipboard(self, sisa_text, full_word=None, show_toast_flag=True):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(sisa_text.lower())
+        self.root.update()
+        if show_toast_flag:
+            info = f" (dari '{full_word.upper()}')" if full_word else ""
+            self.show_toast(f"Tersalin sisa kata: '{sisa_text.upper()}'{info} - Tinggal Ctrl+V di Roblox!")
+
+    def show_toast(self, message, undo_callback=None):
+        self.lbl_toast.config(text=message)
+        if undo_callback:
+            self.btn_undo.config(command=undo_callback)
+            self.btn_undo.pack(side=tk.RIGHT, padx=4)
+        else:
+            self.btn_undo.pack_forget()
+
+        if hasattr(self, "_toast_timer") and self._toast_timer:
+            try:
+                self.root.after_cancel(self._toast_timer)
+            except Exception:
+                pass
+
+        self._toast_timer = self.root.after(4000, self._clear_toast)
+
+    def _clear_toast(self):
+        self.lbl_toast.config(text="")
+        self.btn_undo.pack_forget()
+        self._toast_timer = None
+
+    def _get_uncorrected_counts(self):
+        """Menghitung jumlah sampel belum dikoreksi di kurang_tepat dan tidak_dikenali"""
+        p_kt = self.ocr.kurang_tepat_dir
+        count_kt = 0
+        if os.path.exists(p_kt):
+            try:
+                count_kt = len([f for f in os.listdir(p_kt) if f.endswith(".png") and "_seharusnya_" not in f])
+            except Exception:
+                pass
+
+        p_td = self.ocr.unknown_dir
+        count_td = 0
+        if os.path.exists(p_td):
+            try:
+                count_td = len([f for f in os.listdir(p_td) if f.endswith(".png") and "_seharusnya_" not in f and not os.path.isdir(os.path.join(p_td, f))])
+            except Exception:
+                pass
+        return count_kt, count_td
+
+    def _update_koreksi_badge(self):
+        """Memperbarui teks dan warna tombol koreksi berdasarkan jumlah sampel belum dikoreksi"""
+        count_kt, count_td = self._get_uncorrected_counts()
+        total = count_kt + count_td
+
+        if hasattr(self, "btn_koreksi") and self.btn_koreksi.winfo_exists():
+            if total > 0:
+                self.btn_koreksi.config(
+                    text=f"📝 Koreksi ({total})",
+                    bg="#fab387",
+                    fg="#11111b",
+                    activebackground="#f9e2af"
+                )
+            else:
+                self.btn_koreksi.config(
+                    text="📝 Koreksi (0)",
+                    bg="#313244",
+                    fg="#a6adc8",
+                    activebackground="#45475a"
+                )
+
+    def open_koreksi_window(self):
+        """Membuka jendela untuk mendata hasil deteksi yang tepat bagi sampel di kurang_tepat dan tidak_dikenali"""
+        if hasattr(self, "koreksi_win") and self.koreksi_win and self.koreksi_win.winfo_exists():
+            self.koreksi_win.lift()
+            self.koreksi_win.focus_force()
+            return
+
+        self.koreksi_win = tk.Toplevel(self.root)
+        self.koreksi_win.title("📝 Pendataan Koreksi Sampel")
+        self.koreksi_win.geometry("480x620")
+        self.koreksi_win.minsize(440, 540)
+        self.koreksi_win.attributes("-topmost", True)
+        self.koreksi_win.configure(bg="#1e1e2e")
+
+        try:
+            x = self.root.winfo_x() + 30
+            y = self.root.winfo_y() + 20
+            self.koreksi_win.geometry(f"480x620+{x}+{y}")
+        except Exception:
+            pass
+
+        self._koreksi_items = []
+        self._koreksi_current_idx = 0
+        self._koreksi_only_uncorrected = tk.BooleanVar(value=True)
+        self._koreksi_tk_img = None
+
+        # Header Frame
+        hdr = tk.Frame(self.koreksi_win, bg="#181825", padx=12, pady=10)
+        hdr.pack(fill=tk.X)
+
+        title_lbl = tk.Label(
+            hdr,
+            text="📝 Pendataan Koreksi Sampel",
+            font=("Segoe UI", 12, "bold"),
+            fg="#fab387",
+            bg="#181825"
+        )
+        title_lbl.pack(side=tk.LEFT)
+
+        btn_folder = tk.Button(
+            hdr,
+            text="📂 Buka Folder",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=2,
+            command=self._koreksi_open_folder
+        )
+        btn_folder.pack(side=tk.RIGHT)
+
+        # Sumber Selection Bar (Kurang Tepat vs Tidak Dikenali)
+        source_frame = tk.Frame(self.koreksi_win, bg="#24273a", padx=10, pady=6)
+        source_frame.pack(fill=tk.X)
+
+        lbl_sumber = tk.Label(
+            source_frame,
+            text="📁 Sumber:",
+            font=("Segoe UI", 9, "bold"),
+            fg="#cdd6f4",
+            bg="#24273a"
+        )
+        lbl_sumber.pack(side=tk.LEFT, padx=(0, 4))
+
+        count_kt, count_td = self._get_uncorrected_counts()
+        initial_source = "tidak_dikenali" if (count_kt == 0 and count_td > 0) else "kurang_tepat"
+        self._koreksi_source = tk.StringVar(value=initial_source)
+
+        self.rb_kt = tk.Radiobutton(
+            source_frame,
+            text=f"🚩 Kurang Tepat ({count_kt})",
+            variable=self._koreksi_source,
+            value="kurang_tepat",
+            font=("Segoe UI", 8, "bold"),
+            fg="#eba0ac",
+            bg="#24273a",
+            selectcolor="#313244",
+            activebackground="#24273a",
+            activeforeground="#eba0ac",
+            command=self._koreksi_reload_items
+        )
+        self.rb_kt.pack(side=tk.LEFT, padx=2)
+
+        self.rb_td = tk.Radiobutton(
+            source_frame,
+            text=f"⚠️ Tidak Dikenali ({count_td})",
+            variable=self._koreksi_source,
+            value="tidak_dikenali",
+            font=("Segoe UI", 8, "bold"),
+            fg="#fab387",
+            bg="#24273a",
+            selectcolor="#313244",
+            activebackground="#24273a",
+            activeforeground="#fab387",
+            command=self._koreksi_reload_items
+        )
+        self.rb_td.pack(side=tk.LEFT, padx=2)
+
+        self.rb_all = tk.Radiobutton(
+            source_frame,
+            text="Semua",
+            variable=self._koreksi_source,
+            value="all",
+            font=("Segoe UI", 8),
+            fg="#89b4fa",
+            bg="#24273a",
+            selectcolor="#313244",
+            activebackground="#24273a",
+            activeforeground="#89b4fa",
+            command=self._koreksi_reload_items
+        )
+        self.rb_all.pack(side=tk.LEFT, padx=2)
+
+        # Bar filter / opsi
+        filter_bar = tk.Frame(self.koreksi_win, bg="#1e1e2e", padx=12, pady=4)
+        filter_bar.pack(fill=tk.X)
+
+        chk_filter = tk.Checkbutton(
+            filter_bar,
+            text="Hanya tampilkan yang belum dikoreksi",
+            variable=self._koreksi_only_uncorrected,
+            font=("Segoe UI", 9),
+            fg="#bac2de",
+            bg="#1e1e2e",
+            selectcolor="#313244",
+            activebackground="#1e1e2e",
+            activeforeground="#cdd6f4",
+            command=self._koreksi_reload_items
+        )
+        chk_filter.pack(side=tk.LEFT)
+
+        self.lbl_koreksi_progress = tk.Label(
+            filter_bar,
+            text="- / -",
+            font=("Segoe UI", 9, "bold"),
+            fg="#89b4fa",
+            bg="#1e1e2e"
+        )
+        self.lbl_koreksi_progress.pack(side=tk.RIGHT)
+
+        # Image Display Container
+        img_container = tk.Frame(self.koreksi_win, bg="#11111b", padx=8, pady=8, bd=1, relief=tk.SOLID)
+        img_container.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
+
+        self.lbl_koreksi_img = tk.Label(
+            img_container,
+            text="Tidak ada gambar",
+            font=("Segoe UI", 10, "italic"),
+            fg="#6c7086",
+            bg="#11111b"
+        )
+        self.lbl_koreksi_img.pack(expand=True)
+
+        # Info Frame
+        self.info_box = tk.Frame(self.koreksi_win, bg="#181825", padx=12, pady=6)
+        self.info_box.pack(fill=tk.X, padx=12, pady=4)
+
+        self.lbl_koreksi_fname = tk.Label(
+            self.info_box,
+            text="File: -",
+            font=("Segoe UI", 8),
+            fg="#6c7086",
+            bg="#181825",
+            anchor=tk.W
+        )
+        self.lbl_koreksi_fname.pack(fill=tk.X)
+
+        self.lbl_koreksi_detail = tk.Label(
+            self.info_box,
+            text="Terdeteksi: - | Akurasi: -",
+            font=("Segoe UI", 9, "bold"),
+            fg="#cdd6f4",
+            bg="#181825",
+            anchor=tk.W
+        )
+        self.lbl_koreksi_detail.pack(fill=tk.X)
+
+        self.lbl_koreksi_status = tk.Label(
+            self.info_box,
+            text="Status: -",
+            font=("Segoe UI", 8),
+            fg="#fab387",
+            bg="#181825",
+            anchor=tk.W
+        )
+        self.lbl_koreksi_status.pack(fill=tk.X)
+
+        # Input Frame Koreksi
+        input_frame = tk.Frame(self.koreksi_win, bg="#313244", padx=12, pady=8)
+        input_frame.pack(fill=tk.X, padx=12, pady=6)
+
+        lbl_input_prompt = tk.Label(
+            input_frame,
+            text="✏️ Awalan yang Seharusnya (Benar):",
+            font=("Segoe UI", 10, "bold"),
+            fg="#fab387",
+            bg="#313244"
+        )
+        lbl_input_prompt.pack(anchor=tk.W)
+
+        action_row = tk.Frame(input_frame, bg="#313244")
+        action_row.pack(fill=tk.X, pady=(4, 0))
+
+        self.entry_koreksi_text = tk.Entry(
+            action_row,
+            font=("Segoe UI", 12, "bold"),
+            bg="#181825",
+            fg="#cdd6f4",
+            insertbackground="#cdd6f4",
+            relief=tk.FLAT,
+            justify=tk.CENTER
+        )
+        self.entry_koreksi_text.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6), ipady=3)
+        self.entry_koreksi_text.bind("<Return>", lambda e: self._koreksi_save_current())
+
+        btn_save = tk.Button(
+            action_row,
+            text="💾 Simpan (Enter)",
+            font=("Segoe UI", 9, "bold"),
+            bg="#a6e3a1",
+            fg="#11111b",
+            activebackground="#94e2d5",
+            relief=tk.FLAT,
+            padx=10,
+            pady=3,
+            cursor="hand2",
+            command=self._koreksi_save_current
+        )
+        btn_save.pack(side=tk.RIGHT)
+
+        # Navigation & Bottom Bar
+        nav_frame = tk.Frame(self.koreksi_win, bg="#1e1e2e", padx=12, pady=6)
+        nav_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        btn_prev = tk.Button(
+            nav_frame,
+            text="◀️ Sebelumnya",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=8,
+            pady=2,
+            command=self._koreksi_prev
+        )
+        btn_prev.pack(side=tk.LEFT)
+
+        btn_next = tk.Button(
+            nav_frame,
+            text="Berikutnya ▶️",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=8,
+            pady=2,
+            command=self._koreksi_next
+        )
+        btn_next.pack(side=tk.LEFT, padx=4)
+
+        btn_delete = tk.Button(
+            nav_frame,
+            text="🗑️ Hapus Sampel (Del)",
+            font=("Segoe UI", 8),
+            bg="#f38ba8",
+            fg="#11111b",
+            activebackground="#eba0ac",
+            relief=tk.FLAT,
+            padx=8,
+            pady=2,
+            command=self._koreksi_delete_current
+        )
+        btn_delete.pack(side=tk.RIGHT)
+
+        # Shortcut Del / Delete untuk hapus sampel seketika tanpa konfirmasi
+        self.koreksi_win.bind("<Delete>", lambda e: (self._koreksi_delete_current(), "break")[1])
+        self.entry_koreksi_text.bind("<Delete>", lambda e: (self._koreksi_delete_current(), "break")[1])
+
+        self._koreksi_reload_items()
+
+    def _parse_file_info(self, fpath, source_type):
+        fname = os.path.basename(fpath)
+        name, _ = os.path.splitext(fname)
+        parts = name.split("_")
+
+        parent_dir = os.path.basename(os.path.dirname(fpath))
+        is_in_subfolder = (parent_dir not in ("kurang_tepat", "tidak_dikenali"))
+
+        if len(parts) >= 4:
+            ts = f"{parts[0]}_{parts[1]}"
+            conf = parts[-1]
+            if "seharusnya" in parts:
+                idx = parts.index("seharusnya")
+                label = "_".join(parts[2:idx])
+                seh = "_".join(parts[idx+1:-1])
+                corr = True
+            elif is_in_subfolder:
+                label = "_".join(parts[2:-1])
+                seh = parent_dir.upper()
+                corr = True
+            else:
+                label = "_".join(parts[2:-1])
+                seh = ""
+                corr = False
+            return {
+                "ts": ts,
+                "label": label,
+                "seh": seh,
+                "conf": conf,
+                "is_corrected": corr,
+                "filename": fname,
+                "fpath": fpath,
+                "source": source_type
+            }
+        elif is_in_subfolder and len(parts) >= 3:
+            return {
+                "ts": f"{parts[0]}_{parts[1]}",
+                "label": parts[2],
+                "seh": parent_dir.upper(),
+                "conf": parts[-1] if len(parts) > 3 else "auto",
+                "is_corrected": True,
+                "filename": fname,
+                "fpath": fpath,
+                "source": source_type
+            }
+        return None
+
+    def _koreksi_reload_items(self):
+        count_kt, count_td = self._get_uncorrected_counts()
+        if hasattr(self, "rb_kt") and self.rb_kt.winfo_exists():
+            self.rb_kt.config(text=f"🚩 Kurang Tepat ({count_kt})")
+            self.rb_td.config(text=f"⚠️ Tidak Dikenali ({count_td})")
+
+        source = getattr(self, "_koreksi_source", None)
+        src_val = source.get() if source else "kurang_tepat"
+
+        parsed = []
+
+        # 1. Muat dari sample/kurang_tepat
+        if src_val in ("kurang_tepat", "all"):
+            folder_kt = self.ocr.kurang_tepat_dir
+            if os.path.exists(folder_kt):
+                for f in sorted(os.listdir(folder_kt)):
+                    if f.endswith(".png"):
+                        fpath = os.path.join(folder_kt, f)
+                        p = self._parse_file_info(fpath, source_type="kurang_tepat")
+                        if p:
+                            parsed.append(p)
+
+        # 2. Muat dari sample/tidak_dikenali
+        if src_val in ("tidak_dikenali", "all"):
+            folder_td = self.ocr.unknown_dir
+            if os.path.exists(folder_td):
+                for f in sorted(os.listdir(folder_td)):
+                    fpath = os.path.join(folder_td, f)
+                    if f.endswith(".png") and not os.path.isdir(fpath):
+                        p = self._parse_file_info(fpath, source_type="tidak_dikenali")
+                        if p:
+                            parsed.append(p)
+                if not self._koreksi_only_uncorrected.get():
+                    for d in sorted(os.listdir(folder_td)):
+                        sub = os.path.join(folder_td, d)
+                        if os.path.isdir(sub):
+                            for f in sorted(os.listdir(sub)):
+                                if f.endswith(".png"):
+                                    fpath = os.path.join(sub, f)
+                                    p = self._parse_file_info(fpath, source_type="tidak_dikenali")
+                                    if p:
+                                        parsed.append(p)
+
+        if self._koreksi_only_uncorrected.get():
+            self._koreksi_items = [p for p in parsed if not p["is_corrected"]]
+        else:
+            self._koreksi_items = parsed
+
+        if self._koreksi_current_idx >= len(self._koreksi_items):
+            self._koreksi_current_idx = max(0, len(self._koreksi_items) - 1)
+        self._koreksi_display_current()
+
+    def _koreksi_display_current(self):
+        if not hasattr(self, "lbl_koreksi_img") or not self.lbl_koreksi_img.winfo_exists():
+            return
+
+        if not self._koreksi_items:
+            src_name = "sumber ini"
+            if hasattr(self, "_koreksi_source"):
+                s = self._koreksi_source.get()
+                if s == "kurang_tepat":
+                    src_name = "Kurang Tepat (F2)"
+                elif s == "tidak_dikenali":
+                    src_name = "Tidak Dikenali (Auto)"
+                else:
+                    src_name = "semua folder"
+
+            self.lbl_koreksi_img.config(image="", text=f"🎉 Semua sampel di {src_name} sudah dikoreksi!\nTidak ada data yang perlu dikoreksi.", fg="#a6e3a1")
+            self._koreksi_tk_img = None
+            self.lbl_koreksi_fname.config(text="File: -")
+            self.lbl_koreksi_detail.config(text="Semua sampel telah memiliki label yang tepat.")
+            self.lbl_koreksi_status.config(text="Status: Selesai", fg="#a6e3a1")
+            self.lbl_koreksi_progress.config(text="0 / 0")
+            self.entry_koreksi_text.delete(0, tk.END)
+            self.entry_koreksi_text.config(state=tk.DISABLED)
+            return
+
+        self.entry_koreksi_text.config(state=tk.NORMAL)
+        item = self._koreksi_items[self._koreksi_current_idx]
+        fpath = item["fpath"]
+
+        # Muat dan tampilkan gambar diperbesar
+        try:
+            im = Image.open(fpath)
+            max_w, max_h = 360, 180
+            scale = min(max_w / im.width, max_h / im.height, 2.0)
+            target_w = max(1, int(im.width * scale))
+            target_h = max(1, int(im.height * scale))
+            im_resized = im.resize((target_w, target_h), Image.NEAREST)
+            self._koreksi_tk_img = ImageTk.PhotoImage(im_resized)
+            self.lbl_koreksi_img.config(image=self._koreksi_tk_img, text="")
+        except Exception as e:
+            self.lbl_koreksi_img.config(image="", text=f"Gagal memuat gambar: {e}", fg="#f38ba8")
+
+        src_badge = "🚩 [F2 Kurang Tepat]" if item["source"] == "kurang_tepat" else "⚠️ [Auto Tidak Dikenali]"
+        self.lbl_koreksi_fname.config(text=f"{src_badge} {item['filename']}")
+        self.lbl_koreksi_detail.config(text=f"Terdeteksi: '{item['label']}' | Keyakinan: {item['conf']}")
+
+        if item["is_corrected"]:
+            self.lbl_koreksi_status.config(text=f"✅ Sudah Dikoreksi: '{item['seh']}'", fg="#a6e3a1")
+        else:
+            self.lbl_koreksi_status.config(text="⚠️ Belum Dikoreksi", fg="#fab387")
+
+        total = len(self._koreksi_items)
+        self.lbl_koreksi_progress.config(text=f"Sampel {self._koreksi_current_idx + 1} dari {total}")
+
+        self.entry_koreksi_text.delete(0, tk.END)
+        if item["seh"]:
+            self.entry_koreksi_text.insert(0, item["seh"])
+        self.entry_koreksi_text.focus_set()
+        self.entry_koreksi_text.select_range(0, tk.END)
+
+    def _koreksi_save_current(self):
+        if not self._koreksi_items:
+            return
+        raw = self.entry_koreksi_text.get().strip().upper()
+        corr = "".join([c for c in raw if c.isalpha()])
+        if not corr:
+            self.show_toast("⚠️ Ketik awalan kata yang seharusnya terlebih dahulu")
+            return
+
+        item = self._koreksi_items[self._koreksi_current_idx]
+        old_path = item["fpath"]
+        folder = os.path.dirname(old_path)
+        new_filename = f"{item['ts']}_{item['label']}_seharusnya_{corr}_{item['conf']}.png"
+        new_path = os.path.join(folder, new_filename)
+
+        try:
+            if old_path != new_path:
+                if os.path.exists(new_path):
+                    os.remove(new_path)
+                os.rename(old_path, new_path)
+            self.show_toast(f"✅ Tersimpan: '{item['label']}' seharusnya '{corr}'")
+            self._update_koreksi_badge()
+            self._koreksi_reload_items()
+        except Exception as e:
+            self.show_toast(f"⚠️ Gagal menyimpan koreksi: {e}")
+
+    def _koreksi_delete_current(self):
+        if not self._koreksi_items:
+            return
+        item = self._koreksi_items[self._koreksi_current_idx]
+        fpath = item["fpath"]
+        try:
+            if os.path.exists(fpath):
+                os.remove(fpath)
+            self.show_toast(f"🗑️ File '{item['filename']}' dihapus")
+            self._update_koreksi_badge()
+            self._koreksi_reload_items()
+        except Exception as e:
+            self.show_toast(f"⚠️ Gagal menghapus file: {e}")
+
+    def _koreksi_prev(self):
+        if not self._koreksi_items:
+            return
+        self._koreksi_current_idx = (self._koreksi_current_idx - 1) % len(self._koreksi_items)
+        self._koreksi_display_current()
+
+    def _koreksi_next(self):
+        if not self._koreksi_items:
+            return
+        self._koreksi_current_idx = (self._koreksi_current_idx + 1) % len(self._koreksi_items)
+        self._koreksi_display_current()
+
+    def _koreksi_open_folder(self):
+        src = getattr(self, "_koreksi_source", None)
+        src_val = src.get() if src else "kurang_tepat"
+        folder = self.ocr.unknown_dir if src_val == "tidak_dikenali" else self.ocr.kurang_tepat_dir
+        try:
+            os.startfile(folder)
+        except Exception as e:
+            self.show_toast(f"Gagal membuka folder: {e}")
+
+    def open_add_word_dialog(self):
+        """Membuka dialog popup untuk menambahkan kata baru ke kamus secara manual"""
+        if hasattr(self, "add_word_win") and self.add_word_win and self.add_word_win.winfo_exists():
+            self.add_word_win.lift()
+            self.add_word_win.focus_force()
+            if hasattr(self, "entry_new_word") and self.entry_new_word.winfo_exists():
+                self.entry_new_word.focus_set()
+                self.entry_new_word.select_range(0, tk.END)
+            return
+
+        self.add_word_win = tk.Toplevel(self.root)
+        self.add_word_win.title("➕ Tambah Kata ke Kamus")
+        self.add_word_win.geometry("420x440")
+        self.add_word_win.minsize(380, 400)
+        self.add_word_win.attributes("-topmost", True)
+        self.add_word_win.configure(bg="#1e1e2e")
+        self.add_word_win.bind("<Escape>", lambda e: self.add_word_win.destroy())
+
+        try:
+            x = self.root.winfo_x() + 30
+            y = self.root.winfo_y() + 40
+            self.add_word_win.geometry(f"420x440+{x}+{y}")
+        except Exception:
+            pass
+
+        # Header Frame
+        hdr = tk.Frame(self.add_word_win, bg="#181825", padx=14, pady=10)
+        hdr.pack(fill=tk.X)
+
+        title_lbl = tk.Label(
+            hdr,
+            text="📚 Tambah Kata Baru ke Kamus",
+            font=("Segoe UI", 12, "bold"),
+            fg="#a6e3a1",
+            bg="#181825"
+        )
+        title_lbl.pack(side=tk.LEFT)
+
+        self.lbl_dict_total = tk.Label(
+            hdr,
+            text=f"{len(self.solver.words):,} kata",
+            font=("Segoe UI", 9, "bold"),
+            fg="#a6adc8",
+            bg="#181825"
+        )
+        self.lbl_dict_total.pack(side=tk.RIGHT)
+
+        sub_lbl = tk.Label(
+            self.add_word_win,
+            text="Kosakata yang ditambahkan akan tersimpan ke kamus_lengkap.txt\ndan langsung siap digunakan oleh bot saat bermain.",
+            font=("Segoe UI", 8),
+            fg="#a6adc8",
+            bg="#1e1e2e",
+            padx=14,
+            pady=6,
+            justify=tk.LEFT
+        )
+        sub_lbl.pack(anchor=tk.W)
+
+        # Input Card Frame
+        input_card = tk.Frame(self.add_word_win, bg="#313244", padx=12, pady=10)
+        input_card.pack(fill=tk.X, padx=14, pady=6)
+
+        lbl_input_title = tk.Label(
+            input_card,
+            text="Ketik Kata Baru:",
+            font=("Segoe UI", 10, "bold"),
+            fg="#cdd6f4",
+            bg="#313244"
+        )
+        lbl_input_title.pack(anchor=tk.W)
+
+        self.entry_new_word = tk.Entry(
+            input_card,
+            font=("Segoe UI", 13, "bold"),
+            bg="#181825",
+            fg="#cdd6f4",
+            insertbackground="#cdd6f4",
+            relief=tk.FLAT,
+            justify=tk.CENTER
+        )
+        self.entry_new_word.pack(fill=tk.X, pady=(6, 8), ipady=4)
+        self.entry_new_word.bind("<KeyRelease>", self._on_new_word_keyrelease)
+        self.entry_new_word.bind("<Return>", lambda e: self._do_add_word())
+
+        # Live Info Box
+        self.live_info_frame = tk.Frame(input_card, bg="#1e1e2e", padx=8, pady=6)
+        self.live_info_frame.pack(fill=tk.X)
+
+        self.lbl_live_tier = tk.Label(
+            self.live_info_frame,
+            text="Tipe: -",
+            font=("Segoe UI", 9, "bold"),
+            fg="#a6adc8",
+            bg="#1e1e2e",
+            anchor=tk.W
+        )
+        self.lbl_live_tier.pack(fill=tk.X)
+
+        self.lbl_live_status = tk.Label(
+            self.live_info_frame,
+            text="Status: Masukkan kata minimal 2 huruf",
+            font=("Segoe UI", 8),
+            fg="#6c7086",
+            bg="#1e1e2e",
+            anchor=tk.W
+        )
+        self.lbl_live_status.pack(fill=tk.X)
+
+        # Tombol Tambah
+        btn_add = tk.Button(
+            self.add_word_win,
+            text="➕ Tambahkan ke Kamus (Enter)",
+            font=("Segoe UI", 10, "bold"),
+            bg="#a6e3a1",
+            fg="#11111b",
+            activebackground="#94e2d5",
+            relief=tk.FLAT,
+            padx=12,
+            pady=6,
+            cursor="hand2",
+            command=self._do_add_word
+        )
+        btn_add.pack(fill=tk.X, padx=14, pady=8)
+
+        # Status Hasil
+        self.lbl_add_feedback = tk.Label(
+            self.add_word_win,
+            text="",
+            font=("Segoe UI", 9),
+            fg="#a6e3a1",
+            bg="#1e1e2e",
+            wraplength=380
+        )
+        self.lbl_add_feedback.pack(fill=tk.X, padx=14, pady=2)
+
+        # Bottom Frame
+        bottom_frame = tk.Frame(self.add_word_win, bg="#181825", padx=14, pady=8)
+        bottom_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        btn_open_dict = tk.Button(
+            bottom_frame,
+            text="📂 Buka kamus_lengkap.txt",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#89b4fa",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=8,
+            pady=3,
+            command=self._open_dict_file
+        )
+        btn_open_dict.pack(side=tk.LEFT)
+
+        btn_close = tk.Button(
+            bottom_frame,
+            text="Tutup",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=10,
+            pady=3,
+            command=self.add_word_win.destroy
+        )
+        btn_close.pack(side=tk.RIGHT)
+
+        # Pre-fill jika di manual entry ada kata yang diketik
+        if hasattr(self, "entry_manual"):
+            manual_text = self.entry_manual.get().strip().upper()
+            if manual_text:
+                self.entry_new_word.insert(0, manual_text)
+
+        self._on_new_word_keyrelease()
+        self.entry_new_word.focus_set()
+        self.entry_new_word.select_range(0, tk.END)
+
+    def _on_new_word_keyrelease(self, event=None):
+        if not hasattr(self, "entry_new_word") or not self.entry_new_word.winfo_exists():
+            return
+        raw = self.entry_new_word.get().strip().lower()
+        word = "".join([c for c in raw if c.isalpha()])
+
+        if not word:
+            self.lbl_live_tier.config(text="Tipe: -", fg="#a6adc8")
+            self.lbl_live_status.config(text="Status: Masukkan kata minimal 2 huruf", fg="#6c7086")
+            return
+
+        last = word[-1]
+        vowels = set("aiueo")
+        has_vowel = any(v in word for v in vowels)
+
+        if last == "x":
+            tier_text = "💥 Tipe: JEBAKAN X (Akhiran X)"
+            tier_fg = "#f38ba8"
+        elif last in ("z", "q", "v", "j", "w", "f"):
+            tier_text = f"⚡ Tipe: JEBAKAN SULIT (Akhiran {last.upper()})"
+            tier_fg = "#fab387"
+        else:
+            tier_text = f"🛡️ Tipe: NORMAL / BERTAHAN (Akhiran {last.upper()})"
+            tier_fg = "#a6e3a1"
+
+        self.lbl_live_tier.config(text=tier_text, fg=tier_fg)
+
+        if len(word) < 2:
+            self.lbl_live_status.config(text="⚠️ Minimal 2 huruf", fg="#fab387")
+        elif not has_vowel:
+            self.lbl_live_status.config(text="⚠️ Wajib memiliki vokal (A, I, U, E, O)", fg="#f38ba8")
+        elif self.solver.has_word(word):
+            self.lbl_live_status.config(text=f"⚠️ Kata '{word.upper()}' sudah ada di kamus", fg="#fab387")
+        else:
+            self.lbl_live_status.config(text=f"✅ Siap ditambahkan ({len(word)} huruf, awalan '{word[:2].upper()}')", fg="#a6e3a1")
+
+    def _do_add_word(self):
+        if not hasattr(self, "entry_new_word"):
+            return
+        raw = self.entry_new_word.get().strip()
+        success, msg = self.solver.add_word(raw)
+
+        if success:
+            word_clean = "".join([c for c in raw if c.isalpha()]).upper()
+            self.lbl_add_feedback.config(text=f"✅ {msg}", fg="#a6e3a1")
+            self.lbl_dict_total.config(text=f"{len(self.solver.words):,} kata")
+            self.entry_new_word.delete(0, tk.END)
+            self._on_new_word_keyrelease()
+            self.show_toast(f"📚 Kata '{word_clean}' berhasil ditambahkan ke kamus!")
+            if hasattr(self, "last_detected_word") and self.last_detected_word:
+                self.update_results(self.last_detected_word)
+            # Tutup popup seketika setelah berhasil menambahkan kata
+            if hasattr(self, "add_word_win") and self.add_word_win and self.add_word_win.winfo_exists():
+                self.add_word_win.destroy()
+        else:
+            self.lbl_add_feedback.config(text=f"❌ {msg}", fg="#f38ba8")
+
+    def _open_dict_file(self):
+        dict_path = os.path.abspath(self.solver.dictionary_path)
+        try:
+            os.startfile(dict_path)
+        except Exception as e:
+            self.show_toast(f"Gagal membuka file: {e}")
+
+    def on_close(self):
+        try:
+            import keyboard
+            keyboard.unhook_all_hotkeys()
+        except Exception:
+            pass
+        self.is_scanning = False
+        self.root.destroy()
+
+def main():
+    root = tk.Tk()
+    app = SambungKataApp(root)
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()

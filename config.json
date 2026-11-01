@@ -1,0 +1,14 @@
+{
+    "screen_area": {
+        "left": 1076,
+        "top": 881,
+        "width": 159,
+        "height": 82
+    },
+    "scan_interval_sec": 0.1,
+    "auto_copy_top_word": false,
+    "mode_santai": false,
+    "report_hotkey": "F2",
+    "ocr_engine": "winocr",
+    "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
+}
