@@ -1406,7 +1406,8 @@ class SambungKataApp:
 
         # Muat gambar dan resize proporsional untuk ditampilkan (maks 500x320)
         try:
-            pil_img = Image.open(img_path)
+            with Image.open(img_path) as raw_img:
+                pil_img = raw_img.copy()
             orig_w, orig_h = pil_img.size
 
             # Jika full screenshot 1920x1200, lakukan crop fokus gameplay tengah agar teks terlihat jelas
@@ -1481,6 +1482,13 @@ class SambungKataApp:
             return
 
         img_path = self._classifier_items[self._classifier_current_idx]
+
+        # Validasi eksistensi file: jika file sudah tidak ada di disk, pop dan tampilkan berikutnya
+        if not os.path.exists(img_path):
+            self._classifier_items.pop(self._classifier_current_idx)
+            self._classifier_show_current()
+            return
+
         fn = os.path.basename(img_path)
         word = self.entry_class_word.get().strip().upper()
 
@@ -1489,15 +1497,20 @@ class SambungKataApp:
         )
         os.makedirs(dest_dir, exist_ok=True)
 
-        # Pindahkan file PNG
         dest_img_path = os.path.join(dest_dir, fn)
+        meta_path = os.path.splitext(img_path)[0] + ".json"
+        dest_meta_path = os.path.join(dest_dir, os.path.basename(meta_path))
+
         try:
             import shutil
-            shutil.move(img_path, dest_img_path)
+            # Gunakan copy2 + remove untuk kehandalan penuh di Windows
+            shutil.copy2(img_path, dest_img_path)
+            try:
+                os.remove(img_path)
+            except Exception:
+                pass
 
-            # Pindahkan metadata JSON jika ada dan tambahkan info labeled_text
-            meta_path = os.path.splitext(img_path)[0] + ".json"
-            dest_meta_path = os.path.join(dest_dir, os.path.basename(meta_path))
+            # Update / Simpan metadata JSON di folder tujuan
             meta_dict = {}
             if os.path.exists(meta_path):
                 try:
@@ -1505,18 +1518,23 @@ class SambungKataApp:
                         meta_dict = json.load(f)
                 except Exception:
                     pass
-            
+
             meta_dict["category"] = target_category
             meta_dict["labeled_text"] = word
-            with open(dest_meta_path, "w", encoding="utf-8") as f:
-                json.dump(meta_dict, f, indent=4)
-
-            if os.path.exists(meta_path) and meta_path != dest_meta_path:
-                try: os.remove(meta_path)
-                except Exception: pass
+            try:
+                with open(dest_meta_path, "w", encoding="utf-8") as f:
+                    json.dump(meta_dict, f, indent=4)
+                if os.path.exists(meta_path) and meta_path != dest_meta_path:
+                    try: os.remove(meta_path)
+                    except Exception: pass
+            except Exception:
+                pass
 
         except Exception as e:
             self.show_toast(f"Gagal memindahkan sampel: {e}")
+            if not os.path.exists(img_path):
+                self._classifier_items.pop(self._classifier_current_idx)
+                self._classifier_show_current()
             return
 
         # Catat kata ke file teks klasifikasi tersendiri di folder deteksi-gameplay/ (Terpisah dari auto_<>.txt)
