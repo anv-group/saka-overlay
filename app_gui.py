@@ -205,13 +205,13 @@ class SambungKataApp:
         lbl_speed.pack(side=tk.LEFT)
 
         self.speed_options = [
-            (0.10, "⚡ 100ms (Ekstrem)"),
-            (0.15, "⚡ 150ms (Kilat)"),
-            (0.25, "🚀 250ms (Cepat)"),
-            (0.50, "🐢 500ms (Santai)")
+            (0.04, "🔥 40ms (Ultra Instan)"),
+            (0.08, "⚡ 80ms (Kilat Turbo)"),
+            (0.15, "🚀 150ms (Cepat)"),
+            (0.30, "🐢 300ms (Santai)")
         ]
-        curr_interval = self.config.get("scan_interval_sec", 0.15)
-        btn_text = "⚡ 150ms (Kilat)"
+        curr_interval = self.config.get("scan_interval_sec", 0.08)
+        btn_text = "⚡ 80ms (Kilat Turbo)"
         for sec, text in self.speed_options:
             if abs(sec - curr_interval) < 0.03:
                 btn_text = text
@@ -395,6 +395,17 @@ class SambungKataApp:
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
+        # Widget Pool untuk kartu kata (menghindari create/destroy berat pada tiap scan)
+        self.word_card_pool = []
+        self.lbl_empty_results = tk.Label(
+            self.scrollable_frame,
+            text="",
+            font=("Segoe UI", 9, "italic"),
+            fg="#f38ba8",
+            bg="#181825",
+            pady=10
+        )
+
         # Manual Input Bar
         manual_frame = tk.Frame(self.root, bg="#181825", padx=10, pady=8)
         manual_frame.pack(fill=tk.X, side=tk.BOTTOM)
@@ -520,7 +531,7 @@ class SambungKataApp:
             self.status_lbl.config(text="● BERHENTI", fg="#f38ba8")
 
     def cycle_scan_speed(self):
-        curr = self.config.get("scan_interval_sec", 0.15)
+        curr = self.config.get("scan_interval_sec", 0.08)
         curr_idx = 1
         for i, (sec, _) in enumerate(self.speed_options):
             if abs(sec - curr) < 0.03:
@@ -535,7 +546,7 @@ class SambungKataApp:
 
     def _scan_loop(self):
         while self.is_scanning:
-            interval = self.config.get("scan_interval_sec", 0.15)
+            interval = self.config.get("scan_interval_sec", 0.08)
             try:
                 res_data = self.ocr.scan_once()
                 if res_data.get("saved_path"):
@@ -655,25 +666,18 @@ class SambungKataApp:
             self.lbl_conf.config(text=f"Akurasi: {pct}% [✅ Tinggi]", fg="#a6e3a1")
             self.warning_frame.pack_forget()
 
-        # Bersihkan list kata sebelumnya
-        for widget in self.scrollable_frame.winfo_children():
-            widget.destroy()
-
         is_santai = self.mode_santai_var.get()
         results = self.solver.cari_jawaban(prefix_clean, limit=14, mode_santai=is_santai)
 
         if not results:
+            for slot in self.word_card_pool:
+                slot["frame"].pack_forget()
             msg_not_found = f"Tidak ditemukan kata berawalan '{prefix_clean}' (Mode Santai: tanpa X/Q/F)." if is_santai else f"Tidak ditemukan kata di kamus berawalan '{prefix_clean}'."
-            lbl_empty = tk.Label(
-                self.scrollable_frame,
-                text=msg_not_found,
-                font=("Segoe UI", 9, "italic"),
-                fg="#f38ba8",
-                bg="#181825",
-                pady=10
-            )
-            lbl_empty.pack(fill=tk.X)
+            self.lbl_empty_results.config(text=msg_not_found)
+            self.lbl_empty_results.pack(fill=tk.X)
             return
+
+        self.lbl_empty_results.pack_forget()
 
         # Auto copy sisa kata pertama jika fitur aktif
         if self.auto_copy_var.get() and results:
@@ -683,15 +687,63 @@ class SambungKataApp:
             self.copy_to_clipboard(sisa_top, full_word=top_word, show_toast_flag=False)
             self.show_toast(f"Otomatis tersalin sisa kata: '{sisa_top}' (dari '{top_upper}')")
 
-        for item in results:
-            self._create_word_card(item, prefix_clean)
+        # Tampilkan kata menggunakan widget pool berkinerja tinggi (tanpa create/destroy berulang)
+        prefix_upper = prefix_clean.upper()
+        for idx, item in enumerate(results):
+            if idx >= len(self.word_card_pool):
+                self._alloc_card_slot()
+            self._update_card_slot(self.word_card_pool[idx], item, prefix_upper)
 
-    def _create_word_card(self, item, prefix=None):
+        # Sembunyikan slot kartu yang tidak terpakai
+        for idx in range(len(results), len(self.word_card_pool)):
+            self.word_card_pool[idx]["frame"].pack_forget()
+
+    def _alloc_card_slot(self):
+        card = tk.Frame(self.scrollable_frame, bg="#1e1e2e", padx=8, pady=5, relief=tk.FLAT)
+        lbl_kata = tk.Label(card, text="", font=("Segoe UI", 11, "bold"), fg="#cdd6f4", bg="#1e1e2e")
+        lbl_kata.pack(side=tk.LEFT, padx=4)
+
+        btn_del = tk.Button(
+            card,
+            text="❌",
+            font=("Segoe UI", 8),
+            bg="#1e1e2e",
+            fg="#f38ba8",
+            activebackground="#45475a",
+            activeforeground="#f38ba8",
+            relief=tk.FLAT,
+            bd=0,
+            padx=4,
+            pady=0,
+            cursor="hand2"
+        )
+        btn_del.pack(side=tk.RIGHT, padx=(2, 0))
+
+        lbl_badge = tk.Label(
+            card,
+            text="",
+            font=("Segoe UI", 8, "bold"),
+            fg="#11111b",
+            bg="#a6e3a1",
+            padx=6,
+            pady=1
+        )
+        lbl_badge.pack(side=tk.RIGHT, padx=4)
+
+        slot = {
+            "frame": card,
+            "lbl_kata": lbl_kata,
+            "btn_del": btn_del,
+            "lbl_badge": lbl_badge
+        }
+        self.word_card_pool.append(slot)
+        return slot
+
+    def _update_card_slot(self, slot, item, prefix_upper):
         kata = item["kata"]
         tipe = item["tipe"]
         deskripsi = item["deskripsi"]
 
-        prefix_upper = (prefix or "").upper()
         kata_upper = kata.upper()
         if prefix_upper and kata_upper.startswith(prefix_upper):
             sisa = kata_upper[len(prefix_upper):]
@@ -714,53 +766,22 @@ class SambungKataApp:
             badge_fg = "#11111b"
             badge_text = "🌿 SANTAI" if deskripsi == "Kata Santai" else "🛡️ NORMAL"
 
-        card = tk.Frame(self.scrollable_frame, bg=card_bg, padx=8, pady=5, relief=tk.FLAT)
+        card = slot["frame"]
+        lbl_kata = slot["lbl_kata"]
+        btn_del = slot["btn_del"]
+        lbl_badge = slot["lbl_badge"]
+
+        card.config(bg=card_bg)
+        lbl_kata.config(text=kata_upper, bg=card_bg)
+        lbl_badge.config(text=badge_text, bg=badge_bg, fg=badge_fg)
+        btn_del.config(bg=card_bg, command=lambda k=kata: self.on_blacklist_word(k))
+
+        handler = lambda e, s=sisa, w=kata: self.copy_to_clipboard(s, full_word=w)
+        card.bind("<Button-1>", handler)
+        lbl_kata.bind("<Button-1>", handler)
+        lbl_badge.bind("<Button-1>", handler)
+
         card.pack(fill=tk.X, padx=4, pady=3)
-
-        # Klik card menyalin sisa kata (agar jika dipaste langsung pas di Roblox)
-        card.bind("<Button-1>", lambda e, s=sisa, w=kata: self.copy_to_clipboard(s, full_word=w))
-
-        # Tampilkan kata penuh (seperti SEX, BUKU, COMPLEX)
-        lbl_kata = tk.Label(
-            card,
-            text=kata_upper,
-            font=("Segoe UI", 11, "bold"),
-            fg="#cdd6f4",
-            bg=card_bg
-        )
-        lbl_kata.pack(side=tk.LEFT, padx=4)
-        lbl_kata.bind("<Button-1>", lambda e, s=sisa, w=kata: self.copy_to_clipboard(s, full_word=w))
-
-        # Tombol Blacklist ❌ di paling kanan
-        btn_del = tk.Button(
-            card,
-            text="❌",
-            font=("Segoe UI", 8),
-            bg=card_bg,
-            fg="#f38ba8",
-            activebackground="#45475a",
-            activeforeground="#f38ba8",
-            relief=tk.FLAT,
-            bd=0,
-            padx=4,
-            pady=0,
-            cursor="hand2",
-            command=lambda k=kata: self.on_blacklist_word(k)
-        )
-        btn_del.pack(side=tk.RIGHT, padx=(2, 0))
-
-        # Badge tipe di sisi kanan
-        lbl_badge = tk.Label(
-            card,
-            text=badge_text,
-            font=("Segoe UI", 8, "bold"),
-            fg=badge_fg,
-            bg=badge_bg,
-            padx=6,
-            pady=1
-        )
-        lbl_badge.pack(side=tk.RIGHT, padx=4)
-        lbl_badge.bind("<Button-1>", lambda e, s=sisa, w=kata: self.copy_to_clipboard(s, full_word=w))
 
     def on_blacklist_word(self, kata):
         """Memasukkan kata ke blacklist dan merefresh rekomendasi"""

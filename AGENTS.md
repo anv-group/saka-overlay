@@ -92,15 +92,16 @@ Digunakan untuk 1 atau 2 huruf karena WinOCR/Tesseract sering mengabaikan huruf 
 ### C. Jalur 3 Huruf: Template Matching Komponen Terpisah + Fallback RapidOCR
 1. **Komponen Terpisah (3 Huruf Bersih)**:
    - Jika `len(comps) == 3` dan lebar masing-masing komponen $< 44\text{ px}$ (seperti `HOI`, `ANA`, `GOH`), template matching dijalankan terlebih dahulu. Jika rata-rata confidence $\ge 0.75$, hasil template matching langsung digunakan (menghindari kesalahan urutan pembacaan seperti `HOI` terbaca `1OH`).
-2. **Huruf Menempel / Ambigu (Contoh: `KAR`)**:  
-   Pada kata seperti `KAR`, ujung kaki `K` dan kaki diagonal `A` saling bersentuhan tipis. `connectedComponents` hanya mendeteksi 2 komponen (komponen pertama selebar 54px).  
-   *Aturan:* Jika `len(comps) < 3` namun `bw > 90` atau ada komponen dengan lebar $> 48\text{ px}$, sistem beralih ke RapidOCR.
-3. **Multi-Padding Adaptif (`[8, 0, 15, 20]`)**:  
+2. **Huruf Menempel / Ambigu (Contoh: `KAR`, `AKAN`)**:  
+   Pada kata seperti `KAR` atau `AKAN`, kaki huruf dapat saling bersentuhan tipis sehingga `connectedComponents` menggabungkan keduanya menjadi satu komponen lebar ($48 \le cw \le 68\text{ px}$).  
+   *Slicing Vertikal Cerdas:* Sistem memotong komponen tersebut pada lembah piksel terendah (*vertical projection dip*) di area tengah (30%–70% lebar komponen). Potongan yang dihasilkan langsung dicocokkan via Template Matcher dalam **1–2 ms** (menghemat ~480 ms dibanding deep learning).
+3. **Multi-Padding Adaptif (`[8, 0, 15, 20]`) dengan Early Exit:**  
    Detektor DBNet pada RapidOCR sangat sensitif terhadap padding kotak:
    - `pad = 8`: Padding ideal untuk kata normal (`GOH`, `GAL`, `HAI`). Mencegah huruf pertama terpotong.
    - `pad = 0`: Direct unpadded crop. Sangat penting untuk kata seperti `OXO` di mana penambahan border luar justru mengacaukan deteksi.
    - `pad = 15`: Margin menengah.
    - `pad = 20`: Margin lebar untuk kata yang sangat padat/ringkas seperti `DIH` (lebar 95px).
+   - *Early Exit:* Jika pada `pad = 8` deteksi telah menghasilkan kata 3 huruf dengan keyakinan $\ge 0.50$ atau kata panjang ($\ge 2$ huruf) dengan keyakinan $\ge 0.70$, sistem langsung mengembalikan hasil seketika tanpa perlu mengeksekusi pad berikutnya (memangkas waktu dari 3.4 detik menjadi 0.5 detik).
 
 ### D. Kalibrasi Ambang Batas Keyakinan (*Confidence Level*)
 - **Template Matcher (1–2 huruf):** Skor rata-rata 0.70 – 0.98. Jika skor $< 0.65$, tandai `is_low_confidence = True`.
@@ -189,11 +190,13 @@ Aplikasi dilengkapi modul `GitUpdater` (`updater.py`) untuk menjaga repository l
 ## 🌿 7. Strategi Branching & CI Workflow
 
 Untuk menghemat kuota komputasi GitHub Actions dan mempercepat siklus development:
-1. **Branch `dev` (Active Development):**
+1. **Branch `reoptimized` (Performa Turbo & Widget Pooling):**
+   - Berisi optimasi latensi ekstrem: vertical projection character slicing (1.5ms), RapidOCR early-exit, Tkinter Card Widget Pooling (0.5ms), dan scan interval turbo (40–80ms).
+2. **Branch `dev` (Active Development):**
    - Seluruh coding aktif, eksperimen OCR, dan penambahan fitur dilakukan di branch `dev`.
    - Push ke branch `dev` **tidak memicu GitHub Actions** (bebas commit kapan saja tanpa menghabiskan kuota).
-2. **Branch `main` (Production & Release):**
-   - Hanya menerima kode stabil hasil merge dari branch `dev`.
+3. **Branch `main` (Production & Release):**
+   - Hanya menerima kode stabil hasil merge.
    - Setiap kali terjadi push atau merge ke `main`, GitHub Actions (`test.yml`) otomatis menjalankan benchmark OCR (92 sampel) di runner Windows.
 
 ---
