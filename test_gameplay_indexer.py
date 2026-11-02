@@ -115,6 +115,24 @@ class TestGameplayIndexer(unittest.TestCase):
         self.assertEqual(wd1, "IMBAS")
         self.assertIn(("KATA_BENAR", "IMBAS"), [(e[0], e[1]) for e in self.events])
 
+    def test_kata_disensor_detection(self):
+        self.events.clear()
+        # Simulasikan kata yang sedang diketik
+        self.indexer.last_typing_word = "KATA_KASAR"
+
+        # Simulasikan frame kotak teks dengan teks sensor "######"
+        # Buat crop sintetis dengan kotak putih berisi teks '######'
+        import numpy as np
+        crop = np.ones((400, 440, 3), dtype=np.uint8) * 50
+        # Kotak putih di tengah
+        crop[10:110, 150:290] = 250
+        cv2.putText(crop, "######", (155, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
+
+        st, wd, act = self.indexer.process_frame(crop, is_full_frame=False)
+        self.assertEqual(st, "KATA_DISENSOR")
+        self.assertEqual(wd, "KATA_KASAR")
+        self.assertEqual(act, "AUTO_BLACKLISTED_CENSORED")
+
 
 if __name__ == '__main__':
     unittest.main()

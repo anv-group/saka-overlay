@@ -105,7 +105,8 @@ class GameplayIndexer:
                     t = line.get('text', '').strip()
                     if t:
                         lines.append(t)
-                return lines
+                if lines:
+                    return lines
             except Exception:
                 pass
 
@@ -250,11 +251,16 @@ class GameplayIndexer:
         raw_lines = []
         main_word = ""
         has_sudah_digunakan = False
+        is_censored = False
 
         if box_crop is not None:
             # Jalankan OCR HANYA di dalam potongan kotak kata yang ditemukan (100% bebas dari background)
             raw_lines = self.ocr_crop(box_crop)
             for line in raw_lines:
+                # Deteksi sensor Safe Chat Roblox (###### atau tanda pagar # berulang)
+                if line.count('#') >= 2 or '###' in line:
+                    is_censored = True
+                    break
                 clean = "".join(c for c in line if c.isalpha()).upper()
                 if 2 <= len(clean) <= 12 and not any(k in clean.lower() for k in ['sudah', 'guna', 'pakai', 'sud', 'buy', 'gift', 'cift']):
                     main_word = self.clean_gameplay_word(clean)
@@ -277,6 +283,11 @@ class GameplayIndexer:
         # Karakter Roblox HANYA menyala hijau jika kata benar, mengabaikan segala sisa warna merah di arena
         if is_char_green and self.last_typing_word:
             state = "KATA_BENAR"
+            main_word = self.last_typing_word
+            self.last_typing_word = None
+        # PRIORITAS 2: KATA_DISENSOR (Roblox menyensor kata menjadi ######)
+        elif is_censored and self.last_typing_word:
+            state = "KATA_DISENSOR"
             main_word = self.last_typing_word
             self.last_typing_word = None
         elif box_type == 'RED':
@@ -302,8 +313,8 @@ class GameplayIndexer:
 
         return state, main_word, details
 
-    def save_to_auto_blacklist(self, word):
-        """Menyimpan kata salah ke auto_blacklist.txt terisolasi"""
+    def save_to_auto_blacklist(self, word, reason="Ditolak Roblox"):
+        """Menyimpan kata salah atau disensor ke auto_blacklist.txt terisolasi"""
         w = word.strip().lower()
         if not w or len(w) < 2:
             return False
@@ -322,7 +333,7 @@ class GameplayIndexer:
 
         try:
             with open(self.auto_blacklist_path, "a", encoding="utf-8") as f:
-                f.write(f"{w}  # Ditolak Roblox {datetime_now_str()}\n")
+                f.write(f"{w}  # {reason} {datetime_now_str()}\n")
             return True
         except Exception:
             return False
@@ -430,8 +441,31 @@ class GameplayIndexer:
 
         action_taken = None
 
-        # 2. Aksi KATA_SALAH (Catat ke auto_blacklist.txt)
-        if state == "KATA_SALAH" and word and len(word) >= 2 and not is_same_recent_event:
+        # 2. Aksi KATA_DISENSOR (Disensor filter Roblox ###### -> Otomatis Blacklist)
+        if state == "KATA_DISENSOR" and word and len(word) >= 2 and not is_same_recent_event:
+            self.last_processed_word = word
+            self.last_processed_state = state
+            self.last_processed_time = now
+
+            self.save_to_auto_blacklist(word, reason="Disensor Roblox (######)")
+            if self.solver:
+                self.solver.blacklist_word(word)
+            action_taken = "AUTO_BLACKLISTED_CENSORED"
+
+            log_entry = {
+                "time": datetime_now_str(),
+                "state": "KATA_DISENSOR",
+                "word": word,
+                "action": action_taken,
+                "detail": "Disensor Safe Chat Roblox (######) -> otomatis diblokir"
+            }
+            self.history.append(log_entry)
+
+            if self.on_event_callback:
+                self.on_event_callback("KATA_DISENSOR", word, action_taken, log_entry)
+
+        # 3. Aksi KATA_SALAH (Catat ke auto_blacklist.txt)
+        elif state == "KATA_SALAH" and word and len(word) >= 2 and not is_same_recent_event:
             self.last_processed_word = word
             self.last_processed_state = state
             self.last_processed_time = now

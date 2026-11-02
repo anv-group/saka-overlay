@@ -42,3 +42,5 @@ unab
 unar
 under
 unux
+kontol
+kata_kasar

@@ -796,7 +796,9 @@ class SambungKataApp:
         self.root.after(0, self._handle_gameplay_event_ui, state, word, action, log_entry)
 
     def _handle_gameplay_event_ui(self, state, word, action, log_entry):
-        if action == "AUTO_BLACKLISTED":
+        if action == "AUTO_BLACKLISTED_CENSORED":
+            self.show_toast(f"⚠️ [Safe Chat] '{word}' disensor Roblox (######) -> Otomatis diblokir!")
+        elif action == "AUTO_BLACKLISTED":
             self.show_toast(f"🚫 [Auto-Detect] '{word}' ditolak game -> Dicatat di auto_blacklist.txt")
         elif action == "AUTO_LEARNED":
             self.show_toast(f"✨ [Auto-Detect] '{word}' valid di game -> Dicatat di auto_kata_baru.txt")
