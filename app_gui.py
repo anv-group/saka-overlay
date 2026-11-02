@@ -2378,12 +2378,12 @@ class SambungKataApp:
         # Label Header baris
         lbl_title = tk.Label(
             self.custom_cats_bar,
-            text="🏷️ Custom:",
-            font=("Segoe UI", 9, "bold"),
+            text="🏷️",
+            font=("Segoe UI", 9),
             fg="#cdd6f4",
             bg="#1e1e2e"
         )
-        lbl_title.pack(side=tk.LEFT, padx=(0, 6))
+        lbl_title.pack(side=tk.LEFT, padx=(0, 4))
 
         # Tombol Kelola '⚙️' di ujung kanan horizontal
         btn_manage = tk.Button(
