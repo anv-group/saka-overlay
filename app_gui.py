@@ -23,6 +23,7 @@ from ocr_engine import OCREngine
 from config import load_config, save_config
 from region_selector import RegionSelector
 from updater import GitUpdater
+from gameplay_indexer import GameplayIndexer
 
 class SambungKataApp:
     def __init__(self, root):
@@ -45,6 +46,11 @@ class SambungKataApp:
         )
         self.ocr = OCREngine(self.config)
         self.updater = GitUpdater()
+        self.gameplay_indexer = GameplayIndexer(
+            config=self.config,
+            solver=self.solver,
+            on_event_callback=self._on_gameplay_event
+        )
 
         self.is_scanning = False
         self.scan_thread = None
@@ -292,6 +298,55 @@ class SambungKataApp:
             bg="#1e1e2e"
         )
         self.lbl_dict_count.pack(side=tk.RIGHT)
+
+        # Baris Fitur Gameplay Indexing (Auto-Learn & Auto-Blacklist)
+        gameplay_frame = tk.Frame(self.root, bg="#1e1e2e")
+        gameplay_frame.pack(fill=tk.X, padx=12, pady=(1, 3))
+
+        self.gameplay_indexing_var = tk.BooleanVar(value=self.config.get("gameplay_indexing_enabled", True))
+        self.chk_gameplay = tk.Checkbutton(
+            gameplay_frame,
+            text="🎮 Auto-Index Game",
+            variable=self.gameplay_indexing_var,
+            command=self.on_toggle_gameplay_indexing,
+            font=("Segoe UI", 9, "bold"),
+            fg="#a6e3a1",
+            bg="#1e1e2e",
+            selectcolor="#313244",
+            activebackground="#1e1e2e",
+            activeforeground="#a6e3a1"
+        )
+        self.chk_gameplay.pack(side=tk.LEFT)
+
+        btn_game_roi = tk.Button(
+            gameplay_frame,
+            text="🎯 Area Game",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#89dceb",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=1,
+            cursor="hand2",
+            command=self.open_gameplay_region_selector
+        )
+        btn_game_roi.pack(side=tk.LEFT, padx=(6, 2))
+
+        btn_game_log = tk.Button(
+            gameplay_frame,
+            text="📋 Log",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=1,
+            cursor="hand2",
+            command=self.open_gameplay_history_window
+        )
+        btn_game_log.pack(side=tk.LEFT, padx=2)
 
         # Area Info Deteksi
         info_frame = tk.LabelFrame(
@@ -576,7 +631,7 @@ class SambungKataApp:
         self.show_toast(f"📚 Sumber: {sumber_str} ({total_words:,} kata)")
 
     def open_region_selector(self):
-        RegionSelector(self.on_region_selected)
+        RegionSelector(self.on_region_selected, title="KLIK & DRAG MOUSE UNTUK MEMILIH AREA AWALAN KATA (PREFIX)")
 
     def on_region_selected(self, area):
         self.config["screen_area"] = area
@@ -585,28 +640,56 @@ class SambungKataApp:
         self.lbl_coords.config(
             text=f"Area: X={area.get('left',0)} Y={area.get('top',0)} | {area.get('width',0)}x{area.get('height',0)} px"
         )
-        self.show_toast(f"Area disimpan: {area['width']}x{area['height']} px")
+        self.show_toast(f"Area awalan disimpan: {area['width']}x{area['height']} px")
         self.preview_selected_area()
 
-    def preview_selected_area(self):
-        """Menampilkan kotak merah transparan sekejap di layar untuk mengonfirmasi area deteksi"""
-        area = self.config.get("screen_area", {})
-        l, t = area.get("left", 0), area.get("top", 0)
-        w, h = area.get("width", 100), area.get("height", 50)
+    def open_gameplay_region_selector(self):
+        RegionSelector(
+            self.on_gameplay_region_selected,
+            title="KLIK & DRAG MOUSE UNTUK MEMILIH AREA GAMEPLAY (KOTAK KATA & KARAKTER)"
+        )
+
+    def on_gameplay_region_selected(self, area):
+        self.config["gameplay_area"] = area
+        save_config(self.config)
+        self.gameplay_indexer.update_config(self.config)
+        self.show_toast(f"Area gameplay disimpan: {area['width']}x{area['height']} px")
+        self.preview_selected_area(
+            area=area,
+            title=f"AREA GAMEPLAY ({area['width']}x{area['height']})",
+            bg_color="#a6e3a1"
+        )
+
+    def on_toggle_gameplay_indexing(self):
+        val = self.gameplay_indexing_var.get()
+        self.config["gameplay_indexing_enabled"] = val
+        save_config(self.config)
+        if val:
+            self.show_toast("🎮 Auto-Index Gameplay AKTIF (Auto Blacklist salah & Auto Learn benar)")
+        else:
+            self.show_toast("Auto-Index Gameplay dinonaktifkan")
+
+    def preview_selected_area(self, area=None, title=None, bg_color=None):
+        """Menampilkan kotak transparan sekejap di layar untuk mengonfirmasi area deteksi"""
+        target_area = area or self.config.get("screen_area", {})
+        l, t = target_area.get("left", 0), target_area.get("top", 0)
+        w, h = target_area.get("width", 100), target_area.get("height", 50)
+        bg = bg_color or "#f38ba8"
+        t_text = title or f"AREA AWALAN ({w}x{h})"
 
         preview_win = tk.Toplevel()
         preview_win.overrideredirect(True)
         preview_win.geometry(f"{w}x{h}+{l}+{t}")
         preview_win.attributes("-topmost", True)
         preview_win.attributes("-alpha", 0.45)
-        preview_win.configure(bg="#f38ba8")
+        preview_win.configure(bg=bg)
 
         lbl = tk.Label(
             preview_win,
-            text=f"AREA DETEKSI ({w}x{h})",
+            text=t_text,
             font=("Segoe UI", 9, "bold"),
             fg="#11111b",
-            bg="#f38ba8"
+            bg=bg
         )
         lbl.pack(expand=True)
 
@@ -640,9 +723,12 @@ class SambungKataApp:
         self.show_toast(f"Kecepatan scan: {next_label}")
 
     def _scan_loop(self):
+        last_gameplay_scan = 0
         while self.is_scanning:
             interval = self.config.get("scan_interval_sec", 0.08)
+            now = time.time()
             try:
+                # 1. Scan Awalan Huruf (Prefix Kotak Bawah)
                 res_data = self.ocr.scan_once()
                 if res_data.get("saved_path"):
                     self.root.after(0, self._update_koreksi_badge)
@@ -650,9 +736,209 @@ class SambungKataApp:
                 if detected_text and detected_text != self.last_detected_word:
                     self.last_detected_word = detected_text
                     self.root.after(0, self.update_results, res_data)
+
+                # 2. Scan Feedback Gameplay (setiap ~150ms)
+                if self.config.get("gameplay_indexing_enabled", True) and (now - last_gameplay_scan >= 0.15):
+                    last_gameplay_scan = now
+                    self.gameplay_indexer.scan_once()
+
             except Exception as e:
                 pass
             time.sleep(interval)
+
+    def _on_gameplay_event(self, state, word, action, log_entry):
+        """Callback dari background thread saat ada event gameplay"""
+        self.root.after(0, self._handle_gameplay_event_ui, state, word, action, log_entry)
+
+    def _handle_gameplay_event_ui(self, state, word, action, log_entry):
+        if action == "BLACKLISTED":
+            self.show_toast(f"🚫 [Auto-Blocklist] '{word}' ditolak game -> Diblokir!")
+            if hasattr(self, "last_detected_word") and self.last_detected_word:
+                self.update_results(self.last_detected_word)
+        elif action == "LEARNED_NEW_WORD":
+            self.show_toast(f"✨ [Auto-Learn] '{word}' valid di game -> Masuk kamus!")
+            if hasattr(self, "lbl_dict_count") and self.lbl_dict_count.winfo_exists():
+                self.lbl_dict_count.config(text=f"({len(self.solver.words):,} kata)")
+            if hasattr(self, "last_detected_word") and self.last_detected_word:
+                self.update_results(self.last_detected_word)
+
+        if hasattr(self, "gameplay_history_win") and self.gameplay_history_win and self.gameplay_history_win.winfo_exists():
+            self._refresh_gameplay_history_table()
+
+    def open_gameplay_history_window(self):
+        """Membuka dialog popup riwayat aktivitas indexing gameplay"""
+        if hasattr(self, "gameplay_history_win") and self.gameplay_history_win and self.gameplay_history_win.winfo_exists():
+            self.gameplay_history_win.lift()
+            self.gameplay_history_win.focus_force()
+            return
+
+        self.gameplay_history_win = tk.Toplevel(self.root)
+        self.gameplay_history_win.title("🎮 Riwayat Auto-Index Gameplay")
+        self.gameplay_history_win.geometry("520x460")
+        self.gameplay_history_win.minsize(460, 380)
+        self.gameplay_history_win.attributes("-topmost", True)
+        self.gameplay_history_win.configure(bg="#1e1e2e")
+        self.gameplay_history_win.bind("<Escape>", lambda e: self.gameplay_history_win.destroy())
+
+        try:
+            x = self.root.winfo_x() + 20
+            y = self.root.winfo_y() + 20
+            self.gameplay_history_win.geometry(f"520x460+{x}+{y}")
+        except Exception:
+            pass
+
+        # Header Frame
+        hdr = tk.Frame(self.gameplay_history_win, bg="#181825", padx=12, pady=10)
+        hdr.pack(fill=tk.X)
+
+        title_lbl = tk.Label(
+            hdr,
+            text="🎮 Riwayat Auto-Index Gameplay",
+            font=("Segoe UI", 12, "bold"),
+            fg="#a6e3a1",
+            bg="#181825"
+        )
+        title_lbl.pack(side=tk.LEFT)
+
+        # Options Frame
+        opts_box = tk.Frame(self.gameplay_history_win, bg="#1e1e2e", padx=12, pady=6)
+        opts_box.pack(fill=tk.X)
+
+        self.bl_inv_var = tk.BooleanVar(value=self.config.get("auto_blacklist_invalid", True))
+        def on_toggle_bl_inv():
+            self.config["auto_blacklist_invalid"] = self.bl_inv_var.get()
+            save_config(self.config)
+            self.gameplay_indexer.update_config(self.config)
+
+        chk_bl = tk.Checkbutton(
+            opts_box,
+            text="Auto-Blacklist kata ditolak",
+            variable=self.bl_inv_var,
+            command=on_toggle_bl_inv,
+            font=("Segoe UI", 9),
+            fg="#f38ba8",
+            bg="#1e1e2e",
+            selectcolor="#313244",
+            activebackground="#1e1e2e"
+        )
+        chk_bl.pack(side=tk.LEFT, padx=(0, 10))
+
+        self.lrn_val_var = tk.BooleanVar(value=self.config.get("auto_learn_valid", True))
+        def on_toggle_lrn_val():
+            self.config["auto_learn_valid"] = self.lrn_val_var.get()
+            save_config(self.config)
+            self.gameplay_indexer.update_config(self.config)
+
+        chk_lrn = tk.Checkbutton(
+            opts_box,
+            text="Auto-Learn kata valid baru",
+            variable=self.lrn_val_var,
+            command=on_toggle_lrn_val,
+            font=("Segoe UI", 9),
+            fg="#a6e3a1",
+            bg="#1e1e2e",
+            selectcolor="#313244",
+            activebackground="#1e1e2e"
+        )
+        chk_lrn.pack(side=tk.LEFT)
+
+        # Treeview Tabel Riwayat
+        tree_frame = tk.Frame(self.gameplay_history_win, bg="#1e1e2e", padx=12, pady=4)
+        tree_frame.pack(fill=tk.BOTH, expand=True)
+
+        cols = ("Waktu", "Status", "Kata", "Aksi", "Keterangan")
+        self.tree_history = ttk.Treeview(tree_frame, columns=cols, show="headings", height=10)
+        self.tree_history.heading("Waktu", text="Waktu")
+        self.tree_history.heading("Status", text="Status")
+        self.tree_history.heading("Kata", text="Kata")
+        self.tree_history.heading("Aksi", text="Aksi")
+        self.tree_history.heading("Keterangan", text="Keterangan")
+
+        self.tree_history.column("Waktu", width=65, anchor=tk.CENTER)
+        self.tree_history.column("Status", width=110, anchor=tk.CENTER)
+        self.tree_history.column("Kata", width=80, anchor=tk.CENTER)
+        self.tree_history.column("Aksi", width=110, anchor=tk.CENTER)
+        self.tree_history.column("Keterangan", width=140, anchor=tk.W)
+
+        tree_scroll = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree_history.yview)
+        self.tree_history.configure(yscrollcommand=tree_scroll.set)
+
+        self.tree_history.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Bottom Bar
+        bbar = tk.Frame(self.gameplay_history_win, bg="#181825", padx=12, pady=8)
+        bbar.pack(fill=tk.X)
+
+        btn_clear = tk.Button(
+            bbar,
+            text="🗑️ Bersihkan Riwayat",
+            font=("Segoe UI", 9),
+            bg="#45475a",
+            fg="#cdd6f4",
+            relief=tk.FLAT,
+            command=self._clear_gameplay_history
+        )
+        btn_clear.pack(side=tk.LEFT)
+
+        btn_close = tk.Button(
+            bbar,
+            text="Tutup",
+            font=("Segoe UI", 9),
+            bg="#313244",
+            fg="#cdd6f4",
+            relief=tk.FLAT,
+            command=self.gameplay_history_win.destroy
+        )
+        btn_close.pack(side=tk.RIGHT)
+
+        self._refresh_gameplay_history_table()
+
+    def _refresh_gameplay_history_table(self):
+        if not hasattr(self, "tree_history") or not self.tree_history.winfo_exists():
+            return
+        for row in self.tree_history.get_children():
+            self.tree_history.delete(row)
+
+        for entry in reversed(self.gameplay_indexer.history):
+            st_text = entry.get("state", "")
+            if st_text == "KATA_SALAH":
+                st_display = "❌ Ditolak Game"
+            elif st_text == "SUDAH_DIGUNAKAN":
+                st_display = "⚠️ Sudah Dipakai"
+            elif st_text == "KATA_BENAR":
+                st_display = "✅ Jawaban Benar"
+            else:
+                st_display = st_text
+
+            act_text = entry.get("action", "")
+            if act_text == "BLACKLISTED":
+                act_display = "🚫 Diblacklist"
+            elif act_text == "LEARNED_NEW_WORD":
+                act_display = "✨ Ditambah Kamus"
+            elif act_text == "KNOWN_WORD":
+                act_display = "Sudah Ada"
+            elif act_text == "ALREADY_BLACKLISTED":
+                act_display = "Sudah Diblokir"
+            else:
+                act_display = act_text or "-"
+
+            self.tree_history.insert(
+                "",
+                tk.END,
+                values=(
+                    entry.get("time", ""),
+                    st_display,
+                    entry.get("word", ""),
+                    act_display,
+                    entry.get("detail", "")
+                )
+            )
+
+    def _clear_gameplay_history(self):
+        self.gameplay_indexer.history.clear()
+        self._refresh_gameplay_history_table()
+        self.show_toast("Riwayat auto-index dibersihkan")
 
     def on_report_kurang_tepat(self):
         """

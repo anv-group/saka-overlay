@@ -27,6 +27,7 @@ sambung-kata/
 ├── main.py              # Entry point GUI (menjalankan app_gui.py)
 ├── main_cli.py          # Entry point Terminal / Headless mode
 ├── ocr_engine.py        # Core Vision & OCR: Dual-Engine (Template Matching + RapidOCR)
+├── gameplay_indexer.py  # Pemantau Gameplay & Auto-Indexer (Deteksi kata salah/sudah dipakai/benar)
 ├── updater.py           # Git Updater Otomatis (Prompt, Auto-update, Disabled, Commit log parser)
 ├── solver.py            # Mesin pencari kata berawalan prefix dengan sistem tier prioritas
 ├── region_selector.py   # DPI-aware transparent overlay untuk seleksi ROI di monitor 1920x1200
@@ -39,15 +40,21 @@ sambung-kata/
 ├── requirements.txt     # Dependensi Python
 ├── run.bat              # Batch script 1-klik untuk user Windows
 ├── test_accuracy.py     # Suite pengujian regresi otomatis (92 sampel benchmark)
+├── test_gameplay_indexer.py # Suite pengujian status gameplay sequence (benar, kata tidak ada, sudah dipakai)
 ├── README.md            # Dokumentasi panduan untuk pengguna akhir
 ├── AGENTS.md            # Dokumen ini (panduan teknis untuk AI Agent)
-└── sample/              # Direktori dataset sampel gambar nyata game
-    ├── 1/               # Sampel 1 huruf (A, F, G, I, K, L, M, N, O, P, Q, R, S, T, Y)
-    ├── 2/               # Sampel 2 huruf (AI, AL, AN, DA, EI, EX, IH, IK, JI, MI, NG, UH, UK)
-    ├── 3/               # Sampel 3 huruf (ANA, ANG, ARE, EXO, ING, KIR, NGI, NUM, ...)
-    ├── tidak_dikenali/  # Subfolder auto-save untuk deteksi berkeyakinan rendah (< 48%)
-    ├── tidak_dikenali_corrected/ # 11 sampel benchmark tantangan tinggi
-    └── kurang_tepat/    # Sampel salah deteksi yang disimpan manual oleh user (F2)
+├── sample/              # Direktori dataset sampel gambar nyata game
+│   ├── 1/               # Sampel 1 huruf (A, F, G, I, K, L, M, N, O, P, Q, R, S, T, Y)
+│   ├── 2/               # Sampel 2 huruf (AI, AL, AN, DA, EI, EX, IH, IK, JI, MI, NG, UH, UK)
+│   ├── 3/               # Sampel 3 huruf (ANA, ANG, ARE, EXO, ING, KIR, NGI, NUM, ...)
+│   ├── tidak_dikenali/  # Subfolder auto-save untuk deteksi berkeyakinan rendah (< 48%)
+│   ├── tidak_dikenali_corrected/ # 11 sampel benchmark tantangan tinggi
+│   └── kurang_tepat/    # Sampel salah deteksi yang disimpan manual oleh user (F2)
+└── deteksi-gameplay/    # Dataset sequence gameplay untuk pengujian status kata
+    ├── benar/           # Urutan frame kata diterima (kotak hilang + tubuh flash hijau)
+    ├── default/         # Full screenshot saat mengetik di kotak putih
+    ├── kata-tidak-ada/  # Urutan 16 frame kata ditolak Roblox (kotak merah tanpa subtext)
+    └── sudah-dipakai/   # Urutan 16 frame kata sudah terpakai (kotak merah + subtext "sudah digunakan")
 ```
 
 ---
@@ -169,6 +176,36 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
    - Mendukung pemilihan salah satu kamus atau penggabungan keduanya (147,886 kata unik).
    - Pengaturan tersimpan otomatis di `config.json` (`use_kbbi`, `use_contek`) dan peralihan kata terjadi seketika di memori solver (< 15 ms).
    - Validasi keamanan: Sistem secara otomatis mencegah kedua checkbox dinonaktifkan bersamaan (minimal satu sumber harus aktif).
+
+---
+
+## 🎮 5b. Sistem Pengindeks & Pemantau Gameplay Otomatis (`gameplay_indexer.py`)
+
+Aplikasi dilengkapi modul pemantau visual gameplay otomatis untuk mengenali dan mengindeks kata berdasarkan respon nyata server Roblox Sambung Kata:
+
+1. **Tiga Ciri Visual Status Kata:**
+   - **`KATA_SALAH` (Kata Ditolak / Tidak Terdaftar di Roblox):**
+     - Kotak teks input berubah menjadi latar **merah pekat** ($R > 100, R > G \times 1.3$).
+     - Indikator 'X' merah (nyawa) berubah dari redup menjadi 100% merah.
+     - **TIDAK ADA** subtext `"sudah digunakan!"` di bawah kotak teks.
+     - *Aksi Otomatis:* Kata otomatis dimasukkan ke `blacklist.txt` ($O(1)$ di solver), dihapus seketika dari daftar rekomendasi kata bot di GUI, dan notifikasi toast muncul.
+   - **`SUDAH_DIGUNAKAN` (Kata Valid tapi Sudah Terpakai Ronde Ini):**
+     - Kotak teks input berubah menjadi latar **merah pekat**.
+     - Tepat di bawah kotak merah muncul subtext tulisan putih ber-outline hitam: `'"<KATA>" sudah digunakan!'` (terbaca via OCR).
+     - *Aksi Otomatis:* Kata ini terbukti **VALID** di server Roblox! Jika kata belum terdaftar di kamus aktif, sistem otomatis menyimpannya ke `kamus_contek.txt` & solver (*Auto-Learn*).
+   - **`KATA_BENAR` (Jawaban Berhasil & Diterima):**
+     - Kotak kata teks di atas pemain **LENYAP SEKETIKA**.
+     - Tubuh karakter pemain di bawahnya seketika **FLASH HIJAU TERANG** (HSV Green Pixels > 10,000, melonjak masif dari rata-rata ~1,100 px).
+     - *Aksi Otomatis:* Kata jawaban berhasil dipelajari (*Auto-Learn*) dan ditambahkan ke kamus aktif jika belum ada.
+2. **Kinerja & Dual-Engine OCR:**
+   - Memanfaatkan **WinOCR** sebagai engine utama untuk pemrosesan ROI kotak gameplay ($440 \times 400\text{ px}$), selesai dalam **4–17 ms** tanpa membebani performa frame rate game.
+   - Fallback otomatis ke RapidOCR jika dijalankan di lingkungan tanpa WinOCR.
+3. **Mekanisme Debounce Anti-Duplikasi:**
+   - Menghindari pemrosesan berulang pada animasi frame transisi (300 ms) dengan jeda cooldown 2.5 detik per kata.
+4. **Antarmuka & Pengaturan GUI:**
+   - Tombol `🎮 Auto-Index Game`: Mengaktifkan/menonaktifkan pemantauan otomatis.
+   - Tombol `🎯 Area Game`: Membuka `RegionSelector` untuk memilih area kotak kata & karakter pemain secara visual.
+   - Tombol `📋 Log`: Membuka jendela dialog riwayat seluruh kata yang berhasil di-blacklist atau ditambahkan ke kamus lengkap dengan stempel waktu dan status.
 
 ---
 

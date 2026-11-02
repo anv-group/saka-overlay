@@ -20,7 +20,16 @@ DEFAULT_CONFIG = {
     "updater_branch": "main",  # "main", "dev", atau branch kustom lainnya
     "auto_check_update_on_startup": True,
     "use_kbbi": True,  # Aktifkan kamus resmi KBBI
-    "use_contek": True  # Aktifkan kamus Contek Sambung Kata (contek-sambungkata.web.id)
+    "use_contek": True,  # Aktifkan kamus Contek Sambung Kata (contek-sambungkata.web.id)
+    "gameplay_indexing_enabled": True,  # Deteksi feedback gameplay (kata salah, kata sudah digunakan, kata benar)
+    "gameplay_area": {  # Area monitoring kata & karakter di layar (1920x1200 default)
+        "left": 740,
+        "top": 250,
+        "width": 440,
+        "height": 400
+    },
+    "auto_blacklist_invalid": True,  # Otomatis blacklist kata yang ditolak game Roblox
+    "auto_learn_valid": True  # Otomatis simpan kata valid yang belum ada di kamus
 }
 
 def load_config():

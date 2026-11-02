@@ -16,9 +16,10 @@ class RegionSelector:
     Overlay transparan full screen untuk memilih kotak area layar (ROI)
     secara interaktif dengan klik & drag mouse pada resolusi penuh (1920x1200).
     """
-    def __init__(self, on_selected_callback):
+    def __init__(self, on_selected_callback, title=None):
         enable_dpi_awareness()
         self.on_selected_callback = on_selected_callback
+        self.title = title
         self.start_x = None
         self.start_y = None
         self.rect_id = None
@@ -57,10 +58,11 @@ class RegionSelector:
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
         # Petunjuk di layar
+        header_text = self.title or "KLIK & DRAG MOUSE UNTUK MEMILIH AREA AWALAN KATA ROBLOX"
         self.canvas.create_text(
             self.screen_w // 2,
             60,
-            text=f"LAYAR PENUH ({self.screen_w}x{self.screen_h})\nKLIK & DRAG MOUSE UNTUK MEMILIH AREA KATA ROBLOX\n(Tekan ESC atau Klik Kanan untuk Batal)",
+            text=f"LAYAR PENUH ({self.screen_w}x{self.screen_h})\n{header_text}\n(Tekan ESC atau Klik Kanan untuk Batal)",
             fill="#00ffcc",
             font=("Segoe UI", 16, "bold"),
             justify=tk.CENTER

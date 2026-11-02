@@ -5,7 +5,7 @@
         "width": 159,
         "height": 82
     },
-    "scan_interval_sec": 0.08,
+    "scan_interval_sec": 0.04,
     "auto_copy_top_word": false,
     "mode_santai": false,
     "report_hotkey": "F2",
@@ -14,6 +14,15 @@
     "updater_mode": "prompt",
     "updater_branch": "reoptimized",
     "auto_check_update_on_startup": true,
-    "use_kbbi": true,
-    "use_contek": true
+    "use_kbbi": false,
+    "use_contek": true,
+    "gameplay_indexing_enabled": true,
+    "gameplay_area": {
+        "left": 740,
+        "top": 250,
+        "width": 440,
+        "height": 400
+    },
+    "auto_blacklist_invalid": true,
+    "auto_learn_valid": true
 }
