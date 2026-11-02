@@ -533,16 +533,22 @@ class SambungKataApp:
     def _open_settings_menu(self):
         """Membuka dropdown menu pengaturan tambahan tanpa memenuhi layar game"""
         menu = tk.Menu(self.root, tearoff=0, bg="#181825", fg="#cdd6f4", activebackground="#313244", activeforeground="#f5e0dc")
+        # Kelompok 1: Area Deteksi Awalan Huruf
         menu.add_command(label="🎯 Set Area Deteksi", command=self.open_region_selector)
         menu.add_command(label="👁️ Test Area Deteksi", command=self.preview_selected_area)
+        menu.add_command(label="📸 Screenshot Area Deteksi (F2)", command=self.on_report_kurang_tepat)
         menu.add_separator()
+
+        # Kelompok 2: Fitur Kamus, Koreksi & Kategori
         menu.add_command(label="🚫 Buka Blocklist Kata", command=self.open_blacklist_window)
-        menu.add_command(label="📝 Pendataan Koreksi (F2)", command=self.open_koreksi_window)
+        menu.add_command(label="📝 Pendataan Koreksi Sampel", command=self.open_koreksi_window)
         menu.add_command(label="🏷️ Kelola Kategori Custom", command=self.open_custom_categories_window)
         menu.add_separator()
-        menu.add_command(label="🎮 Set Area Gameplay (F3)", command=self.open_gameplay_region_selector)
+
+        # Kelompok 3: Area Gameplay & Kalibrasi
+        menu.add_command(label="🎮 Set Area Gameplay", command=self.open_gameplay_region_selector)
+        menu.add_command(label="📸 Screenshot Area Gameplay (F3)", command=self.on_capture_gameplay_kalibrasi)
         menu.add_command(label="📋 Log Gameplay", command=self.open_gameplay_history_window)
-        menu.add_command(label="📸 Ambil Snapshot Kalibrasi (F3)", command=self.on_capture_gameplay_kalibrasi)
         menu.add_separator()
         menu.add_checkbutton(label="📋 Auto-copy sisa kata", variable=self.auto_copy_var, command=self.on_toggle_autocopy)
 
