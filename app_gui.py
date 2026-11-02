@@ -1107,7 +1107,7 @@ class SambungKataApp:
 
         btn_folder = tk.Button(
             hdr,
-            text="📂 Folder",
+            text="📂 Buka Folder",
             font=("Segoe UI", 8),
             bg="#313244",
             fg="#cdd6f4",
@@ -1116,7 +1116,7 @@ class SambungKataApp:
             padx=6,
             pady=2,
             cursor="hand2",
-            command=lambda: os.startfile(self._classifier_unclassified_dir)
+            command=lambda: os.startfile(os.path.dirname(self._classifier_unclassified_dir))
         )
         btn_folder.pack(side=tk.RIGHT, padx=(4, 0))
 
@@ -1519,25 +1519,56 @@ class SambungKataApp:
             self.show_toast(f"Gagal memindahkan sampel: {e}")
             return
 
-        # Catat kata ke file staging terisolasi
+        # Catat kata ke file teks klasifikasi tersendiri di folder deteksi-gameplay/ (Terpisah dari auto_<>.txt)
         if target_category == "default":
-            # Baseline saat mengetik: TIDAK dimasukkan ke kamus atau blacklist mana pun
-            txt_info = f"'{word}' " if word else ""
-            self.show_toast(f"⬜ Sampel {txt_info}disimpan ke deteksi-gameplay/default/ (Tidak masuk kamus)")
+            if word:
+                self._save_klasifikasi_text("klasifikasi_sedang_ngetik.txt", word, fn, "Teks sedang diketik")
+                self.show_toast(f"⬜ '{word}' dicatat ke deteksi-gameplay/klasifikasi_sedang_ngetik.txt")
+            else:
+                self.show_toast("⬜ Sampel baseline disimpan ke deteksi-gameplay/default/")
         elif word and len(word) >= 2:
             if target_category == "kata-tidak-ada":
-                self.gameplay_indexer.save_to_auto_blacklist(word)
-                self.show_toast(f"❌ '{word}' disimpan ke deteksi-gameplay/kata-tidak-ada & auto_blacklist.txt")
+                self._save_klasifikasi_text("klasifikasi_blacklist.txt", word, fn, "Ditolak Roblox (Kata Salah)")
+                self.show_toast(f"❌ '{word}' disimpan ke deteksi-gameplay/klasifikasi_blacklist.txt")
             elif target_category == "sudah-dipakai":
-                self.gameplay_indexer.save_to_auto_kata_baru(word, reason="Sudah digunakan di Roblox (Klasifikasi)")
-                self.show_toast(f"⚠️ '{word}' disimpan ke deteksi-gameplay/sudah-dipakai & auto_kata_baru.txt")
+                self._save_klasifikasi_text("klasifikasi_kata_baru.txt", word, fn, "Sudah digunakan ronde ini")
+                self.show_toast(f"⚠️ '{word}' disimpan ke deteksi-gameplay/klasifikasi_kata_baru.txt")
             elif target_category == "benar":
-                self.gameplay_indexer.save_to_auto_kata_baru(word, reason="Jawaban benar Roblox (Klasifikasi)")
-                self.show_toast(f"✅ '{word}' disimpan ke deteksi-gameplay/benar & auto_kata_baru.txt")
+                self._save_klasifikasi_text("klasifikasi_kata_baru.txt", word, fn, "Jawaban benar diterima")
+                self.show_toast(f"✅ '{word}' disimpan ke deteksi-gameplay/klasifikasi_kata_baru.txt")
 
         # Hapus item dari list dan tampilkan berikutnya
         self._classifier_items.pop(self._classifier_current_idx)
         self._classifier_show_current()
+
+    def _save_klasifikasi_text(self, filename, word, sample_name, reason=""):
+        """Menyimpan kata hasil klasifikasi ke file tersendiri di folder deteksi-gameplay"""
+        w = word.strip().lower()
+        if not w:
+            return
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        target_path = os.path.join(base_dir, "deteksi-gameplay", filename)
+
+        existing = set()
+        if os.path.exists(target_path):
+            try:
+                with open(target_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        item = line.strip().split("#")[0].strip().lower()
+                        if item:
+                            existing.add(item)
+            except Exception:
+                pass
+
+        if w in existing:
+            return
+
+        now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            with open(target_path, "a", encoding="utf-8") as f:
+                f.write(f"{w}  # [{now_str}] {reason} (Sampel: {sample_name})\n")
+        except Exception:
+            pass
 
     def _classifier_clear_all_unclassified(self):
         """Mengosongkan semua gambar di antrean unclassified"""
