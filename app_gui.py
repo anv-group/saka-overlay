@@ -31,13 +31,35 @@ from extract_gameplay_recording import extract_gameplay_events
 class SambungKataApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Sambung Kata Assistant")
-        self.root.geometry("440x650")
-        self.root.minsize(380, 520)
+        self.root.title("⚔️ Sambung Kata Assistant")
+
+        self.config = load_config()
+
+        # Posisi & ukuran window default: di sebelah kanan layar, minimal sesuai ui-size-min.png (438x1075)
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+
+        target_w = 440
+        # Sesuaikan tinggi agar pas di layar pengguna mendekati 1075px dari ui-size-min.png
+        target_h = max(720, min(1075, screen_h - 40))
+        target_x = max(0, screen_w - target_w - 15)
+        target_y = 15
+        default_geom = f"{target_w}x{target_h}+{target_x}+{target_y}"
+
+        saved_geom = self.config.get("window_geometry")
+        if saved_geom:
+            try:
+                self.root.geometry(saved_geom)
+            except Exception:
+                self.root.geometry(default_geom)
+        else:
+            self.root.geometry(default_geom)
+
+        # Lebar minimal 438px sesuai batas minimal visual ui-size-min.png
+        self.root.minsize(438, 650)
         self.root.attributes("-topmost", True)
         self.root.configure(bg="#1e1e2e")
 
-        self.config = load_config()
         use_kbbi = self.config.get("use_kbbi", True)
         use_contek = self.config.get("use_contek", True)
         self.solver = SambungKataSolver(
@@ -573,8 +595,16 @@ class SambungKataApp:
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig(self.canvas_window, width=e.width))
 
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Aktifkan scroll roda mouse (MouseWheel) mulus di area rekomendasi kata
+        self.recom_frame.bind("<Enter>", self._bind_mousewheel)
+        self.recom_frame.bind("<Leave>", self._unbind_mousewheel)
+        self.canvas.bind("<Enter>", self._bind_mousewheel)
+        self.canvas.bind("<Leave>", self._unbind_mousewheel)
+        self.scrollable_frame.bind("<Enter>", self._bind_mousewheel)
+        self.scrollable_frame.bind("<Leave>", self._unbind_mousewheel)
 
         # Widget Pool untuk kartu kata (menghindari create/destroy berat pada tiap scan)
         self.word_card_pool = []
@@ -1927,6 +1957,29 @@ class SambungKataApp:
         for idx in range(len(results), len(self.word_card_pool)):
             self.word_card_pool[idx]["frame"].pack_forget()
 
+    def _on_mousewheel(self, event):
+        """Scroll daftar rekomendasi kata menggunakan roda mouse secara mulus"""
+        if not hasattr(self, "canvas") or not self.canvas.winfo_exists():
+            return
+        if event.delta:
+            # Di Windows: event.delta positif = scroll up, negatif = scroll down
+            step = int(-1 * (event.delta / 120))
+            self.canvas.yview_scroll(step, "units")
+        elif event.num == 4:
+            self.canvas.yview_scroll(-1, "units")
+        elif event.num == 5:
+            self.canvas.yview_scroll(1, "units")
+
+    def _bind_mousewheel(self, event=None):
+        self.root.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.root.bind_all("<Button-4>", self._on_mousewheel)
+        self.root.bind_all("<Button-5>", self._on_mousewheel)
+
+    def _unbind_mousewheel(self, event=None):
+        self.root.unbind_all("<MouseWheel>")
+        self.root.unbind_all("<Button-4>")
+        self.root.unbind_all("<Button-5>")
+
     def _alloc_card_slot(self):
         card = tk.Frame(self.scrollable_frame, bg="#1e1e2e", padx=8, pady=5, relief=tk.FLAT)
         lbl_kata = tk.Label(card, text="", font=("Segoe UI", 11, "bold"), fg="#cdd6f4", bg="#1e1e2e")
@@ -1958,6 +2011,14 @@ class SambungKataApp:
             pady=1
         )
         lbl_badge.pack(side=tk.RIGHT, padx=4)
+
+        # Aktifkan scroll roda mouse saat kursor melayang di atas kartu kata
+        card.bind("<Enter>", self._bind_mousewheel)
+        card.bind("<Leave>", self._unbind_mousewheel)
+        lbl_kata.bind("<Enter>", self._bind_mousewheel)
+        lbl_kata.bind("<Leave>", self._unbind_mousewheel)
+        lbl_badge.bind("<Enter>", self._bind_mousewheel)
+        lbl_badge.bind("<Leave>", self._unbind_mousewheel)
 
         slot = {
             "frame": card,
@@ -4001,6 +4062,11 @@ class SambungKataApp:
         self.updater.restart_app()
 
     def on_close(self):
+        try:
+            self.config["window_geometry"] = self.root.geometry()
+            save_config(self.config)
+        except Exception:
+            pass
         try:
             import keyboard
             keyboard.unhook_all_hotkeys()
