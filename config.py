@@ -17,6 +17,7 @@ DEFAULT_CONFIG = {
     "ocr_engine": "winocr",  # "winocr" atau "tesseract"
     "tesseract_path": r"C:\Program Files\Tesseract-OCR\tesseract.exe",
     "updater_mode": "prompt",  # "prompt", "auto", "disabled"
+    "updater_branch": "main",  # "main", "dev", atau branch kustom lainnya
     "auto_check_update_on_startup": True
 }
 

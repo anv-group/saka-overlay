@@ -7,7 +7,7 @@
 ## 📌 1. Ringkasan Proyek & Target Game
 
 - **Nama Project:** Roblox Sambung Kata Assistant & Auto Solver
-- **Direktori Utama:** `C:\Users\Alden\Documents\VSCode\sambung-kata`
+- **Direktori Utama:** `C:\Users\Alden\Documents\VSCode\sambung-kata-overlay`
 - **Target Game:** Roblox Sambung Kata (`https://www.roblox.com/games/130342654546662/Sambung-Kata`)
 - **Mekanisme Game:**
   1. Game menampilkan kotak putih bersudut melengkung (*rounded rectangle*) dengan font hitam berukuran besar di tengah layar.
@@ -166,23 +166,39 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
 
 Aplikasi dilengkapi modul `GitUpdater` (`updater.py`) untuk menjaga repository lokal tetap sinkron dengan GitHub:
 
-1. **Pengecekan Komparatif HEAD vs `origin/main`:**
+1. **Dukungan Multi-Branch (`updater_branch` di `config.json`):**
+   - Mengambil daftar seluruh remote branch secara dinamis via `git ls-remote --heads origin` (`get_available_branches()`).
+   - Pengguna dapat memilih branch pembaruan (misal: `main` untuk versi stabil atau `dev` untuk update fitur terbaru) langsung dari dropdown GUI.
+   - Mendeteksi perpindahan branch (`is_branch_switch = True`). Jika branch target berbeda dengan branch lokal saat ini, tombol update akan menampilkan `🔀 Beralih ke '<branch>' & Update` dan melakukan `git checkout <branch>` secara otomatis sebelum menarik commit terbaru.
+2. **Pengecekan Komparatif HEAD vs `origin/<branch>`:**
    - Menjalankan `git fetch origin <branch>` secara non-blocking di background thread.
    - Mengambil jumlah commit tertinggal via `git rev-list --count HEAD..origin/<branch>`.
    - Mengurai riwayat perubahan via `git log HEAD..origin/<branch> --pretty=format:"%h%x09%an%x09%ad%x09%s"`.
    - Mengembalikan daftar terstruktur commit (hash, author, date, message) dan mendeteksi apakah `requirements.txt` ikut berubah.
-2. **Tiga Mode Pembaruan (`updater_mode` di `config.json`):**
+3. **Tiga Mode Pembaruan (`updater_mode` di `config.json`):**
    - **`prompt` (Default):** Jika update ditemukan saat startup, dialog modal responsif terbuka menampilkan daftar commit perubahan lengkap dengan tombol `🚀 Perbarui Sekarang` dan opsi mode.
    - **`auto`:** Update diunduh dan diterapkan seketika di latar belakang saat startup tanpa bertanya, lalu notifikasi tombol *Restart* muncul.
    - **`disabled`:** Pengecekan otomatis saat startup dilewati sepenuhnya. Pemeriksaan manual tetap dapat dilakukan kapan saja via tombol `🔄 Update` di header.
-3. **Eksekusi Update & Clean Restart:**
+4. **Eksekusi Update & Clean Restart:**
    - Menggunakan `git pull --autostash origin <branch>` agar modifikasi konfigurasi/kamus lokal tidak memicu konflik stash.
    - Jika `requirements.txt` diperbarui, perintah `pip install -r requirements.txt --quiet` dijalankan otomatis.
    - Fungsi `_restart_app_cleanly()` melepas semua global keyboard hook, mematikan thread OCR, lalu meluncurkan proses Python baru sebelum keluar.
 
 ---
 
-## 🧪 7. Prosedur Pengujian Regresi Wajib
+## 🌿 7. Strategi Branching & CI Workflow
+
+Untuk menghemat kuota komputasi GitHub Actions dan mempercepat siklus development:
+1. **Branch `dev` (Active Development):**
+   - Seluruh coding aktif, eksperimen OCR, dan penambahan fitur dilakukan di branch `dev`.
+   - Push ke branch `dev` **tidak memicu GitHub Actions** (bebas commit kapan saja tanpa menghabiskan kuota).
+2. **Branch `main` (Production & Release):**
+   - Hanya menerima kode stabil hasil merge dari branch `dev`.
+   - Setiap kali terjadi push atau merge ke `main`, GitHub Actions (`test.yml`) otomatis menjalankan benchmark OCR (92 sampel) di runner Windows.
+
+---
+
+## 🧪 8. Prosedur Pengujian Regresi Wajib
 
 Setiap kali Anda (AI Agent) mengubah kode di `ocr_engine.py`, `solver.py`, atau pipeline image processing, **ANDA WAJIB MENJALANKAN SUITE PENGUJIAN REGRESI**:
 
@@ -196,7 +212,7 @@ python test_accuracy.py
 
 ---
 
-## ⚠️ 8. Jebakan Kritis Lingkungan Windows (Gotchas)
+## ⚠️ 9. Jebakan Kritis Lingkungan Windows (Gotchas)
 
 1. **Penskalaan DPI Windows (1920x1200 / Scaling > 100%)**:
    - Jika `ctypes.windll.shcore.SetProcessDpiAwareness(2)` tidak dipanggil sebelum membuat Tkinter window, koordinat `mss.grab` dan koordinat overlay Tkinter akan meleset hingga 25-50%, menyebabkan area kotak seleksi terpotong.
@@ -209,7 +225,7 @@ python test_accuracy.py
 
 ---
 
-## 📋 9. Panduan Menangani Sampel Baru dari User
+## 📋 10. Panduan Menangani Sampel Baru dari User
 
 Jika pengguna melaporkan gambar di `sample/kurang_tepat/` atau `sample/tidak_dikenali/`:
 1. Buka dan periksa gambar menggunakan skrip inspeksi OpenCV.

@@ -1885,7 +1885,8 @@ class SambungKataApp:
     def _startup_update_check(self):
         """Memeriksa update di latar belakang saat aplikasi pertama kali dibuka"""
         try:
-            res = self.updater.check_for_updates(timeout=10)
+            target_br = self.config.get("updater_branch", "main")
+            res = self.updater.check_for_updates(target_branch=target_br, timeout=10)
             if res.get("has_update"):
                 self.root.after(0, self._on_update_found_badge, res)
                 mode = self.config.get("updater_mode", "prompt")
@@ -1900,8 +1901,9 @@ class SambungKataApp:
         """Memperbarui tampilan tombol update di header jika ditemukan commit baru"""
         if hasattr(self, "btn_update") and self.btn_update.winfo_exists():
             cnt = res.get("behind_count", len(res.get("commits", [])))
+            txt = f"🔀 Branch ({res.get('branch')})" if res.get("is_branch_switch") else f"🚀 Update ({cnt})"
             self.btn_update.config(
-                text=f"🚀 Update ({cnt})",
+                text=txt,
                 bg="#f9e2af",
                 fg="#11111b",
                 activebackground="#fab387"
@@ -1909,19 +1911,20 @@ class SambungKataApp:
 
     def _execute_auto_update(self, res):
         """Menjalankan update secara otomatis di latar belakang dan memberi opsi restart"""
+        target_br = res.get("branch", self.config.get("updater_branch", "main"))
         cnt = res.get("behind_count", len(res.get("commits", [])))
-        self.show_toast(f"⏳ Sedang mengunduh {cnt} update baru otomatis...")
+        self.show_toast(f"⏳ Sedang mengunduh update branch '{target_br}' otomatis...")
 
         def _worker():
-            success, msg = self.updater.apply_update()
+            success, msg = self.updater.apply_update(target_branch=target_br)
             if success:
-                self.root.after(0, lambda: self._on_auto_update_complete(cnt))
+                self.root.after(0, lambda: self._on_auto_update_complete(cnt, target_br))
             else:
                 self.root.after(0, lambda: self.show_toast(f"⚠️ Gagal auto-update: {msg}"))
 
         threading.Thread(target=_worker, daemon=True).start()
 
-    def _on_auto_update_complete(self, count):
+    def _on_auto_update_complete(self, count, branch="main"):
         """Callback ketika auto-update selesai terpasang"""
         if hasattr(self, "btn_update") and self.btn_update.winfo_exists():
             self.btn_update.config(
@@ -1931,22 +1934,29 @@ class SambungKataApp:
                 command=self._restart_app_cleanly
             )
         self.show_toast(
-            f"✅ {count} update terpasang! Klik 'Restart' di header.",
+            f"✅ Update '{branch}' terpasang! Klik 'Restart' di header.",
             undo_callback=self._restart_app_cleanly
         )
 
-    def check_for_updates(self, manual=False):
+    def check_for_updates(self, target_branch=None, manual=False):
         """Memicu pengecekan pembaruan secara manual atau terjadwal"""
+        branch_to_check = target_branch or self.config.get("updater_branch", "main")
         if manual:
-            self.show_toast("🔄 Memeriksa pembaruan di GitHub...")
+            self.show_toast(f"🔄 Memeriksa branch '{branch_to_check}' di GitHub...")
             if hasattr(self, "btn_update") and self.btn_update.winfo_exists():
                 self.btn_update.config(state=tk.DISABLED, text="⏳ Cek...")
 
         def _worker():
             try:
-                res = self.updater.check_for_updates(timeout=12)
+                res = self.updater.check_for_updates(target_branch=branch_to_check, timeout=12)
             except Exception as e:
-                res = {"success": False, "error": str(e), "has_update": False, "commits": []}
+                res = {
+                    "success": False,
+                    "error": str(e),
+                    "has_update": False,
+                    "branch": branch_to_check,
+                    "commits": []
+                }
 
             def _done():
                 if hasattr(self, "btn_update") and self.btn_update.winfo_exists():
@@ -1960,9 +1970,7 @@ class SambungKataApp:
                             fg="#89b4fa"
                         )
 
-                if res.get("has_update"):
-                    self.show_update_dialog(res)
-                elif manual:
+                if res.get("has_update") or manual:
                     self.show_update_dialog(res)
 
             self.root.after(0, _done)
@@ -1980,12 +1988,14 @@ class SambungKataApp:
         commits = res.get("commits", [])
         behind_count = res.get("behind_count", len(commits))
         curr_commit = res.get("current_commit", self.updater.get_current_commit())
-        branch = res.get("branch", self.updater.get_current_branch())
+        branch = res.get("branch", self.config.get("updater_branch", "main"))
+        current_branch = res.get("current_branch", self.updater.get_current_branch())
+        is_branch_switch = res.get("is_branch_switch", (current_branch != branch))
 
         self.update_win = tk.Toplevel(self.root)
         self.update_win.title("🚀 Pembaruan Aplikasi — Sambung Kata" if has_update else "⚙️ Pengaturan & Info Pembaruan")
-        self.update_win.geometry("460x560")
-        self.update_win.minsize(420, 480)
+        self.update_win.geometry("480x620")
+        self.update_win.minsize(440, 520)
         self.update_win.attributes("-topmost", True)
         self.update_win.configure(bg="#1e1e2e")
         self.update_win.bind("<Escape>", lambda e: self.update_win.destroy())
@@ -1993,7 +2003,7 @@ class SambungKataApp:
         try:
             x = self.root.winfo_x() + 20
             y = self.root.winfo_y() + 20
-            self.update_win.geometry(f"460x560+{x}+{y}")
+            self.update_win.geometry(f"480x620+{x}+{y}")
         except Exception:
             pass
 
@@ -2004,16 +2014,17 @@ class SambungKataApp:
         if has_update:
             lbl_title = tk.Label(
                 hdr,
-                text="🚀 Pembaruan Tersedia!",
+                text="🔀 Beralih Branch" if is_branch_switch else "🚀 Pembaruan Tersedia!",
                 font=("Segoe UI", 12, "bold"),
                 fg="#f9e2af",
                 bg="#181825"
             )
             lbl_title.pack(side=tk.LEFT)
 
+            status_text = f"Target: {branch}" if is_branch_switch else f"{behind_count} commit baru"
             lbl_count = tk.Label(
                 hdr,
-                text=f"{behind_count} commit baru",
+                text=status_text,
                 font=("Segoe UI", 9, "bold"),
                 fg="#a6e3a1",
                 bg="#181825"
@@ -2038,12 +2049,76 @@ class SambungKataApp:
             )
             lbl_cur.pack(side=tk.RIGHT)
 
-        # 2. Status / Info Subtitle
-        sub_frame = tk.Frame(self.update_win, bg="#1e1e2e", padx=14, pady=6)
+        # 2. Branch Selector Bar
+        branch_box = tk.Frame(self.update_win, bg="#24273a", padx=12, pady=6, bd=1, relief=tk.FLAT)
+        branch_box.pack(fill=tk.X, padx=14, pady=(6, 2))
+
+        lbl_br = tk.Label(
+            branch_box,
+            text="🌿 Branch:",
+            font=("Segoe UI", 9, "bold"),
+            fg="#cdd6f4",
+            bg="#24273a"
+        )
+        lbl_br.pack(side=tk.LEFT, padx=(0, 4))
+
+        available_branches = self.updater.get_available_branches()
+        if branch not in available_branches:
+            available_branches.append(branch)
+
+        combo_branch = ttk.Combobox(
+            branch_box,
+            values=available_branches,
+            state="readonly",
+            width=12,
+            font=("Segoe UI", 9)
+        )
+        combo_branch.set(branch)
+        combo_branch.pack(side=tk.LEFT, padx=4)
+
+        lbl_curr_local = tk.Label(
+            branch_box,
+            text=f"(Aktif: {current_branch})",
+            font=("Segoe UI", 8),
+            fg="#a6adc8",
+            bg="#24273a"
+        )
+        lbl_curr_local.pack(side=tk.LEFT, padx=2)
+
+        def _on_branch_change_action(event=None):
+            selected_b = combo_branch.get().strip()
+            if selected_b:
+                self.config["updater_branch"] = selected_b
+                save_config(self.config)
+                self.update_win.destroy()
+                self.check_for_updates(target_branch=selected_b, manual=True)
+
+        combo_branch.bind("<<ComboboxSelected>>", _on_branch_change_action)
+
+        btn_chk_br = tk.Button(
+            branch_box,
+            text="Ganti Branch",
+            font=("Segoe UI", 8, "bold"),
+            bg="#89b4fa",
+            fg="#11111b",
+            activebackground="#b4befe",
+            relief=tk.FLAT,
+            padx=6,
+            pady=1,
+            cursor="hand2",
+            command=_on_branch_change_action
+        )
+        btn_chk_br.pack(side=tk.RIGHT)
+
+        # 3. Status / Info Subtitle
+        sub_frame = tk.Frame(self.update_win, bg="#1e1e2e", padx=14, pady=4)
         sub_frame.pack(fill=tk.X)
 
-        if has_update:
-            msg_sub = f"Repositori GitHub memiliki {behind_count} pembaruan baru di branch '{branch}':"
+        if is_branch_switch:
+            msg_sub = f"Anda sedang di branch '{current_branch}'. Memilih branch '{branch}' akan beralih ke branch tersebut."
+            fg_sub = "#f9e2af"
+        elif has_update:
+            msg_sub = f"Branch '{branch}' di GitHub memiliki {behind_count} commit baru:"
             fg_sub = "#cdd6f4"
         else:
             msg_sub = f"Aplikasi Anda sudah sinkron dengan branch '{branch}' di GitHub.\nCommit aktif: {curr_commit.get('message', '-')}"
@@ -2055,13 +2130,13 @@ class SambungKataApp:
             font=("Segoe UI", 9),
             fg=fg_sub,
             bg="#1e1e2e",
-            wraplength=430,
+            wraplength=450,
             justify=tk.LEFT
         )
         lbl_sub.pack(anchor=tk.W)
 
-        # 3. Commit List Container (Canvas + Scrollbar)
-        if has_update and commits:
+        # 4. Commit List Container (Canvas + Scrollbar)
+        if commits:
             list_container = tk.Frame(self.update_win, bg="#181825", bd=1, relief=tk.SOLID)
             list_container.pack(fill=tk.BOTH, expand=True, padx=14, pady=4)
 
@@ -2112,7 +2187,7 @@ class SambungKataApp:
                 font=("Segoe UI", 9),
                 fg="#cdd6f4",
                 bg="#181825",
-                wraplength=400,
+                wraplength=420,
                 justify=tk.LEFT
             ).pack(anchor=tk.W, pady=(2, 0))
 
@@ -2124,9 +2199,9 @@ class SambungKataApp:
                 bg="#181825"
             ).pack(anchor=tk.W, pady=(4, 0))
 
-        # 4. Mode Selection Frame (Radio buttons for: prompt, auto, disabled)
-        mode_box = tk.Frame(self.update_win, bg="#24273a", padx=12, pady=8, bd=1, relief=tk.FLAT)
-        mode_box.pack(fill=tk.X, padx=14, pady=6)
+        # 5. Mode Selection Frame (Radio buttons for: prompt, auto, disabled)
+        mode_box = tk.Frame(self.update_win, bg="#24273a", padx=12, pady=6, bd=1, relief=tk.FLAT)
+        mode_box.pack(fill=tk.X, padx=14, pady=4)
 
         lbl_mode_title = tk.Label(
             mode_box,
@@ -2135,13 +2210,13 @@ class SambungKataApp:
             fg="#cdd6f4",
             bg="#24273a"
         )
-        lbl_mode_title.pack(anchor=tk.W, pady=(0, 4))
+        lbl_mode_title.pack(anchor=tk.W, pady=(0, 2))
 
         curr_mode = self.config.get("updater_mode", "prompt")
-        self.var_updater_mode = tk.StringVar(value=curr_mode)
+        var_updater_mode = tk.StringVar(value=curr_mode)
 
         def _on_mode_change():
-            new_mode = self.var_updater_mode.get()
+            new_mode = var_updater_mode.get()
             self.config["updater_mode"] = new_mode
             save_config(self.config)
             mode_labels = {
@@ -2160,7 +2235,7 @@ class SambungKataApp:
             rb = tk.Radiobutton(
                 mode_box,
                 text=text,
-                variable=self.var_updater_mode,
+                variable=var_updater_mode,
                 value=val,
                 font=("Segoe UI", 8, "bold" if val == curr_mode else "normal"),
                 fg=color,
@@ -2172,7 +2247,7 @@ class SambungKataApp:
             )
             rb.pack(anchor=tk.W, pady=1)
 
-        # 5. Action Buttons Frame
+        # 6. Action Buttons Frame
         btn_frame = tk.Frame(self.update_win, bg="#1e1e2e", padx=14, pady=8)
         btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
@@ -2186,9 +2261,10 @@ class SambungKataApp:
         lbl_update_status.pack(fill=tk.X, pady=(0, 4))
 
         if has_update:
+            btn_text = f"🔀 Beralih ke '{branch}' & Update" if is_branch_switch else "🚀 Perbarui Sekarang"
             btn_apply = tk.Button(
                 btn_frame,
-                text="🚀 Perbarui Sekarang",
+                text=btn_text,
                 font=("Segoe UI", 10, "bold"),
                 bg="#a6e3a1",
                 fg="#11111b",
@@ -2201,18 +2277,20 @@ class SambungKataApp:
             btn_apply.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
 
             def _apply_click():
-                btn_apply.config(state=tk.DISABLED, text="⏳ Mengunduh Pembaruan...")
-                lbl_update_status.config(text="Sedang melakukan git pull & update dependensi...")
+                btn_apply.config(state=tk.DISABLED, text="⏳ Memproses Pembaruan...")
+                lbl_update_status.config(text=f"Sedang mengunduh / beralih ke '{branch}'...")
 
                 def _apply_worker():
-                    success, msg = self.updater.apply_update()
+                    success, msg = self.updater.apply_update(target_branch=branch)
 
                     def _apply_done():
                         if success:
-                            lbl_update_status.config(text="✅ Pembaruan berhasil dipasang!", fg="#a6e3a1")
+                            self.config["updater_branch"] = branch
+                            save_config(self.config)
+                            lbl_update_status.config(text=f"✅ {msg}", fg="#a6e3a1")
                             restart = messagebox.askyesno(
                                 "Pembaruan Berhasil",
-                                "Pembaruan telah berhasil diterapkan!\n\nApakah Anda ingin me-restart aplikasi sekarang agar perubahan aktif?",
+                                f"{msg}\n\nApakah Anda ingin me-restart aplikasi sekarang agar perubahan aktif?",
                                 parent=self.update_win
                             )
                             if restart:
@@ -2256,8 +2334,23 @@ class SambungKataApp:
                 padx=12,
                 pady=4,
                 cursor="hand2",
-                command=lambda: [self.update_win.destroy(), self.check_for_updates(manual=True)]
+                command=lambda: [self.update_win.destroy(), self.check_for_updates(target_branch=branch, manual=True)]
             )
+            btn_recheck.pack(side=tk.LEFT)
+
+            btn_close = tk.Button(
+                btn_frame,
+                text="Tutup",
+                font=("Segoe UI", 9),
+                bg="#313244",
+                fg="#cdd6f4",
+                activebackground="#45475a",
+                relief=tk.FLAT,
+                padx=14,
+                pady=4,
+                command=self.update_win.destroy
+            )
+            btn_close.pack(side=tk.RIGHT)
             btn_recheck.pack(side=tk.LEFT)
 
             btn_close = tk.Button(
