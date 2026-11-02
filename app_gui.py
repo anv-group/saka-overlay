@@ -139,21 +139,20 @@ class SambungKataApp:
         )
         self.btn_restart.pack(side=tk.LEFT, padx=3)
 
-        # Mode Santai Toggle
+        # Mode Toggle Button: NORMAL vs SANTAI (Model tag compact tanpa emoji)
         self.mode_santai_var = tk.BooleanVar(value=self.config.get("mode_santai", False))
-        self.chk_santai = tk.Checkbutton(
+        self.btn_mode_santai = tk.Button(
             top_bar,
-            text="🌿 Santai",
-            variable=self.mode_santai_var,
-            command=self.on_toggle_mode_santai,
-            font=("Segoe UI", 9, "bold"),
-            fg="#a6e3a1",
-            bg="#181825",
-            selectcolor="#313244",
-            activebackground="#181825",
-            activeforeground="#a6e3a1"
+            text="",
+            font=("Segoe UI", 8, "bold"),
+            relief=tk.FLAT,
+            padx=6,
+            pady=2,
+            cursor="hand2",
+            command=self.toggle_mode_santai
         )
-        self.chk_santai.pack(side=tk.LEFT, padx=(6, 2))
+        self.btn_mode_santai.pack(side=tk.LEFT, padx=(4, 2))
+        self.chk_santai = self.btn_mode_santai
 
         # Settings Menu (⚙️) di ujung kanan
         self.btn_settings = tk.Button(
@@ -296,7 +295,7 @@ class SambungKataApp:
 
         # 5. Daftar Rekomendasi Jawaban (Memenuhi sisa seluruh window)
         is_santai_init = self.config.get("mode_santai", False)
-        recom_title = " Rekomendasi Kata (🌿 Mode Santai) " if is_santai_init else " Rekomendasi Kata (Klik untuk Salin) "
+        recom_title = " Rekomendasi Kata (SANTAI) " if is_santai_init else " Rekomendasi Kata (NORMAL) "
         recom_fg = "#a6e3a1" if is_santai_init else "#f38ba8"
         self.recom_frame = tk.LabelFrame(
             self.root,
@@ -384,6 +383,7 @@ class SambungKataApp:
         except Exception as e:
             print(f"[!] Warning: Gagal mendaftarkan global hotkey: {e}")
 
+        self._update_mode_santai_button()
         self._update_koreksi_badge()
 
     def _open_settings_menu(self):
@@ -463,19 +463,54 @@ class SambungKataApp:
         else:
             self.show_toast("Auto-copy sisa kata dinonaktifkan")
 
+    def _update_mode_santai_button(self):
+        """Memperbarui teks dan warna tombol toggle Mode Normal / Santai"""
+        if not hasattr(self, "btn_mode_santai") or not self.btn_mode_santai.winfo_exists():
+            return
+        is_santai = self.mode_santai_var.get()
+        if is_santai:
+            self.btn_mode_santai.config(
+                text="SANTAI",
+                bg="#a6e3a1",
+                fg="#11111b",
+                activebackground="#94e2d5",
+                activeforeground="#11111b"
+            )
+        else:
+            self.btn_mode_santai.config(
+                text="NORMAL",
+                bg="#313244",
+                fg="#cdd6f4",
+                activebackground="#45475a",
+                activeforeground="#cdd6f4"
+            )
+
+    def toggle_mode_santai(self):
+        """Toggle mode permainan antara NORMAL dan SANTAI"""
+        new_val = not self.mode_santai_var.get()
+        self.mode_santai_var.set(new_val)
+        self.on_toggle_mode_santai()
+
     def on_toggle_mode_santai(self):
         is_santai = self.mode_santai_var.get()
         self.config["mode_santai"] = is_santai
         save_config(self.config)
+        self._update_mode_santai_button()
 
         if is_santai:
-            self.show_toast("🌿 Mode Santai AKTIF (Huruf X, Q, F dikecualikan)")
-            self.recom_frame.config(text=" Rekomendasi Kata (🌿 Mode Santai) ", fg="#a6e3a1")
+            self.show_toast("Mode Santai aktif (tanpa X, Q, F)")
+            if hasattr(self, "recom_frame") and self.recom_frame.winfo_exists():
+                self.recom_frame.config(text=" Rekomendasi Kata (SANTAI) ", fg="#a6e3a1")
         else:
-            self.show_toast("⚔️ Mode Normal AKTIF (Jebakan X/Z/Q/F aktif)")
-            self.recom_frame.config(text=" Rekomendasi Kata (Klik untuk Salin) ", fg="#f38ba8")
+            self.show_toast("Mode Normal aktif (Jebakan X/Z/Q/F aktif)")
+            if hasattr(self, "recom_frame") and self.recom_frame.winfo_exists():
+                self.recom_frame.config(text=" Rekomendasi Kata (NORMAL) ", fg="#f38ba8")
 
-        if self.last_detected_word:
+        # Cek apakah sedang ada input manual aktif atau kata OCR terakhir
+        manual_text = "".join([c for c in self.search_var.get().strip().upper() if c.isalpha()]) if hasattr(self, "search_var") else ""
+        if manual_text:
+            self.update_results(manual_text)
+        elif hasattr(self, "last_detected_word") and self.last_detected_word:
             self.update_results(self.last_detected_word)
 
     def on_toggle_dict_source(self):
