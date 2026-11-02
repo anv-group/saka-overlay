@@ -1,5 +1,7 @@
 # 🎮 Roblox Sambung Kata Assistant & Auto Solver
 
+[![OCR Accuracy Regression Test](https://github.com/anv-group/sambung-kata-overlay/actions/workflows/test.yml/badge.svg)](https://github.com/anv-group/sambung-kata-overlay/actions/workflows/test.yml)
+
 Asisten cerdas pendamping bermain game **Roblox Sambung Kata** ([Mainkan di Roblox](https://www.roblox.com/games/130342654546662/Sambung-Kata)).
 
 Aplikasi ini secara otomatis mendeteksi kotak awalan huruf giliran Anda di layar, memilihkan kata serangan terbaik dari kamus **147.870+ kata**, dan dapat langsung menyalinnya ke clipboard sehingga Anda tinggal menekan `Ctrl + V` lalu `Enter` di dalam game!
