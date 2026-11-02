@@ -31,7 +31,7 @@ from extract_gameplay_recording import extract_gameplay_events
 class SambungKataApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("⚔️ Sambung Kata Assistant")
+        self.root.title("Sambung Kata Overlay")
 
         self.config = load_config()
 
@@ -385,6 +385,7 @@ class SambungKataApp:
 
         self._update_mode_santai_button()
         self._update_koreksi_badge()
+        self._update_window_title()
 
     def _open_settings_menu(self):
         """Membuka dropdown menu pengaturan tambahan tanpa memenuhi layar game"""
@@ -430,6 +431,7 @@ class SambungKataApp:
         save_config(self.config)
         if hasattr(self, "btn_speed"):
             self.btn_speed.config(text=label)
+        self._update_window_title()
         self.show_toast(f"⚡ Kecepatan scan diatur ke: {label}")
 
     def _on_search_text_changed(self, *args):
@@ -462,6 +464,37 @@ class SambungKataApp:
             self.show_toast("📋 Auto-copy sisa kata AKTIF (Tinggal Ctrl+V di Roblox)")
         else:
             self.show_toast("Auto-copy sisa kata dinonaktifkan")
+
+    def _update_window_title(self):
+        """Memperbarui judul window: Sambung Kata Overlay (<branch jika bukan main> <commit>) [<kecepatan scan>]"""
+        try:
+            branch = self.updater.get_current_branch()
+            commit_info = self.updater.get_current_commit()
+            commit_hash = commit_info.get("hash", "")
+            if branch and branch != "main":
+                git_str = f"({branch} {commit_hash})".strip()
+            elif commit_hash and commit_hash != "unknown":
+                git_str = f"({commit_hash})"
+            else:
+                git_str = ""
+        except Exception:
+            git_str = ""
+
+        curr_sec = self.config.get("scan_interval_sec", 0.08)
+        speed_label = None
+        for sec, lbl in getattr(self, "speed_options", []):
+            if abs(sec - curr_sec) < 0.005:
+                speed_label = lbl
+                break
+        if not speed_label:
+            speed_label = f"⚡ {int(curr_sec * 1000)}ms"
+
+        parts = ["Sambung Kata Overlay"]
+        if git_str:
+            parts.append(git_str)
+        parts.append(f"[{speed_label}]")
+
+        self.root.title(" ".join(parts))
 
     def _update_mode_santai_button(self):
         """Memperbarui teks dan warna tombol toggle Mode Normal / Santai"""
@@ -638,6 +671,7 @@ class SambungKataApp:
         self.config["scan_interval_sec"] = next_sec
         save_config(self.config)
         self.btn_speed.config(text=next_label)
+        self._update_window_title()
         self.show_toast(f"Kecepatan scan: {next_label}")
 
     def _scan_loop(self):
