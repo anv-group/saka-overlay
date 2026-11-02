@@ -15,7 +15,9 @@ DEFAULT_CONFIG = {
     "mode_santai": False,  # True jika main di Mode Santai (tanpa X, Q, F)
     "report_hotkey": "F2",  # Hotkey screenshot instan deteksi salah
     "ocr_engine": "winocr",  # "winocr" atau "tesseract"
-    "tesseract_path": r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    "tesseract_path": r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+    "updater_mode": "prompt",  # "prompt", "auto", "disabled"
+    "auto_check_update_on_startup": True
 }
 
 def load_config():

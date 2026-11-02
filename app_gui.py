@@ -22,6 +22,7 @@ from solver import SambungKataSolver
 from ocr_engine import OCREngine
 from config import load_config, save_config
 from region_selector import RegionSelector
+from updater import GitUpdater
 
 class SambungKataApp:
     def __init__(self, root):
@@ -35,6 +36,7 @@ class SambungKataApp:
         self.config = load_config()
         self.solver = SambungKataSolver("kamus_lengkap.txt")
         self.ocr = OCREngine(self.config)
+        self.updater = GitUpdater()
 
         self.is_scanning = False
         self.scan_thread = None
@@ -42,6 +44,10 @@ class SambungKataApp:
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._build_ui()
+
+        # Pengecekan pembaruan otomatis di latar belakang saat startup
+        if self.config.get("auto_check_update_on_startup", True) and self.config.get("updater_mode", "prompt") != "disabled":
+            self.root.after(1200, lambda: threading.Thread(target=self._startup_update_check, daemon=True).start())
 
     def _build_ui(self):
         # Header Frame
@@ -65,6 +71,21 @@ class SambungKataApp:
             bg="#181825"
         )
         self.status_lbl.pack(side=tk.RIGHT)
+
+        self.btn_update = tk.Button(
+            header,
+            text="🔄 Update",
+            font=("Segoe UI", 8, "bold"),
+            bg="#313244",
+            fg="#89b4fa",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=1,
+            cursor="hand2",
+            command=lambda: self.check_for_updates(manual=True)
+        )
+        self.btn_update.pack(side=tk.RIGHT, padx=(0, 6))
 
         # Toolbar Frame
         toolbar = tk.Frame(self.root, bg="#1e1e2e", padx=10, pady=8)
@@ -1856,6 +1877,450 @@ class SambungKataApp:
             os.startfile(dict_path)
         except Exception as e:
             self.show_toast(f"Gagal membuka file: {e}")
+
+    # =========================================================================
+    # FITUR PEMBARUAN OTOMATIS (UPDATER)
+    # =========================================================================
+
+    def _startup_update_check(self):
+        """Memeriksa update di latar belakang saat aplikasi pertama kali dibuka"""
+        try:
+            res = self.updater.check_for_updates(timeout=10)
+            if res.get("has_update"):
+                self.root.after(0, self._on_update_found_badge, res)
+                mode = self.config.get("updater_mode", "prompt")
+                if mode == "auto":
+                    self.root.after(0, lambda: self._execute_auto_update(res))
+                elif mode == "prompt":
+                    self.root.after(0, lambda: self.show_update_dialog(res))
+        except Exception as e:
+            print(f"[!] Update check error: {e}")
+
+    def _on_update_found_badge(self, res):
+        """Memperbarui tampilan tombol update di header jika ditemukan commit baru"""
+        if hasattr(self, "btn_update") and self.btn_update.winfo_exists():
+            cnt = res.get("behind_count", len(res.get("commits", [])))
+            self.btn_update.config(
+                text=f"🚀 Update ({cnt})",
+                bg="#f9e2af",
+                fg="#11111b",
+                activebackground="#fab387"
+            )
+
+    def _execute_auto_update(self, res):
+        """Menjalankan update secara otomatis di latar belakang dan memberi opsi restart"""
+        cnt = res.get("behind_count", len(res.get("commits", [])))
+        self.show_toast(f"⏳ Sedang mengunduh {cnt} update baru otomatis...")
+
+        def _worker():
+            success, msg = self.updater.apply_update()
+            if success:
+                self.root.after(0, lambda: self._on_auto_update_complete(cnt))
+            else:
+                self.root.after(0, lambda: self.show_toast(f"⚠️ Gagal auto-update: {msg}"))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_auto_update_complete(self, count):
+        """Callback ketika auto-update selesai terpasang"""
+        if hasattr(self, "btn_update") and self.btn_update.winfo_exists():
+            self.btn_update.config(
+                text="🔄 Restart",
+                bg="#a6e3a1",
+                fg="#11111b",
+                command=self._restart_app_cleanly
+            )
+        self.show_toast(
+            f"✅ {count} update terpasang! Klik 'Restart' di header.",
+            undo_callback=self._restart_app_cleanly
+        )
+
+    def check_for_updates(self, manual=False):
+        """Memicu pengecekan pembaruan secara manual atau terjadwal"""
+        if manual:
+            self.show_toast("🔄 Memeriksa pembaruan di GitHub...")
+            if hasattr(self, "btn_update") and self.btn_update.winfo_exists():
+                self.btn_update.config(state=tk.DISABLED, text="⏳ Cek...")
+
+        def _worker():
+            try:
+                res = self.updater.check_for_updates(timeout=12)
+            except Exception as e:
+                res = {"success": False, "error": str(e), "has_update": False, "commits": []}
+
+            def _done():
+                if hasattr(self, "btn_update") and self.btn_update.winfo_exists():
+                    self.btn_update.config(state=tk.NORMAL)
+                    if res.get("has_update"):
+                        self._on_update_found_badge(res)
+                    else:
+                        self.btn_update.config(
+                            text="🔄 Update",
+                            bg="#313244",
+                            fg="#89b4fa"
+                        )
+
+                if res.get("has_update"):
+                    self.show_update_dialog(res)
+                elif manual:
+                    self.show_update_dialog(res)
+
+            self.root.after(0, _done)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def show_update_dialog(self, res):
+        """Membuka popup dialog pembaruan dengan daftar commit dan pengaturan mode"""
+        if hasattr(self, "update_win") and self.update_win and self.update_win.winfo_exists():
+            self.update_win.lift()
+            self.update_win.focus_force()
+            return
+
+        has_update = res.get("has_update", False)
+        commits = res.get("commits", [])
+        behind_count = res.get("behind_count", len(commits))
+        curr_commit = res.get("current_commit", self.updater.get_current_commit())
+        branch = res.get("branch", self.updater.get_current_branch())
+
+        self.update_win = tk.Toplevel(self.root)
+        self.update_win.title("🚀 Pembaruan Aplikasi — Sambung Kata" if has_update else "⚙️ Pengaturan & Info Pembaruan")
+        self.update_win.geometry("460x560")
+        self.update_win.minsize(420, 480)
+        self.update_win.attributes("-topmost", True)
+        self.update_win.configure(bg="#1e1e2e")
+        self.update_win.bind("<Escape>", lambda e: self.update_win.destroy())
+
+        try:
+            x = self.root.winfo_x() + 20
+            y = self.root.winfo_y() + 20
+            self.update_win.geometry(f"460x560+{x}+{y}")
+        except Exception:
+            pass
+
+        # 1. Header Frame
+        hdr = tk.Frame(self.update_win, bg="#181825", padx=14, pady=10)
+        hdr.pack(fill=tk.X)
+
+        if has_update:
+            lbl_title = tk.Label(
+                hdr,
+                text="🚀 Pembaruan Tersedia!",
+                font=("Segoe UI", 12, "bold"),
+                fg="#f9e2af",
+                bg="#181825"
+            )
+            lbl_title.pack(side=tk.LEFT)
+
+            lbl_count = tk.Label(
+                hdr,
+                text=f"{behind_count} commit baru",
+                font=("Segoe UI", 9, "bold"),
+                fg="#a6e3a1",
+                bg="#181825"
+            )
+            lbl_count.pack(side=tk.RIGHT)
+        else:
+            lbl_title = tk.Label(
+                hdr,
+                text="✅ Versi Terbaru",
+                font=("Segoe UI", 12, "bold"),
+                fg="#a6e3a1",
+                bg="#181825"
+            )
+            lbl_title.pack(side=tk.LEFT)
+
+            lbl_cur = tk.Label(
+                hdr,
+                text=f"Commit #{curr_commit.get('hash', 'latest')}",
+                font=("Segoe UI", 9, "bold"),
+                fg="#89b4fa",
+                bg="#181825"
+            )
+            lbl_cur.pack(side=tk.RIGHT)
+
+        # 2. Status / Info Subtitle
+        sub_frame = tk.Frame(self.update_win, bg="#1e1e2e", padx=14, pady=6)
+        sub_frame.pack(fill=tk.X)
+
+        if has_update:
+            msg_sub = f"Repositori GitHub memiliki {behind_count} pembaruan baru di branch '{branch}':"
+            fg_sub = "#cdd6f4"
+        else:
+            msg_sub = f"Aplikasi Anda sudah sinkron dengan branch '{branch}' di GitHub.\nCommit aktif: {curr_commit.get('message', '-')}"
+            fg_sub = "#a6adc8"
+
+        lbl_sub = tk.Label(
+            sub_frame,
+            text=msg_sub,
+            font=("Segoe UI", 9),
+            fg=fg_sub,
+            bg="#1e1e2e",
+            wraplength=430,
+            justify=tk.LEFT
+        )
+        lbl_sub.pack(anchor=tk.W)
+
+        # 3. Commit List Container (Canvas + Scrollbar)
+        if has_update and commits:
+            list_container = tk.Frame(self.update_win, bg="#181825", bd=1, relief=tk.SOLID)
+            list_container.pack(fill=tk.BOTH, expand=True, padx=14, pady=4)
+
+            canvas = tk.Canvas(list_container, bg="#181825", highlightthickness=0)
+            scrollbar = ttk.Scrollbar(list_container, orient=tk.VERTICAL, command=canvas.yview)
+            commit_scroll_frame = tk.Frame(canvas, bg="#181825")
+
+            commit_scroll_frame.bind(
+                "<Configure>",
+                lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+            )
+            canvas_frame_id = canvas.create_window((0, 0), window=commit_scroll_frame, anchor="nw")
+
+            def _on_canvas_configure(event):
+                canvas.itemconfig(canvas_frame_id, width=event.width)
+            canvas.bind("<Configure>", _on_canvas_configure)
+
+            canvas.configure(yscrollcommand=scrollbar.set)
+            canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+            for c in commits:
+                self._create_commit_card(commit_scroll_frame, c)
+
+        elif not has_update:
+            current_box = tk.Frame(self.update_win, bg="#181825", padx=12, pady=10, bd=1, relief=tk.SOLID)
+            current_box.pack(fill=tk.X, padx=14, pady=8)
+
+            tk.Label(
+                current_box,
+                text="📌 INFORMASI COMMIT AKTIF",
+                font=("Segoe UI", 8, "bold"),
+                fg="#89b4fa",
+                bg="#181825"
+            ).pack(anchor=tk.W)
+
+            tk.Label(
+                current_box,
+                text=f"Hash: {curr_commit.get('hash', '-')}",
+                font=("Segoe UI", 9, "bold"),
+                fg="#f9e2af",
+                bg="#181825"
+            ).pack(anchor=tk.W, pady=(2, 0))
+
+            tk.Label(
+                current_box,
+                text=f"Pesan: {curr_commit.get('message', '-')}",
+                font=("Segoe UI", 9),
+                fg="#cdd6f4",
+                bg="#181825",
+                wraplength=400,
+                justify=tk.LEFT
+            ).pack(anchor=tk.W, pady=(2, 0))
+
+            tk.Label(
+                current_box,
+                text=f"Tanggal: {curr_commit.get('date', '-')} | Oleh: {curr_commit.get('author', '-')}",
+                font=("Segoe UI", 8),
+                fg="#6c7086",
+                bg="#181825"
+            ).pack(anchor=tk.W, pady=(4, 0))
+
+        # 4. Mode Selection Frame (Radio buttons for: prompt, auto, disabled)
+        mode_box = tk.Frame(self.update_win, bg="#24273a", padx=12, pady=8, bd=1, relief=tk.FLAT)
+        mode_box.pack(fill=tk.X, padx=14, pady=6)
+
+        lbl_mode_title = tk.Label(
+            mode_box,
+            text="⚙️ Mode Pemeriksaan Update:",
+            font=("Segoe UI", 9, "bold"),
+            fg="#cdd6f4",
+            bg="#24273a"
+        )
+        lbl_mode_title.pack(anchor=tk.W, pady=(0, 4))
+
+        curr_mode = self.config.get("updater_mode", "prompt")
+        self.var_updater_mode = tk.StringVar(value=curr_mode)
+
+        def _on_mode_change():
+            new_mode = self.var_updater_mode.get()
+            self.config["updater_mode"] = new_mode
+            save_config(self.config)
+            mode_labels = {
+                "prompt": "Tanya Setiap Ada Update",
+                "auto": "Otomatis Update di Latar Belakang",
+                "disabled": "Pengecekan Otomatis Dinonaktifkan"
+            }
+            self.show_toast(f"Mode updater: {mode_labels.get(new_mode, new_mode)}")
+
+        modes = [
+            ("prompt", "🔔 Tanya Setiap Ada Update (Prompt)", "#cdd6f4"),
+            ("auto", "⚡ Otomatis Update Tanpa Tanya (Auto)", "#a6e3a1"),
+            ("disabled", "🚫 Nonaktifkan Cek Otomatis (Disabled)", "#f38ba8")
+        ]
+        for val, text, color in modes:
+            rb = tk.Radiobutton(
+                mode_box,
+                text=text,
+                variable=self.var_updater_mode,
+                value=val,
+                font=("Segoe UI", 8, "bold" if val == curr_mode else "normal"),
+                fg=color,
+                bg="#24273a",
+                selectcolor="#181825",
+                activebackground="#24273a",
+                activeforeground=color,
+                command=_on_mode_change
+            )
+            rb.pack(anchor=tk.W, pady=1)
+
+        # 5. Action Buttons Frame
+        btn_frame = tk.Frame(self.update_win, bg="#1e1e2e", padx=14, pady=8)
+        btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        lbl_update_status = tk.Label(
+            btn_frame,
+            text="",
+            font=("Segoe UI", 8),
+            fg="#fab387",
+            bg="#1e1e2e"
+        )
+        lbl_update_status.pack(fill=tk.X, pady=(0, 4))
+
+        if has_update:
+            btn_apply = tk.Button(
+                btn_frame,
+                text="🚀 Perbarui Sekarang",
+                font=("Segoe UI", 10, "bold"),
+                bg="#a6e3a1",
+                fg="#11111b",
+                activebackground="#94e2d5",
+                relief=tk.FLAT,
+                padx=14,
+                pady=5,
+                cursor="hand2"
+            )
+            btn_apply.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
+
+            def _apply_click():
+                btn_apply.config(state=tk.DISABLED, text="⏳ Mengunduh Pembaruan...")
+                lbl_update_status.config(text="Sedang melakukan git pull & update dependensi...")
+
+                def _apply_worker():
+                    success, msg = self.updater.apply_update()
+
+                    def _apply_done():
+                        if success:
+                            lbl_update_status.config(text="✅ Pembaruan berhasil dipasang!", fg="#a6e3a1")
+                            restart = messagebox.askyesno(
+                                "Pembaruan Berhasil",
+                                "Pembaruan telah berhasil diterapkan!\n\nApakah Anda ingin me-restart aplikasi sekarang agar perubahan aktif?",
+                                parent=self.update_win
+                            )
+                            if restart:
+                                self.update_win.destroy()
+                                self._restart_app_cleanly()
+                            else:
+                                self.show_toast("✅ Pembaruan selesai. Silakan restart aplikasi nanti.")
+                                self.update_win.destroy()
+                        else:
+                            btn_apply.config(state=tk.NORMAL, text="🔄 Coba Lagi")
+                            lbl_update_status.config(text=f"❌ Gagal: {msg}", fg="#f38ba8")
+
+                    self.root.after(0, _apply_done)
+
+                threading.Thread(target=_apply_worker, daemon=True).start()
+
+            btn_apply.config(command=_apply_click)
+
+            btn_dismiss = tk.Button(
+                btn_frame,
+                text="Nanti Saja",
+                font=("Segoe UI", 9),
+                bg="#313244",
+                fg="#cdd6f4",
+                activebackground="#45475a",
+                relief=tk.FLAT,
+                padx=12,
+                pady=5,
+                command=self.update_win.destroy
+            )
+            btn_dismiss.pack(side=tk.RIGHT)
+        else:
+            btn_recheck = tk.Button(
+                btn_frame,
+                text="🔄 Periksa Lagi",
+                font=("Segoe UI", 9, "bold"),
+                bg="#89b4fa",
+                fg="#11111b",
+                activebackground="#b4befe",
+                relief=tk.FLAT,
+                padx=12,
+                pady=4,
+                cursor="hand2",
+                command=lambda: [self.update_win.destroy(), self.check_for_updates(manual=True)]
+            )
+            btn_recheck.pack(side=tk.LEFT)
+
+            btn_close = tk.Button(
+                btn_frame,
+                text="Tutup",
+                font=("Segoe UI", 9),
+                bg="#313244",
+                fg="#cdd6f4",
+                activebackground="#45475a",
+                relief=tk.FLAT,
+                padx=14,
+                pady=4,
+                command=self.update_win.destroy
+            )
+            btn_close.pack(side=tk.RIGHT)
+
+    def _create_commit_card(self, parent, commit_info):
+        """Membuat tampilan kartu per-commit di daftar pembaruan"""
+        card = tk.Frame(parent, bg="#11111b", padx=10, pady=8, bd=1, relief=tk.SOLID)
+        card.pack(fill=tk.X, padx=6, pady=4)
+
+        hdr = tk.Frame(card, bg="#11111b")
+        hdr.pack(fill=tk.X)
+
+        h_badge = tk.Label(
+            hdr,
+            text=f"📌 #{commit_info['hash']}",
+            font=("Segoe UI", 8, "bold"),
+            bg="#313244",
+            fg="#89b4fa",
+            padx=4,
+            pady=1
+        )
+        h_badge.pack(side=tk.LEFT)
+
+        info_lbl = tk.Label(
+            hdr,
+            text=f"{commit_info['date']} • {commit_info['author']}",
+            font=("Segoe UI", 8),
+            fg="#6c7086",
+            bg="#11111b"
+        )
+        info_lbl.pack(side=tk.LEFT, padx=6)
+
+        msg_lbl = tk.Label(
+            card,
+            text=commit_info['message'],
+            font=("Segoe UI", 9, "bold"),
+            fg="#cdd6f4",
+            bg="#11111b",
+            wraplength=380,
+            justify=tk.LEFT,
+            anchor=tk.W
+        )
+        msg_lbl.pack(fill=tk.X, pady=(4, 0))
+
+    def _restart_app_cleanly(self):
+        """Menutup aplikasi secara bersih lalu memulai ulang"""
+        try:
+            self.on_close()
+        except Exception:
+            pass
+        self.updater.restart_app()
 
     def on_close(self):
         try:

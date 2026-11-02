@@ -27,6 +27,7 @@ sambung-kata/
 ├── main.py              # Entry point GUI (menjalankan app_gui.py)
 ├── main_cli.py          # Entry point Terminal / Headless mode
 ├── ocr_engine.py        # Core Vision & OCR: Dual-Engine (Template Matching + RapidOCR)
+├── updater.py           # Git Updater Otomatis (Prompt, Auto-update, Disabled, Commit log parser)
 ├── solver.py            # Mesin pencari kata berawalan prefix dengan sistem tier prioritas
 ├── region_selector.py   # DPI-aware transparent overlay untuk seleksi ROI di monitor 1920x1200
 ├── config.py            # Utilitas load/save konfigurasi JSON
@@ -161,7 +162,27 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
 
 ---
 
-## 🧪 6. Prosedur Pengujian Regresi Wajib
+## 🔄 6. Sistem Pembaruan Otomatis Git (`updater.py`)
+
+Aplikasi dilengkapi modul `GitUpdater` (`updater.py`) untuk menjaga repository lokal tetap sinkron dengan GitHub:
+
+1. **Pengecekan Komparatif HEAD vs `origin/main`:**
+   - Menjalankan `git fetch origin <branch>` secara non-blocking di background thread.
+   - Mengambil jumlah commit tertinggal via `git rev-list --count HEAD..origin/<branch>`.
+   - Mengurai riwayat perubahan via `git log HEAD..origin/<branch> --pretty=format:"%h%x09%an%x09%ad%x09%s"`.
+   - Mengembalikan daftar terstruktur commit (hash, author, date, message) dan mendeteksi apakah `requirements.txt` ikut berubah.
+2. **Tiga Mode Pembaruan (`updater_mode` di `config.json`):**
+   - **`prompt` (Default):** Jika update ditemukan saat startup, dialog modal responsif terbuka menampilkan daftar commit perubahan lengkap dengan tombol `🚀 Perbarui Sekarang` dan opsi mode.
+   - **`auto`:** Update diunduh dan diterapkan seketika di latar belakang saat startup tanpa bertanya, lalu notifikasi tombol *Restart* muncul.
+   - **`disabled`:** Pengecekan otomatis saat startup dilewati sepenuhnya. Pemeriksaan manual tetap dapat dilakukan kapan saja via tombol `🔄 Update` di header.
+3. **Eksekusi Update & Clean Restart:**
+   - Menggunakan `git pull --autostash origin <branch>` agar modifikasi konfigurasi/kamus lokal tidak memicu konflik stash.
+   - Jika `requirements.txt` diperbarui, perintah `pip install -r requirements.txt --quiet` dijalankan otomatis.
+   - Fungsi `_restart_app_cleanly()` melepas semua global keyboard hook, mematikan thread OCR, lalu meluncurkan proses Python baru sebelum keluar.
+
+---
+
+## 🧪 7. Prosedur Pengujian Regresi Wajib
 
 Setiap kali Anda (AI Agent) mengubah kode di `ocr_engine.py`, `solver.py`, atau pipeline image processing, **ANDA WAJIB MENJALANKAN SUITE PENGUJIAN REGRESI**:
 
@@ -175,7 +196,7 @@ python test_accuracy.py
 
 ---
 
-## ⚠️ 7. Jebakan Kritis Lingkungan Windows (Gotchas)
+## ⚠️ 8. Jebakan Kritis Lingkungan Windows (Gotchas)
 
 1. **Penskalaan DPI Windows (1920x1200 / Scaling > 100%)**:
    - Jika `ctypes.windll.shcore.SetProcessDpiAwareness(2)` tidak dipanggil sebelum membuat Tkinter window, koordinat `mss.grab` dan koordinat overlay Tkinter akan meleset hingga 25-50%, menyebabkan area kotak seleksi terpotong.
@@ -188,7 +209,7 @@ python test_accuracy.py
 
 ---
 
-## 📋 8. Panduan Menangani Sampel Baru dari User
+## 📋 9. Panduan Menangani Sampel Baru dari User
 
 Jika pengguna melaporkan gambar di `sample/kurang_tepat/` atau `sample/tidak_dikenali/`:
 1. Buka dan periksa gambar menggunakan skrip inspeksi OpenCV.

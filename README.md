@@ -88,6 +88,7 @@ Aplikasi ini secara otomatis mendeteksi kotak awalan huruf giliran Anda di layar
 | **`⚡ Cari Kata Cepat (Manual)`** | Kolom input manual di bagian bawah. Ketik 1–3 huruf awalan lalu tekan `Enter` jika ingin mencari kata tanpa menggunakan scanner layar. |
 | **`➕ Kamus`** | Menambahkan kata baru ke `kamus_lengkap.txt` secara permanen. Dilengkapi validasi vokal otomatis, pengecekan duplikasi, dan pratinjau tipe prioritas (*Tier Jebakan*). |
 | **`🚫 Blocklist`** | Membuka jendela **Kelola Blocklist Kata** untuk melihat semua kata yang diblokir, mencari/memfilter kata, menghapus kata dari daftar blokir, menambah kata blokir baru, atau membuka file `blacklist.txt` langsung. |
+| **`🔄 Update`** | **Pemeriksa Pembaruan Git:** Mengecek commit baru di repositori GitHub, menampilkan daftar pesan commit perubahan (misal: tambah kata, kalibrasi OCR), dan mengunduh pembaruan seketika. Mendukung mode: *Tanya Dulu (Prompt)*, *Auto-Update*, atau *Nonaktifkan*. |
 | **Tombol Blacklist `❌`** | Menghapus kata yang ditolak di Roblox dari rekomendasi tanpa mengubah file kamus utama. Kata otomatis tercatat ke `blacklist.txt` (bisa di-*undo* dengan tombol `↩️ Batalkan`). |
 | **Tampilan Kartu & Klik Salin** | Menampilkan kata penuh (seperti `SEX`, `COMPLEX`, `BUKU`). Klik kartu mana saja untuk langsung menyalin sisa huruf tersebut ke clipboard. |
 
@@ -129,6 +130,20 @@ Kamus bawaan aplikasi ini merupakan gabungan cerdas (*Hybrid Merge*):
 - **Jendela Selalu di Atas (*Always on Top*):** Jendela asisten otomatis mengambang di atas jendela Roblox, sehingga Anda bisa meletakkannya di sudut kiri/kanan layar tanpa tertutup game.
 - **Mendukung Segala Layar:** Kompatibel dengan semua resolusi monitor (termasuk 1920x1080, 1920x1200) dan pengaturan Windows Display Scaling (100%, 125%, 150%).
 - **Intip Lebih Awal:** Biarkan tombol **`▶️ Mulai Auto-Scan`** menyala bahkan saat pemain lain sedang giliran. Saat huruf pemain lain muncul, Anda bisa melihat opsi kata lebih cepat sebelum giliran Anda tiba.
+
+---
+
+## 🔄 Sistem Pembaruan Otomatis (Updater)
+
+Aplikasi dilengkapi modul Git Updater otomatis yang terintegrasi langsung dengan repositori GitHub:
+
+- **Pengecekan Saat Startup:** Saat aplikasi pertama kali dibuka, sistem akan memeriksa apakah ada commit baru di repositori GitHub (`origin/main`) di latar belakang tanpa membuat aplikasi lambat.
+- **Daftar Commit Perubahan:** Jika ada pembaruan, jendela dialog akan memunculkan daftar commit baru lengkap dengan pesan commit (contoh: penambahan kosakata baru, kalibrasi OCR, atau perbaikan bug).
+- **3 Mode Pembaruan:**
+  1. **🔔 Tanya Dulu (Prompt - Default):** Menampilkan dialog konfirmasi dan rincian commit sebelum memperbarui.
+  2. **⚡ Otomatis (Auto):** Mengunduh dan memasang pembaruan otomatis di latar belakang saat startup, lalu menampilkan tombol *Restart* halus.
+  3. **🚫 Nonaktifkan (Disabled):** Menonaktifkan pengecekan pembaruan otomatis saat startup. Anda tetap bisa memeriksa secara manual kapan saja via tombol **`🔄 Update`** di header aplikasi.
+- **Pembaruan 1-Klik:** Mengklik tombol **`🚀 Perbarui Sekarang`** akan otomatis menjalankan `git pull` dan menginstal dependensi baru (jika `requirements.txt` diperbarui).
 
 ---
 
