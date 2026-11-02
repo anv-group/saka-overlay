@@ -188,24 +188,28 @@ Aplikasi dilengkapi modul pemantau visual gameplay otomatis untuk mengenali dan 
      - Kotak teks input berubah menjadi latar **merah pekat** ($R > 100, R > G \times 1.3$).
      - Indikator 'X' merah (nyawa) berubah dari redup menjadi 100% merah.
      - **TIDAK ADA** subtext `"sudah digunakan!"` di bawah kotak teks.
-     - *Aksi Otomatis:* Kata otomatis dimasukkan ke `blacklist.txt` ($O(1)$ di solver), dihapus seketika dari daftar rekomendasi kata bot di GUI, dan notifikasi toast muncul.
+     - *Aksi Otomatis (Terisolasi):* Kata dicatat ke file staging terpisah `auto_blacklist.txt` (TIDAK menyentuh atau mencemari `blacklist.txt` resmi), dan notifikasi toast muncul.
    - **`SUDAH_DIGUNAKAN` (Kata Valid tapi Sudah Terpakai Ronde Ini):**
      - Kotak teks input berubah menjadi latar **merah pekat**.
      - Tepat di bawah kotak merah muncul subtext tulisan putih ber-outline hitam: `'"<KATA>" sudah digunakan!'` (terbaca via OCR).
-     - *Aksi Otomatis:* Kata ini terbukti **VALID** di server Roblox! Jika kata belum terdaftar di kamus aktif, sistem otomatis menyimpannya ke `kamus_contek.txt` & solver (*Auto-Learn*).
+     - *Aksi Otomatis (Terisolasi):* Kata ini terbukti **VALID** di server Roblox. Jika belum terdaftar di kamus resmi, sistem mencatatnya ke `auto_kata_baru.txt` (TIDAK menyentuh kamus utama).
    - **`KATA_BENAR` (Jawaban Berhasil & Diterima):**
      - Kotak kata teks di atas pemain **LENYAP SEKETIKA**.
      - Tubuh karakter pemain di bawahnya seketika **FLASH HIJAU TERANG** (HSV Green Pixels > 10,000, melonjak masif dari rata-rata ~1,100 px).
-     - *Aksi Otomatis:* Kata jawaban berhasil dipelajari (*Auto-Learn*) dan ditambahkan ke kamus aktif jika belum ada.
-2. **Kinerja & Dual-Engine OCR:**
+     - *Aksi Otomatis (Terisolasi):* Kata jawaban dicatat ke `auto_kata_baru.txt` jika belum ada di kamus resmi.
+2. **Isolasi Data Kamus & Human-in-the-Loop:**
+   - Kamus resmi (`kamus_kbbi.txt`, `kamus_contek.txt`, `kamus_lengkap.txt`) dan `blacklist.txt` **100% aman dan tidak tersentuh** oleh deteksi otomatis.
+   - Semua hasil auto-detect masuk ke file staging terpisah (`auto_blacklist.txt` dan `auto_kata_baru.txt`) untuk dikurasi atau diverifikasi pengguna.
+3. **Kinerja & Dual-Engine OCR:**
    - Memanfaatkan **WinOCR** sebagai engine utama untuk pemrosesan ROI kotak gameplay ($440 \times 400\text{ px}$), selesai dalam **4–17 ms** tanpa membebani performa frame rate game.
    - Fallback otomatis ke RapidOCR jika dijalankan di lingkungan tanpa WinOCR.
-3. **Mekanisme Debounce Anti-Duplikasi:**
+4. **Mekanisme Debounce Anti-Duplikasi:**
    - Menghindari pemrosesan berulang pada animasi frame transisi (300 ms) dengan jeda cooldown 2.5 detik per kata.
-4. **Antarmuka & Pengaturan GUI:**
-   - Tombol `🎮 Auto-Index Game`: Mengaktifkan/menonaktifkan pemantauan otomatis.
-   - Tombol `🎯 Area Game`: Membuka `RegionSelector` untuk memilih area kotak kata & karakter pemain secara visual.
-   - Tombol `📋 Log`: Membuka jendela dialog riwayat seluruh kata yang berhasil di-blacklist atau ditambahkan ke kamus lengkap dengan stempel waktu dan status.
+5. **Alat Kalibrasi Mandiri (Hotkey F3 & Log GUI):**
+   - **Hotkey `F3` (Snapshot Kalibrasi):** Mengambil screenshot snapshot area gameplay seketika dan menyimpan gambar PNG beserta metadata JSON (warna RGB, HSV, piksel merah, piksel hijau, OCR raw lines) ke folder `deteksi-gameplay/sample_kalibrasi/`.
+   - **Tombol `🎮 Auto-Index Game`:** Mengaktifkan/menonaktifkan pemantauan otomatis.
+   - **Tombol `🎯 Area Game`:** Membuka `RegionSelector` untuk memilih area kotak kata & karakter pemain secara visual.
+   - **Tombol `📋 Log`:** Membuka dialog riwayat sesi dengan tombol langsung untuk membuka file `auto_blacklist.txt`, `auto_kata_baru.txt`, dan folder `sample_kalibrasi`.
 
 ---
 

@@ -1,9 +1,9 @@
 {
     "screen_area": {
-        "left": 1076,
-        "top": 881,
-        "width": 159,
-        "height": 82
+        "left": 1084,
+        "top": 884,
+        "width": 146,
+        "height": 73
     },
     "scan_interval_sec": 0.04,
     "auto_copy_top_word": false,
@@ -16,12 +16,12 @@
     "auto_check_update_on_startup": true,
     "use_kbbi": false,
     "use_contek": true,
-    "gameplay_indexing_enabled": true,
+    "gameplay_indexing_enabled": false,
     "gameplay_area": {
-        "left": 740,
-        "top": 250,
-        "width": 440,
-        "height": 400
+        "left": 733,
+        "top": 237,
+        "width": 454,
+        "height": 550
     },
     "auto_blacklist_invalid": true,
     "auto_learn_valid": true

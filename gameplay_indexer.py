@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import cv2
 import numpy as np
 import mss
@@ -26,16 +27,23 @@ class GameplayIndexer:
        - KATA_SALAH: Kotak berubah merah, tidak ada pesan 'sudah digunakan' (kata invalid/ditolak game).
        - SUDAH_DIGUNAKAN: Kotak berubah merah, terdapat teks '"<KATA>" sudah digunakan!' (kata valid tapi sudah terpakai).
        - KATA_BENAR: Kotak kata lenyap seketika DAN tubuh karakter pemain di bawahnya berubah hijau terang.
-    2. Aksi Otomatis:
-       - Auto-Blacklist: Jika kata ditolak game (KATA_SALAH), otomatis dimasukkan ke blacklist.txt & solver.
-       - Auto-Learn: Jika kata valid di game (SUDAH_DIGUNAKAN atau KATA_BENAR) tapi belum ada di kamus aktif,
-         otomatis disimpan ke kamus & solver.
+    2. Isolasi Data (Keamanan Kamus):
+       - Data auto-detect disimpan ke file terpisah: auto_blacklist.txt dan auto_kata_baru.txt.
+       - TIDAK menyentuh atau merubah kamus resmi (kamus_kbbi.txt, kamus_contek.txt, kamus_lengkap.txt, blacklist.txt)
+         agar data kurasi yang ada tetap aman dan murni dari kesalahan deteksi visual.
     """
-    def __init__(self, config=None, solver=None, on_event_callback=None):
+    def __init__(self, config=None, solver=None, on_event_callback=None, base_dir=None):
         self.config = config or {}
         self.solver = solver
         self.on_event_callback = on_event_callback
+        self.base_dir = base_dir or os.path.dirname(os.path.abspath(__file__))
         self.sct = getattr(mss, "MSS", mss.mss)()
+
+        # File terisolasi khusus auto-detect
+        self.auto_blacklist_path = os.path.join(self.base_dir, "auto_blacklist.txt")
+        self.auto_kata_baru_path = os.path.join(self.base_dir, "auto_kata_baru.txt")
+        self.kalibrasi_dir = os.path.join(self.base_dir, "deteksi-gameplay", "sample_kalibrasi")
+        os.makedirs(self.kalibrasi_dir, exist_ok=True)
 
         # RapidOCR engine fallback jika WinOCR tidak tersedia
         self.rapid_engine = RapidOCR(params={'Global': {'use_angle_cls': False}}) if HAS_RAPIDOCR else None
@@ -49,6 +57,9 @@ class GameplayIndexer:
 
         # Riwayat aktivitas indexing dalam sesi
         self.history = []
+
+    def update_config(self, config):
+        self.config = config
 
     def capture_gameplay_area(self):
         """Mengambil screenshot crop area gameplay langsung via mss (cepat < 1ms)"""
@@ -74,9 +85,6 @@ class GameplayIndexer:
         if crop is None:
             return "IDLE", "", None
         return self.process_frame(crop, is_full_frame=False)
-
-    def update_config(self, config):
-        self.config = config
 
     def ocr_crop(self, img_bgr):
         """Menjalankan OCR cepat pada potongan kotak kata (menggunakan WinOCR atau fallback RapidOCR)"""
@@ -118,7 +126,6 @@ class GameplayIndexer:
         H, W = crop.shape[:2]
 
         # 1. Analisis Tubuh Karakter Pemain (Piksel Hijau)
-        # Karakter berada di bawah kotak teks: y: 70..H
         char_roi = crop[int(H * 0.18):H, int(W * 0.12):int(W * 0.88)]
         char_hsv = cv2.cvtColor(char_roi, cv2.COLOR_BGR2HSV)
         green_mask = cv2.inRange(char_hsv, np.array([35, 80, 80]), np.array([85, 255, 255]))
@@ -168,7 +175,6 @@ class GameplayIndexer:
         elif is_box_white and main_word:
             state = "SEDANG_KETIK"
         elif not main_word and is_char_green and self.last_typing_word:
-            # Jika kotak kata menghilang dan tubuh karakter flash hijau seketika
             state = "KATA_BENAR"
             main_word = self.last_typing_word
 
@@ -176,23 +182,108 @@ class GameplayIndexer:
             'is_box_red': is_box_red,
             'is_box_white': is_box_white,
             'green_count': green_count,
+            'red_count': red_count,
             'raw_lines': raw_lines
         }
 
         return state, main_word, details
 
+    def save_to_auto_blacklist(self, word):
+        """Menyimpan kata salah ke auto_blacklist.txt terisolasi"""
+        w = word.strip().lower()
+        if not w or len(w) < 2:
+            return False
+        existing = set()
+        if os.path.exists(self.auto_blacklist_path):
+            try:
+                with open(self.auto_blacklist_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        item = line.strip().split("#")[0].strip().lower()
+                        if item:
+                            existing.add(item)
+            except Exception:
+                pass
+        if w in existing:
+            return False
+
+        try:
+            with open(self.auto_blacklist_path, "a", encoding="utf-8") as f:
+                f.write(f"{w}  # Ditolak Roblox {datetime_now_str()}\n")
+            return True
+        except Exception:
+            return False
+
+    def save_to_auto_kata_baru(self, word, reason="Valid di Roblox"):
+        """Menyimpan kata baru ke auto_kata_baru.txt terisolasi"""
+        w = word.strip().lower()
+        if not w or len(w) < 2:
+            return False
+        existing = set()
+        if os.path.exists(self.auto_kata_baru_path):
+            try:
+                with open(self.auto_kata_baru_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        item = line.strip().split("#")[0].strip().lower()
+                        if item:
+                            existing.add(item)
+            except Exception:
+                pass
+        if w in existing:
+            return False
+
+        try:
+            with open(self.auto_kata_baru_path, "a", encoding="utf-8") as f:
+                f.write(f"{w}  # {reason} {datetime_now_str()}\n")
+            return True
+        except Exception:
+            return False
+
+    def capture_kalibrasi_sample(self, label="manual", note=""):
+        """
+        Menyimpan snapshot visual gameplay saat ini beserta metadata lengkap
+        ke folder deteksi-gameplay/sample_kalibrasi/ untuk bahan kalibrasi akurasi lanjutan.
+        """
+        crop = self.capture_gameplay_area()
+        if crop is None:
+            return None
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        state, word, details = self.process_crop(crop)
+        fn_base = f"{timestamp}_{label}_{state}_{word or 'EMPTY'}"
+        img_path = os.path.join(self.kalibrasi_dir, f"{fn_base}.png")
+        meta_path = os.path.join(self.kalibrasi_dir, f"{fn_base}.json")
+
+        cv2.imwrite(img_path, crop)
+        meta = {
+            "timestamp": timestamp,
+            "label": label,
+            "state_detected": state,
+            "word_detected": word,
+            "details": {
+                "is_box_red": bool(details.get("is_box_red", False)),
+                "is_box_white": bool(details.get("is_box_white", False)),
+                "green_count": int(details.get("green_count", 0)),
+                "red_count": int(details.get("red_count", 0)),
+                "raw_lines": details.get("raw_lines", [])
+            },
+            "note": note
+        }
+        try:
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(meta, f, indent=4)
+        except Exception:
+            pass
+        return img_path
+
     def process_frame(self, frame_or_crop, is_full_frame=False):
         """
         Memproses frame/crop dan melakukan tindakan auto-blacklist atau auto-learn jika memenuhi syarat.
-        Mengembalikan tuple: (state, word, action_taken)
+        Hasil disimpan ke file terisolasi (auto_blacklist.txt / auto_kata_baru.txt).
         """
         now = time.time()
         
         if is_full_frame and frame_or_crop is not None:
-            # Potong gameplay_area dari full frame
             area = self.config.get("gameplay_area")
             if not area:
-                # Default 1920x1200
                 H, W = frame_or_crop.shape[:2]
                 area = {
                     "left": int(W * 0.385),
@@ -225,48 +316,45 @@ class GameplayIndexer:
 
         action_taken = None
 
-        # 2. Aksi KATA_SALAH (Auto-Blacklist)
+        # 2. Aksi KATA_SALAH (Catat ke auto_blacklist.txt)
         if state == "KATA_SALAH" and word and len(word) >= 2 and not is_same_recent_event:
             self.last_processed_word = word
             self.last_processed_state = state
             self.last_processed_time = now
 
             auto_bl = self.config.get("auto_blacklist_invalid", True)
-            if self.solver:
-                if auto_bl:
-                    success = self.solver.blacklist_word(word)
-                    action_taken = "BLACKLISTED" if success else "ALREADY_BLACKLISTED"
-                else:
-                    action_taken = "DETECTED_WRONG"
+            if auto_bl:
+                success = self.save_to_auto_blacklist(word)
+                action_taken = "AUTO_BLACKLISTED" if success else "ALREADY_IN_AUTO_BLACKLIST"
+            else:
+                action_taken = "DETECTED_WRONG"
 
             log_entry = {
                 "time": datetime_now_str(),
                 "state": "KATA_SALAH",
                 "word": word,
                 "action": action_taken,
-                "detail": "Ditolak game Roblox (kata tidak ada)"
+                "detail": "Ditolak game Roblox -> dicatat ke auto_blacklist.txt"
             }
             self.history.append(log_entry)
 
             if self.on_event_callback:
                 self.on_event_callback("KATA_SALAH", word, action_taken, log_entry)
 
-        # 3. Aksi SUDAH_DIGUNAKAN (Auto-Learn kata valid)
+        # 3. Aksi SUDAH_DIGUNAKAN (Catat ke auto_kata_baru.txt jika belum ada di kamus)
         elif state == "SUDAH_DIGUNAKAN" and word and len(word) >= 2 and not is_same_recent_event:
             self.last_processed_word = word
             self.last_processed_state = state
             self.last_processed_time = now
 
             auto_learn = self.config.get("auto_learn_valid", True)
-            if self.solver:
-                already_has = self.solver.has_word(word)
-                if not already_has and auto_learn:
-                    success, msg = self.solver.add_word(word)
-                    action_taken = "LEARNED_NEW_WORD" if success else "LEARN_FAILED"
-                else:
-                    action_taken = "KNOWN_WORD"
+            already_has = self.solver.has_word(word) if self.solver else False
+            
+            if not already_has and auto_learn:
+                success = self.save_to_auto_kata_baru(word, reason="Sudah digunakan di Roblox")
+                action_taken = "AUTO_LEARNED" if success else "ALREADY_IN_AUTO_NEW"
             else:
-                action_taken = "DETECTED_USED"
+                action_taken = "KNOWN_IN_OFFICIAL_DICT"
 
             log_entry = {
                 "time": datetime_now_str(),
@@ -280,30 +368,28 @@ class GameplayIndexer:
             if self.on_event_callback:
                 self.on_event_callback("SUDAH_DIGUNAKAN", word, action_taken, log_entry)
 
-        # 4. Aksi KATA_BENAR (Auto-Learn kata benar)
+        # 4. Aksi KATA_BENAR (Catat ke auto_kata_baru.txt jika belum ada di kamus)
         elif state == "KATA_BENAR" and word and len(word) >= 2 and not is_same_recent_event:
             self.last_processed_word = word
             self.last_processed_state = state
             self.last_processed_time = now
-            self.last_typing_word = None  # Reset kata yang sedang diketik
+            self.last_typing_word = None
 
             auto_learn = self.config.get("auto_learn_valid", True)
-            if self.solver:
-                already_has = self.solver.has_word(word)
-                if not already_has and auto_learn:
-                    success, msg = self.solver.add_word(word)
-                    action_taken = "LEARNED_NEW_WORD" if success else "LEARN_FAILED"
-                else:
-                    action_taken = "KNOWN_WORD"
+            already_has = self.solver.has_word(word) if self.solver else False
+
+            if not already_has and auto_learn:
+                success = self.save_to_auto_kata_baru(word, reason="Jawaban benar Roblox")
+                action_taken = "AUTO_LEARNED" if success else "ALREADY_IN_AUTO_NEW"
             else:
-                action_taken = "ACCEPTED_CORRECT"
+                action_taken = "KNOWN_IN_OFFICIAL_DICT"
 
             log_entry = {
                 "time": datetime_now_str(),
                 "state": "KATA_BENAR",
                 "word": word,
                 "action": action_taken,
-                "detail": "Jawaban diterima Roblox (karakter hijau)"
+                "detail": "Jawaban diterima Roblox (karakter flash hijau)"
             }
             self.history.append(log_entry)
 

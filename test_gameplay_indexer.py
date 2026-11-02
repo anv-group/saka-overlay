@@ -10,12 +10,10 @@ class TestGameplayIndexer(unittest.TestCase):
         def on_event(state, word, action, entry):
             self.events.append((state, word, action))
 
-        # Gunakan path file sementara untuk pengujian
-        self.tmp_bl_path = 'test_tmp_blacklist.txt'
-        with open(self.tmp_bl_path, 'w', encoding='utf-8') as f:
-            f.write("remix\n")
+        self.tmp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test_tmp_staging')
+        os.makedirs(self.tmp_dir, exist_ok=True)
 
-        self.solver = SambungKataSolver(blacklist_path=self.tmp_bl_path)
+        self.solver = SambungKataSolver()
         self.indexer = GameplayIndexer(
             config={
                 "auto_blacklist_invalid": True,
@@ -28,13 +26,21 @@ class TestGameplayIndexer(unittest.TestCase):
                 }
             },
             solver=self.solver,
-            on_event_callback=on_event
+            on_event_callback=on_event,
+            base_dir=self.tmp_dir
         )
 
     def tearDown(self):
-        if hasattr(self, 'tmp_bl_path') and os.path.exists(self.tmp_bl_path):
+        # Bersihkan folder staging pengujian
+        if os.path.exists(self.tmp_dir):
+            for f in os.listdir(self.tmp_dir):
+                fp = os.path.join(self.tmp_dir, f)
+                try:
+                    if os.path.isfile(fp): os.remove(fp)
+                except Exception:
+                    pass
             try:
-                os.remove(self.tmp_bl_path)
+                os.rmdir(self.tmp_dir)
             except Exception:
                 pass
 
@@ -45,7 +51,10 @@ class TestGameplayIndexer(unittest.TestCase):
         self.assertEqual(word, "IMBAS")
 
     def test_kata_salah_sequence(self):
-        # Jalankan pada sequence kata tidak ada (0..15)
+        # Catat total baris blacklist.txt asli sebelum test
+        with open('blacklist.txt', 'r', encoding='utf-8') as f:
+            orig_bl_lines = f.readlines()
+
         detected_states = []
         for i in range(16):
             img = cv2.imread(f'deteksi-gameplay/kata-tidak-ada/{i}.png')
@@ -54,11 +63,22 @@ class TestGameplayIndexer(unittest.TestCase):
 
         # Harus ada state KATA_SALAH yang terdeteksi
         self.assertIn("KATA_SALAH", detected_states)
-        # Event callback harus dipanggil dengan KATA_SALAH dan word ATF
         states_in_events = [e[0] for e in self.events]
         words_in_events = [e[1] for e in self.events]
         self.assertIn("KATA_SALAH", states_in_events)
         self.assertIn("ATF", words_in_events)
+
+        # PASTIKAN blacklist.txt asli TIDAK BERUBAH SAMA SEKALI
+        with open('blacklist.txt', 'r', encoding='utf-8') as f:
+            curr_bl_lines = f.readlines()
+        self.assertEqual(orig_bl_lines, curr_bl_lines, "blacklist.txt asli tidak boleh tersentuh!")
+
+        # Pastikan masuk ke auto_blacklist.txt terisolasi
+        auto_bl_file = os.path.join(self.tmp_dir, "auto_blacklist.txt")
+        self.assertTrue(os.path.exists(auto_bl_file), "auto_blacklist.txt harus terbuat")
+        with open(auto_bl_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn("atf", content)
 
     def test_sudah_dipakai_sequence(self):
         self.events.clear()
@@ -71,6 +91,14 @@ class TestGameplayIndexer(unittest.TestCase):
         self.assertIn("SUDAH_DIGUNAKAN", detected_states)
         words_in_events = [e[1] for e in self.events]
         self.assertIn("UPAN", words_in_events)
+
+        # Pastikan kamus resmi tidak berubah, tapi tercatat di auto_kata_baru.txt jika belum ada
+        auto_baru_file = os.path.join(self.tmp_dir, "auto_kata_baru.txt")
+        # Jika UPAN belum ada di kamus, harus tercatat
+        if not self.solver.has_word("upan"):
+            self.assertTrue(os.path.exists(auto_baru_file))
+            with open(auto_baru_file, 'r', encoding='utf-8') as f:
+                self.assertIn("upan", f.read())
 
     def test_benar_sequence(self):
         self.events.clear()

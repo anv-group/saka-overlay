@@ -348,6 +348,21 @@ class SambungKataApp:
         )
         btn_game_log.pack(side=tk.LEFT, padx=2)
 
+        btn_game_calib = tk.Button(
+            gameplay_frame,
+            text="📸 F3",
+            font=("Segoe UI", 8, "bold"),
+            bg="#313244",
+            fg="#f9e2af",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=1,
+            cursor="hand2",
+            command=self.on_capture_gameplay_kalibrasi
+        )
+        btn_game_calib.pack(side=tk.LEFT, padx=2)
+
         # Area Info Deteksi
         info_frame = tk.LabelFrame(
             self.root,
@@ -425,15 +440,18 @@ class SambungKataApp:
         )
         self.btn_koreksi.pack(side=tk.RIGHT, padx=2)
 
-        # Shortcut lokal Tkinter
+        # Shortcut lokal Tkinter (F2 untuk awalan, F3 untuk gameplay)
         self.root.bind(f"<{self.report_hotkey}>", lambda e: self.on_report_kurang_tepat())
+        self.gameplay_calib_hotkey = "F3"
+        self.root.bind(f"<{self.gameplay_calib_hotkey}>", lambda e: self.on_capture_gameplay_kalibrasi())
 
         # Global Hotkey menggunakan keyboard library agar bisa ditekan saat fokus di game Roblox
         try:
             import keyboard
             keyboard.add_hotkey(self.report_hotkey.lower(), lambda: self.root.after(0, self.on_report_kurang_tepat))
+            keyboard.add_hotkey(self.gameplay_calib_hotkey.lower(), lambda: self.root.after(0, self.on_capture_gameplay_kalibrasi))
         except Exception as e:
-            print(f"[!] Warning: Gagal mendaftarkan global hotkey {self.report_hotkey}: {e}")
+            print(f"[!] Warning: Gagal mendaftarkan global hotkey: {e}")
 
         # Frame Peringatan Keyakinan Rendah & Alternatif
         self.warning_frame = tk.Frame(info_frame, bg="#313244", padx=6, pady=4)
@@ -746,21 +764,24 @@ class SambungKataApp:
                 pass
             time.sleep(interval)
 
+    def on_capture_gameplay_kalibrasi(self):
+        """Mengambil snapshot area gameplay dan metadata ke deteksi-gameplay/sample_kalibrasi (Hotkey F3)"""
+        saved_img = self.gameplay_indexer.capture_kalibrasi_sample(label="kalibrasi_f3")
+        if saved_img:
+            fn = os.path.basename(saved_img)
+            self.show_toast(f"📸 Sampel kalibrasi tersimpan: '{fn}'")
+        else:
+            self.show_toast("⚠️ Gagal mengambil sampel (pastikan area gameplay sudah diatur)")
+
     def _on_gameplay_event(self, state, word, action, log_entry):
         """Callback dari background thread saat ada event gameplay"""
         self.root.after(0, self._handle_gameplay_event_ui, state, word, action, log_entry)
 
     def _handle_gameplay_event_ui(self, state, word, action, log_entry):
-        if action == "BLACKLISTED":
-            self.show_toast(f"🚫 [Auto-Blocklist] '{word}' ditolak game -> Diblokir!")
-            if hasattr(self, "last_detected_word") and self.last_detected_word:
-                self.update_results(self.last_detected_word)
-        elif action == "LEARNED_NEW_WORD":
-            self.show_toast(f"✨ [Auto-Learn] '{word}' valid di game -> Masuk kamus!")
-            if hasattr(self, "lbl_dict_count") and self.lbl_dict_count.winfo_exists():
-                self.lbl_dict_count.config(text=f"({len(self.solver.words):,} kata)")
-            if hasattr(self, "last_detected_word") and self.last_detected_word:
-                self.update_results(self.last_detected_word)
+        if action == "AUTO_BLACKLISTED":
+            self.show_toast(f"🚫 [Auto-Detect] '{word}' ditolak game -> Dicatat di auto_blacklist.txt")
+        elif action == "AUTO_LEARNED":
+            self.show_toast(f"✨ [Auto-Detect] '{word}' valid di game -> Dicatat di auto_kata_baru.txt")
 
         if hasattr(self, "gameplay_history_win") and self.gameplay_history_win and self.gameplay_history_win.winfo_exists():
             self._refresh_gameplay_history_table()
@@ -774,8 +795,8 @@ class SambungKataApp:
 
         self.gameplay_history_win = tk.Toplevel(self.root)
         self.gameplay_history_win.title("🎮 Riwayat Auto-Index Gameplay")
-        self.gameplay_history_win.geometry("520x460")
-        self.gameplay_history_win.minsize(460, 380)
+        self.gameplay_history_win.geometry("560x490")
+        self.gameplay_history_win.minsize(500, 400)
         self.gameplay_history_win.attributes("-topmost", True)
         self.gameplay_history_win.configure(bg="#1e1e2e")
         self.gameplay_history_win.bind("<Escape>", lambda e: self.gameplay_history_win.destroy())
@@ -783,7 +804,7 @@ class SambungKataApp:
         try:
             x = self.root.winfo_x() + 20
             y = self.root.winfo_y() + 20
-            self.gameplay_history_win.geometry(f"520x460+{x}+{y}")
+            self.gameplay_history_win.geometry(f"560x490+{x}+{y}")
         except Exception:
             pass
 
@@ -793,7 +814,7 @@ class SambungKataApp:
 
         title_lbl = tk.Label(
             hdr,
-            text="🎮 Riwayat Auto-Index Gameplay",
+            text="🎮 Riwayat Auto-Index Gameplay (File Terpisah)",
             font=("Segoe UI", 12, "bold"),
             fg="#a6e3a1",
             bg="#181825"
@@ -812,10 +833,10 @@ class SambungKataApp:
 
         chk_bl = tk.Checkbutton(
             opts_box,
-            text="Auto-Blacklist kata ditolak",
+            text="Catat kata ditolak ke auto_blacklist.txt",
             variable=self.bl_inv_var,
             command=on_toggle_bl_inv,
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 8),
             fg="#f38ba8",
             bg="#1e1e2e",
             selectcolor="#313244",
@@ -831,10 +852,10 @@ class SambungKataApp:
 
         chk_lrn = tk.Checkbutton(
             opts_box,
-            text="Auto-Learn kata valid baru",
+            text="Catat kata valid baru ke auto_kata_baru.txt",
             variable=self.lrn_val_var,
             command=on_toggle_lrn_val,
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 8),
             fg="#a6e3a1",
             bg="#1e1e2e",
             selectcolor="#313244",
@@ -842,22 +863,33 @@ class SambungKataApp:
         )
         chk_lrn.pack(side=tk.LEFT)
 
+        # Info Box
+        sub_info = tk.Label(
+            self.gameplay_history_win,
+            text="🛡️ Kamus & blacklist resmi Anda 100% aman (kata di bawah hanya disimpan ke file staging terpisah)",
+            font=("Segoe UI", 8, "italic"),
+            fg="#a6adc8",
+            bg="#1e1e2e",
+            padx=12
+        )
+        sub_info.pack(anchor=tk.W)
+
         # Treeview Tabel Riwayat
         tree_frame = tk.Frame(self.gameplay_history_win, bg="#1e1e2e", padx=12, pady=4)
         tree_frame.pack(fill=tk.BOTH, expand=True)
 
-        cols = ("Waktu", "Status", "Kata", "Aksi", "Keterangan")
-        self.tree_history = ttk.Treeview(tree_frame, columns=cols, show="headings", height=10)
+        cols = ("Waktu", "Status", "Kata", "Tindakan", "Keterangan")
+        self.tree_history = ttk.Treeview(tree_frame, columns=cols, show="headings", height=9)
         self.tree_history.heading("Waktu", text="Waktu")
         self.tree_history.heading("Status", text="Status")
         self.tree_history.heading("Kata", text="Kata")
-        self.tree_history.heading("Aksi", text="Aksi")
+        self.tree_history.heading("Tindakan", text="Tindakan")
         self.tree_history.heading("Keterangan", text="Keterangan")
 
         self.tree_history.column("Waktu", width=65, anchor=tk.CENTER)
         self.tree_history.column("Status", width=110, anchor=tk.CENTER)
         self.tree_history.column("Kata", width=80, anchor=tk.CENTER)
-        self.tree_history.column("Aksi", width=110, anchor=tk.CENTER)
+        self.tree_history.column("Tindakan", width=140, anchor=tk.W)
         self.tree_history.column("Keterangan", width=140, anchor=tk.W)
 
         tree_scroll = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree_history.yview)
@@ -866,13 +898,66 @@ class SambungKataApp:
         self.tree_history.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
+        # Bar Buka File Terpisah
+        file_bar = tk.Frame(self.gameplay_history_win, bg="#1e1e2e", padx=12, pady=4)
+        file_bar.pack(fill=tk.X)
+
+        def _open_file(filepath):
+            if not os.path.exists(filepath):
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write("# Daftar kata auto-detect\n")
+            try:
+                os.startfile(filepath)
+            except Exception as e:
+                self.show_toast(f"Gagal membuka file: {e}")
+
+        def _open_dir(dirpath):
+            os.makedirs(dirpath, exist_ok=True)
+            try:
+                os.startfile(dirpath)
+            except Exception as e:
+                self.show_toast(f"Gagal membuka folder: {e}")
+
+        btn_open_bl = tk.Button(
+            file_bar,
+            text="📂 Buka auto_blacklist.txt",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#f38ba8",
+            relief=tk.FLAT,
+            command=lambda: _open_file(self.gameplay_indexer.auto_blacklist_path)
+        )
+        btn_open_bl.pack(side=tk.LEFT, padx=(0, 4))
+
+        btn_open_baru = tk.Button(
+            file_bar,
+            text="📂 Buka auto_kata_baru.txt",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#a6e3a1",
+            relief=tk.FLAT,
+            command=lambda: _open_file(self.gameplay_indexer.auto_kata_baru_path)
+        )
+        btn_open_baru.pack(side=tk.LEFT, padx=4)
+
+        btn_open_samples = tk.Button(
+            file_bar,
+            text="📁 Sampel F3",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#f9e2af",
+            relief=tk.FLAT,
+            command=lambda: _open_dir(self.gameplay_indexer.kalibrasi_dir)
+        )
+        btn_open_samples.pack(side=tk.LEFT, padx=4)
+
         # Bottom Bar
         bbar = tk.Frame(self.gameplay_history_win, bg="#181825", padx=12, pady=8)
         bbar.pack(fill=tk.X)
 
         btn_clear = tk.Button(
             bbar,
-            text="🗑️ Bersihkan Riwayat",
+            text="🗑️ Bersihkan Riwayat Sesi",
             font=("Segoe UI", 9),
             bg="#45475a",
             fg="#cdd6f4",
@@ -912,14 +997,18 @@ class SambungKataApp:
                 st_display = st_text
 
             act_text = entry.get("action", "")
-            if act_text == "BLACKLISTED":
-                act_display = "🚫 Diblacklist"
-            elif act_text == "LEARNED_NEW_WORD":
-                act_display = "✨ Ditambah Kamus"
-            elif act_text == "KNOWN_WORD":
-                act_display = "Sudah Ada"
-            elif act_text == "ALREADY_BLACKLISTED":
-                act_display = "Sudah Diblokir"
+            if act_text == "AUTO_BLACKLISTED":
+                act_display = "🚫 auto_blacklist.txt"
+            elif act_text == "AUTO_LEARNED":
+                act_display = "✨ auto_kata_baru.txt"
+            elif act_text == "ALREADY_IN_AUTO_BLACKLIST":
+                act_display = "Sudah di auto_blacklist"
+            elif act_text == "ALREADY_IN_AUTO_NEW":
+                act_display = "Sudah di auto_kata_baru"
+            elif act_text == "KNOWN_IN_OFFICIAL_DICT":
+                act_display = "Sudah di Kamus Resmi"
+            elif act_text == "DETECTED_WRONG":
+                act_display = "Terdeteksi Salah"
             else:
                 act_display = act_text or "-"
 
