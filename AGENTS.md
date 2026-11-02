@@ -247,21 +247,29 @@ Untuk menghemat kuota komputasi GitHub Actions dan mempercepat siklus developmen
    - Push ke branch `dev` **tidak memicu GitHub Actions** (bebas commit kapan saja tanpa menghabiskan kuota).
 3. **Branch `main` (Production & Release):**
    - Hanya menerima kode stabil hasil merge.
-   - Setiap kali terjadi push atau merge ke `main`, GitHub Actions (`test.yml`) otomatis menjalankan benchmark OCR (92 sampel) di runner Windows.
+   - Setiap kali terjadi push atau merge ke `main`, GitHub Actions (`test.yml`) otomatis menjalankan rangkaian pengujian lengkap: OCR Benchmark (92 sampel), Solver & Custom Traps Unit Tests, dan Gameplay Indexer Sequence Tests di runner Windows.
 
 ---
 
 ## 🧪 8. Prosedur Pengujian Regresi Wajib
 
-Setiap kali Anda (AI Agent) mengubah kode di `ocr_engine.py`, `solver.py`, atau pipeline image processing, **ANDA WAJIB MENJALANKAN SUITE PENGUJIAN REGRESI**:
+Setiap kali Anda (AI Agent) mengubah kode di `ocr_engine.py`, `solver.py`, `gameplay_indexer.py`, atau pipeline UI/image processing, **ANDA WAJIB MENJALANKAN SUITE PENGUJIAN REGRESI**:
 
 ```powershell
+# 1. Benchmark Akurasi OCR Layar (Wajib 92/92 Lolos 100%)
 python test_accuracy.py
+
+# 2. Unit Test Solver, Custom Traps, Mode Santai, & Blacklist
+python test_solver.py
+
+# 3. Pengujian Sekuens Respon Visual Gameplay (Benar, Ditolak, Terpakai)
+python test_gameplay_indexer.py
 ```
 
 ### Standar Kelulusan:
-- Total dataset uji: **92 sampel gambar nyata Roblox**
-- **Wajib 100% Pass (92/92 Lolos Bersih)** tanpa ada penurunan akurasi atau peringatan keyakinan rendah (*false low confidence*).
+- Total dataset uji OCR: **92 sampel gambar nyata Roblox**
+- **Wajib 100% Pass** tanpa ada penurunan akurasi atau peringatan keyakinan rendah (*false low confidence*).
+- Seluruh 7 pengujian solver dan 5 pengujian gameplay indexer wajib berstatus **OK**.
 
 ---
 

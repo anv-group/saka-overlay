@@ -330,7 +330,8 @@ class SambungKataSolver:
                 # Cek akhiran custom
                 matched_rule = None
                 for rule in active_custom:
-                    if w.endswith(rule["suffix"]):
+                    sfx = rule.get("suffix", "").lower()
+                    if sfx and w.endswith(sfx):
                         matched_rule = rule
                         break
 
@@ -350,7 +351,8 @@ class SambungKataSolver:
                 # Cek akhiran custom (Prioritas Super / Paling Atas)
                 matched_rule = None
                 for rule in active_custom:
-                    if w.endswith(rule["suffix"]):
+                    sfx = rule.get("suffix", "").lower()
+                    if sfx and w.endswith(sfx):
                         matched_rule = rule
                         break
 

@@ -1,24 +1,24 @@
 # 🎮 Roblox Sambung Kata Assistant & Auto Solver
 
-[![OCR Accuracy Regression Test](https://github.com/anv-group/sambung-kata-overlay/actions/workflows/test.yml/badge.svg)](https://github.com/anv-group/sambung-kata-overlay/actions/workflows/test.yml)
+[![CI & Regression Tests](https://github.com/anv-group/sambung-kata-overlay/actions/workflows/test.yml/badge.svg)](https://github.com/anv-group/sambung-kata-overlay/actions/workflows/test.yml)
 
 Asisten cerdas pendamping bermain game **Roblox Sambung Kata** ([Mainkan di Roblox](https://www.roblox.com/games/130342654546662/Sambung-Kata)).
 
-Aplikasi ini secara otomatis mendeteksi kotak awalan huruf giliran Anda di layar, memilihkan kata serangan terbaik dari kamus **147.870+ kata**, dan dapat langsung menyalinnya ke clipboard sehingga Anda tinggal menekan `Ctrl + V` lalu `Enter` di dalam game!
+Aplikasi ini secara otomatis mendeteksi kotak awalan huruf giliran Anda di layar secara *real-time*, memilihkan kata serangan terbaik dari kamus **147.880+ kata** (KBBI v6 + Database Contek Game Roblox), dan dapat langsung menyalinnya ke clipboard sehingga Anda tinggal menekan `Ctrl + V` lalu `Enter` di dalam game!
 
 ---
 
 ## ⚡ Panduan Kilat 1 Menit (Quick Start)
 
 1. **Buka Roblox** dan masuk ke room permainan **Sambung Kata**.
-2. **Jalankan Asisten:** Klik ganda file **`run.bat`** (atau jalankan `python main.py`).
+2. **Jalankan Asisten:** Klik ganda file **`run.bat`** (atau jalankan `python main.py`). Window akan otomatis menempel di sisi kanan layar dalam format *ultra-compact overlay*.
 3. **Tentukan Area Huruf:**
-   - Klik tombol **`🎯 Set Area Layar`**.
+   - Klik tombol **`⚙️`** di kanan atas, lalu pilih **`🎯 Set Area Deteksi`**.
    - Layar akan meredup. Tarik kotak seleksi menggunakan mouse tepat mengelilingi kotak putih tempat huruf giliran muncul di game Roblox.
 4. **Mulai Main:**
-   - Centang **`📋 Auto-copy sisa kata`** (atau ketik manual dengan melihat panduan sisa kata di layar).
-   - Klik tombol **`▶️ Mulai Auto-Scan`**.
-   - Saat giliran Anda tiba, sisa kata (tanpa awalan) langsung tersalin otomatis atau dapat diketik kilat. Jika menggunakan auto-copy, cukup tekan **`Ctrl + V`** di kolom input Roblox lalu tekan **`Enter`**!
+   - Klik tombol **`▶️ Mulai`** di bilah atas.
+   - Saat giliran Anda tiba, rekomendasi kata langsung muncul seketika (latensi 40–80ms).
+   - Klik kartu kata yang diinginkan untuk menyalinnya ke clipboard, lalu tekan **`Ctrl + V`** dan **`Enter`** di Roblox!
 
 ---
 
@@ -28,141 +28,164 @@ Aplikasi ini secara otomatis mendeteksi kotak awalan huruf giliran Anda di layar
 - **Sistem Operasi:** Windows 10 atau Windows 11 (64-bit).
 - **Python:** Versi **3.10** ke atas ([Download Python](https://www.python.org/downloads/)).
   > [!IMPORTANT]
-  > Saat menginstal Python di Windows, **wajib centang opsi "Add python.exe to PATH"** di layar awal installer agar perintah python dapat dijalankan langsung dari mana saja.
+  > Saat menginstal Python di Windows, **wajib centang opsi "Add python.exe to PATH"** di layar awal installer agar perintah python dapat dikenali sistem.
 
 ---
 
 ### 📥 Langkah Instalasi & Menjalankan
 
-1. **Clone atau Unduh Repositori:**
+1. **Clone Repositori:**
    ```powershell
    git clone https://github.com/anv-group/sambung-kata-overlay.git
    cd sambung-kata-overlay
    ```
-   *(Atau klik tombol **Code** > **Download ZIP** di halaman GitHub lalu ekstrak foldernya).*
+   *(Atau klik tombol **Code** > **Download ZIP** di GitHub lalu ekstrak foldernya).*
 
 2. **Jalankan Aplikasi:**
 
    **Cara 1 — Paling Praktis (1-Klik):**
-   - Cukup klik ganda file **`run.bat`**.
-   - Skrip batch akan secara otomatis memeriksa Python, menginstal seluruh dependensi dari `requirements.txt` jika belum terpasang, dan langsung meluncurkan aplikasi GUI.
+   - Klik ganda file **`run.bat`**.
+   - Skrip batch otomatis memeriksa environment, memasang dependensi dari `requirements.txt` bila belum ada, dan langsung meluncurkan aplikasi GUI.
 
    **Cara 2 — Lewat Terminal / PowerShell:**
    ```powershell
-   # 1. (Opsional tapi disarankan) Buat virtual environment
+   # 1. (Opsional tapi disarankan) Virtual environment
    python -m venv venv
    .\venv\Scripts\activate
 
    # 2. Instal dependensi
    pip install -r requirements.txt
 
-   # 3. Jalankan aplikasi GUI
+   # 3. Jalankan aplikasi
    python main.py
    ```
 
-   **Cara 3 — Mode CLI (Konsol / Terminal Saja):**
+   **Cara 3 — Mode CLI (Headless / Terminal):**
    ```powershell
    python main_cli.py
    ```
 
-3. **Pengujian Akurasi (Opsional):**
-   Untuk memverifikasi keakuratan engine OCR terhadap 92 sampel gambar nyata Roblox:
+---
+
+## 🔄 Cara Memperbarui Aplikasi (Update)
+
+### A. Jika Menggunakan Versi Sekarang (Sudah Ada Updater):
+Aplikasi sudah dilengkapi modul pembaruan otomatis di latar belakang:
+- **Saat Startup:** Jika ada commit baru di repositori GitHub, dialog pembaruan akan otomatis muncul (bisa diatur ke mode *Prompt*, *Auto-Update*, atau *Disabled*).
+- **Pemeriksaan Manual:** Klik tombol **`⚙️`** (Settings) di kanan atas ➔ pilih **`🔄 Cek Update Git...`** ➔ klik **`🚀 Perbarui Sekarang`**.
+- **Pemilihan Branch:** Anda dapat berpindah branch secara instan (misal branch stabil `main` atau branch performa turbo `reoptimized`) langsung dari dropdown updater.
+
+### B. Khusus Pengguna Lama yang Clone Sebelum Fitur Updater Ada:
+Bagi pengguna yang meng-clone repositori ini sebelum modul updater dibuat (sehingga belum ada menu update di GUI):
+1. Buka folder aplikasi di **Terminal / Command Prompt / PowerShell**.
+2. Jalankan perintah berikut:
    ```powershell
-   python test_accuracy.py
+   git pull
    ```
+   *(Atau `git pull origin main`)*
+3. Setelah perintah di atas dijalankan sekali, seluruh modul updater, konfigurasi baru, dan fitur-fitur terkini akan langsung terpasang. Untuk pembaruan berikutnya cukup gunakan tombol update di aplikasi!
 
 ---
 
-## 🎯 Panduan Fitur & Tombol Aplikasi
+## 🎯 Panduan Fitur & Antarmuka Aplikasi
 
-| Tombol / Fitur | Fungsi & Cara Pakai |
+Jendela aplikasi didesain khusus dengan konsep **Ultra-Compact Overlay** yang mengambang di atas Roblox (*Always-on-Top*) di sisi kanan monitor:
+
+| Elemen UI / Shortcut | Fungsi & Cara Pakai |
 | :--- | :--- |
-| **`🎯 Set Area Layar`** | Menentukan posisi kotak putih tempat awalan kata muncul di Roblox. Hanya perlu diatur satu kali (otomatis tersimpan untuk pemakaian berikutnya). |
-| **`👁️ Tes Area`** | Menampilkan cuplikan gambar area yang telah dipilih untuk memastikan kotak tidak terpotong. |
-| **`▶️ Mulai Auto-Scan`** | Menjalankan pemindaian layar secara otomatis dan *real-time*. |
-| **`⏹️ Stop Scan`** | Menghentikan pemindaian otomatis (misalnya saat sedang istirahat bermain). |
-| **`⚡ Kecepatan Scan`** | Mengatur interval pengecekan layar: **100ms (Ekstrem)**, **150ms (Kilat)**, **250ms (Cepat)**, atau **500ms (Santai)**. Dilengkapi optimasi *Frame-Diff* sehingga scan super kilat tidak membebani CPU. |
-| **`📋 Auto-copy sisa kata`** | Bila dicentang, **sisa huruf yang harus diketik** (tanpa awalan) langsung disalin otomatis ke clipboard. Di game Anda tinggal menekan `Ctrl + V` lalu `Enter`! |
-| **`🌿 Mode Santai`** | **Aktifkan jika bermain di room Mode Santai!** Menyaring dan membuang kata yang mengandung/berakhiran huruf terlarang (**X, Q, dan F**). |
-| **`🚩 Deteksi Salah (F2)`** | **Screenshot Seketika (1-Klik):** Jika saat bermain ada huruf yang salah terbaca, langsung tekan **`F2`**. Gambar langsung tersimpan seketika ke `sample/kurang_tepat/` tanpa popup dialog yang mengganggu tempo cepat permainan. |
-| **`📝 Koreksi (N)`** | **Pendataan Koreksi:** Membuka antarmuka visual untuk mereview dan melabeli screenshot salah deteksi (baik dari manual `sample/kurang_tepat/` maupun auto-save `sample/tidak_dikenali/`), melihat gambar diperbesar, dan menginput awalan yang benar dengan menekan `Enter`. |
-| **Tombol Alternatif Huruf** | Jika sistem membaca huruf yang memiliki kemiripan bentuk (seperti `G`, `C`, `D`, `O`), tombol pilihan alternatif akan muncul (contoh: `[G] [C]`). Klik huruf yang benar untuk beralih instan. |
-| **`⚡ Cari Kata Cepat (Manual)`** | Kolom input manual di bagian bawah. Ketik 1–3 huruf awalan lalu tekan `Enter` jika ingin mencari kata tanpa menggunakan scanner layar. |
-| **`➕ Kamus`** | Menambahkan kata baru ke `kamus_lengkap.txt` secara permanen. Dilengkapi validasi vokal otomatis, pengecekan duplikasi, dan pratinjau tipe prioritas (*Tier Jebakan*). |
-| **`🚫 Blocklist`** | Membuka jendela **Kelola Blocklist Kata** untuk melihat semua kata yang diblokir, mencari/memfilter kata, menghapus kata dari daftar blokir, menambah kata blokir baru, atau membuka file `blacklist.txt` langsung. |
-| **`🔄 Update`** | **Pemeriksa Pembaruan Git:** Mengecek commit baru di repositori GitHub, menampilkan daftar pesan commit perubahan (misal: tambah kata, kalibrasi OCR), dan mengunduh pembaruan seketika. Mendukung mode: *Tanya Dulu (Prompt)*, *Auto-Update*, atau *Nonaktifkan*. |
-| **Tombol Blacklist `❌`** | Menghapus kata yang ditolak di Roblox dari rekomendasi tanpa mengubah file kamus utama. Kata otomatis tercatat ke `blacklist.txt` (bisa di-*undo* dengan tombol `↩️ Batalkan`). |
-| **Tampilan Kartu & Klik Salin** | Menampilkan kata penuh (seperti `SEX`, `COMPLEX`, `BUKU`). Klik kartu mana saja untuk langsung menyalin sisa huruf tersebut ke clipboard. |
+| **Title Bar Dinamis** | Format: `Sambung Kata Overlay (<branch> <commit>) [<kecepatan scan>]`. Menampilkan branch git aktif, commit hash saat ini, dan kecepatan scan secara *real-time*. |
+| **`▶️ Mulai` / `⏹️ Stop`** | Menjalankan atau menghentikan pemindaian OCR layar secara instan. |
+| **`🔄` (Restart)** | Merestart aplikasi dalam 1-klik secara bersih untuk mereload kamus, memori, atau konfigurasi. |
+| **`NORMAL` / `SANTAI`** | Tombol tag cepat untuk beralih mode. Saat mode **`SANTAI`** aktif, seluruh kata yang mengandung atau berakhiran **X, Q, dan F** otomatis disaring dan dibuang. |
+| **`⚙️` (Settings)** | Dropdown menu untuk konfigurasi: `🎯 Set Area Deteksi`, `👁️ Test Area Deteksi`, `🚫 Blocklist Kata`, `🏷️ Kategori Kustom`, `📋 Log Gameplay`, `⚡ Kecepatan Scan`, dan `🔄 Cek Update Git`. |
+| **`⚡ Kecepatan Scan`** | Submenu radio button 1-klik untuk memilih kecepatan: **`🔥 40ms (Ultra Instan)`**, **`⚡ 80ms (Kilat Turbo)`**, **`🚀 150ms (Cepat)`**, atau **`🐢 300ms (Santai)`**. |
+| **Search Bar Real-Time** | Input manual awalan huruf. Hasil rekomendasi langsung terfilter saat Anda mengetik tanpa perlu klik tombol cari. Input ini otomatis meng-overwrite OCR. Terdapat tombol **`❌`** di ujung kanan untuk membersihkan teks seketika. |
+| **`🏷️` Quick Toggle Bar** | Deretan tombol tag kategori akhiran kustom (misal: `[NS]`, `[NGK]`) tepat di atas rekomendasi kata. Klik tombol tag untuk mengaktifkan/menonaktifkan prioritas jebakan kustom seketika. |
+| **Rekomendasi Kata (Scrollable)** | Menampilkan kartu kata terurut berdasarkan tier jebakan. Dilengkapi *smooth mousewheel scroll* (scroll roda mouse di mana saja di area kartu) dan *widget pooling* (render super kilat 0.5ms). |
+| **`❌` di Kartu Kata** | Memasukkan kata yang ditolak server Roblox ke dalam `blacklist.txt` seketika (dapat dibatalkan dengan tombol `↩️ Batalkan`). |
+| **`➕ Kamus`** | Menambahkan kata baru ke kamus secara permanen (tersedia di menu pengaturan atau dialog). |
+| **`F2` (Deteksi Salah)** | **Global Hotkey:** Screenshot instan (< 5ms) saat ada huruf salah baca ke folder `sample/kurang_tepat/` tanpa popup yang mengganggu permainan. Review dilakukan setelah bermain lewat menu **`📝 Koreksi`**. |
+| **`F3` (Snapshot Kalibrasi)** | Mengambil snapshot visual gameplay (kotak kata & avatar pemain) dan menyimpan metadata warna RGB/HSV ke folder `deteksi-gameplay/sample_kalibrasi/`. |
 
 ---
 
 ## 💥 Strategi Kata & Trik Menang
 
-Aplikasi ini dirancang bukan sekadar untuk menjawab, melainkan untuk **memenangkan permainan** dengan taktik serangan:
+Aplikasi ini menggunakan sistem tier prioritas multi-level untuk memaksimalkan peluang eliminasi lawan:
 
-### 1. 💥 Tier 1: JEBAKAN X (Serangan Mematikan)
-Bot memprioritaskan kata-kata sah yang berakhiran huruf **`X`** (seperti `SEX`, `COMPLEX`, `PARADOX`, `DETOX`, `BOX`, `FAX`, `BODREX`, `LATEX`). Lawan berikutnya akan dipaksa mencari kata yang berawalan huruf **X** yang sangat terbatas di Roblox, sehingga lawan 95% akan kehabisan waktu dan tereliminasi.
+```mermaid
+flowchart TD
+    Awalan["Awalan Huruf Giliran"] --> Tier0{"Ada Kategori Kustom Aktif?<br/>(Contoh: NS, NGK)"}
+    Tier0 -- "YA" --> CustomTrap["🔥 Tier 0: Custom Traps (Prioritas Super)<br/>Kata berakhiran NS, NGK, dll."]
+    Tier0 -- "TIDAK" --> Tier1{"Ada Kata Berakhiran X?"}
+    Tier1 -- "YA" --> TrapX["💥 Tier 1: JEBAKAN X (Mematikan)<br/>Contoh: SEX, COMPLEX, PARADOX, DETOX"]
+    Tier1 -- "TIDAK" --> Tier2{"Ada Kata Akhiran Konsonan Sulit?"}
+    Tier2 -- "YA" --> TrapHard["⚡ Tier 2: JEBAKAN SULIT<br/>Akhiran Z, Q, V, J, W, F"]
+    Tier2 -- "TIDAK" --> Tier3["🛡️ Tier 3: NORMAL / CASUAL<br/>Kata KBBI pendek (3-6 huruf) yang cepat diketik"]
+```
 
-### 2. ⚡ Tier 2: JEBAKAN SULIT
-Jika tidak ada kata berakhiran X, bot akan menawarkan kata berakhiran konsonan langka: **`Z`**, **`Q`**, **`V`**, **`J`**, **`W`**, dan **`F`**.
-
-### 3. 🛡️ Tier 3: NORMAL
-Kata-kata bahasa Indonesia baku KBBI yang pendek (3–6 huruf) sehingga sangat cepat dan mudah diketik secara manual jika waktu giliran Anda menipis.
-
-### 4. 🌿 Mode Santai (Tanpa X, Q, F)
-Khusus di room *Mode Santai*, pemain dilarang menggunakan huruf **X**, **Q**, dan **F**. Saat toggle **`🌿 Mode Santai`** dinyalakan, bot secara otomatis:
-- Menghapus semua kata yang mengandung atau berakhiran `X, Q, F`.
-- Mengalihkan serangan ke akhiran sulit yang sah (**`Z, V, J, W`**).
-- Menyediakan kata santai yang umum dan dijamin valid di Roblox.
-
----
-
-## 📚 Pilihan Sumber Kamus (KBBI & Contek Sambung Kata)
-
-Aplikasi kini menyediakan kontrol fleksibel bagi pemain untuk memilih sumber kosakata yang ingin digunakan:
-- **[x] KBBI (112.822 kata):** Kosakata resmi Kamus Besar Bahasa Indonesia (KBBI Edisi VI). Cocok untuk permainan ketat yang hanya menerima kata baku.
-- **[x] Contek Sambung Kata (108.123 kata):** Kosakata dari basis data `contek-sambungkata.web.id` yang mencakup kosakata populer, kata gaul, imbuhan fleksibel, serta istilah game Roblox (`aho`, `alo`, `wibu`, `noob`, `pro`, `roblox`) dan kata serangan akhiran X/Z.
-- **Gabungan Keduanya (147.886 kata unik - Rekomendasi):** Centang kedua sumber untuk mendapatkan rekomendasi terlengkap dan peluang menang maksimal.
-- **Pembersihan Kata Asing:** Kata bahasa Inggris non-Indonesia murni yang ditolak oleh sistem Roblox telah disaring (misal: bot selalu menyarankan `klimaks`, bukan `climax`).
-- **Validasi Struktur:** Setiap kata wajib memiliki minimal satu vokal untuk menghindari singkatan aneh yang tidak diterima game.
+1. **🔥 Tier 0: Custom Traps (Prioritas Super):**  
+   Kategori kustom buatan Anda sendiri (seperti kata berakhiran `NS`: *LENS, RESPONS*, atau `NGK`: *TENGKORAK*). Dapat diaktifkan/dinonaktifkan dengan 1-klik di bar tag `🏷️`.
+2. **💥 Tier 1: JEBAKAN X (Serangan Mematikan):**  
+   Kata-kata sah yang berakhiran huruf **`X`** (*SEX, COMPLEX, PARADOX, DETOX, BOX, FAX, BODREX, LATEX*). Lawan berikutnya dipaksa mencari awalan X yang sangat langka di Roblox sehingga 95% lawan akan gugur kehabisan waktu.
+3. **⚡ Tier 2: JEBAKAN SULIT:**  
+   Jika tidak ada akhiran X, bot memilihkan kata berakhiran konsonan sulit: **`Z`**, **`Q`**, **`V`**, **`J`**, **`W`**, dan **`F`**.
+4. **🛡️ Tier 3: NORMAL / BERTAHAN:**  
+   Kosakata baku bahasa Indonesia yang pendek (3–6 huruf) agar sangat cepat dan aman diketik secara manual saat waktu giliran menipis.
+5. **🌿 Mode Santai:**  
+   Pilihan khusus saat bermain di room Roblox Mode Santai (melarang huruf X, Q, dan F). Bot secara otomatis menyaring seluruh kata yang mengandung atau berakhiran `X, Q, F`, lalu mengalihkan serangan ke `Z, V, J, W`.
 
 ---
 
-## 💡 Tips & Kenyamanan Bermain
+## 📚 Basis Kosakata & Kamus
 
-- **Jendela Selalu di Atas (*Always on Top*):** Jendela asisten otomatis mengambang di atas jendela Roblox, sehingga Anda bisa meletakkannya di sudut kiri/kanan layar tanpa tertutup game.
-- **Mendukung Segala Layar:** Kompatibel dengan semua resolusi monitor (termasuk 1920x1080, 1920x1200) dan pengaturan Windows Display Scaling (100%, 125%, 150%).
-- **Intip Lebih Awal:** Biarkan tombol **`▶️ Mulai Auto-Scan`** menyala bahkan saat pemain lain sedang giliran. Saat huruf pemain lain muncul, Anda bisa melihat opsi kata lebih cepat sebelum giliran Anda tiba.
+Aplikasi menggabungkan basis data kosakata terlengkap (**147.880+ kata unik**):
+- **KBBI VI (112.822 kata):** Kosakata baku resmi Kamus Besar Bahasa Indonesia Edisi VI.
+- **Contek Sambung Kata (108.130 kata):** Basis data `contek-sambungkata.web.id` yang mencakup kosakata gaul, istilah Roblox (`aho`, `alo`, `wibu`, `noob`, `pro`, `roblox`), imbuhan fleksibel, dan kata serangan.
+- **Pembersihan Kata:** Seluruh kata bahasa Inggris non-Indonesia murni yang ditolak Roblox telah disaring (contoh: bot menggunakan `klimaks`, bukan `climax`).
+- **Validasi Struktur:** Setiap kata wajib memiliki minimal satu vokal untuk menyaring singkatan yang tidak valid di game.
 
 ---
 
-## 🔄 Sistem Pembaruan Otomatis (Updater) & Pemilihan Branch
+## 🎮 Pemantau & Pengindeks Gameplay Otomatis
 
-Aplikasi dilengkapi modul Git Updater otomatis yang terintegrasi langsung dengan repositori GitHub:
+Aplikasi dilengkapi modul pemantau gameplay (`gameplay_indexer.py`) untuk mengenali respon visual nyata server Roblox:
+- **`KATA_SALAH`:** Kotak input berubah menjadi latar merah pekat tanpa subtext ➔ otomatis dicatat ke file staging terisolasi `auto_blacklist.txt`.
+- **`SUDAH_DIGUNAKAN`:** Kotak merah dengan subtext `"... sudah digunakan!"` ➔ terbukti valid di Roblox, otomatis dicatat ke `auto_kata_baru.txt`.
+- **`KATA_BENAR`:** Kotak teks lenyap seketika dan avatar karakter memancarkan kilatan hijau (*green flash*) ➔ otomatis dicatat ke `auto_kata_baru.txt`.
+- *Prinsip Human-in-the-Loop:* Kamus utama dan blacklist resmi pengguna **100% aman dan tidak tercemar**. Seluruh data deteksi otomatis tersimpan terpisah di folder staging untuk dapat diverifikasi.
 
-- **Pengecekan Saat Startup:** Saat aplikasi pertama kali dibuka, sistem akan memeriksa apakah ada commit baru di branch target GitHub di latar belakang tanpa membuat aplikasi lambat.
-- **Dukungan Multi-Branch (Main, Dev, dll.):** Anda dapat memilih branch target update melalui dropdown di dialog update (misal: branch stabil `main` atau branch pengembangan aktif `dev`). Bot akan otomatis beralih branch (*branch switch*) dan melakukan sinkronisasi dengan aman.
-- **Daftar Commit Perubahan:** Jika ada pembaruan, jendela dialog akan memunculkan daftar commit baru lengkap dengan pesan commit (contoh: penambahan kosakata baru, kalibrasi OCR, atau perbaikan bug).
-- **3 Mode Pembaruan:**
-  1. **🔔 Tanya Dulu (Prompt - Default):** Menampilkan dialog konfirmasi dan rincian commit sebelum memperbarui.
-  2. **⚡ Otomatis (Auto):** Mengunduh dan memasang pembaruan otomatis di latar belakang saat startup, lalu menampilkan tombol *Restart* halus.
-  3. **🚫 Nonaktifkan (Disabled):** Menonaktifkan pengecekan pembaruan otomatis saat startup. Anda tetap bisa memeriksa secara manual kapan saja via tombol **`🔄 Update`** di header aplikasi.
-- **Pembaruan 1-Klik:** Mengklik tombol **`🚀 Perbarui Sekarang`** (atau **`🔀 Beralih ke '<branch>' & Update`**) akan otomatis menjalankan git pull/checkout dan menginstal dependensi baru (jika `requirements.txt` diperbarui).
+---
+
+## 🧪 Pengujian & CI Benchmark
+
+Setiap perubahan kode diverifikasi melalui automated test suite lengkap:
+```powershell
+# 1. Uji Akurasi OCR Layar (92 Sampel Nyata Roblox)
+python test_accuracy.py
+
+# 2. Uji Unit Solver, Tier Prioritas & Custom Traps
+python test_solver.py
+
+# 3. Uji Deteksi Visual Sekuens Gameplay
+python test_gameplay_indexer.py
+```
+> Seluruh pengujian di atas dijalankan otomatis oleh **GitHub Actions** pada runner Windows setiap kali terjadi push atau pull request ke branch `main`.
 
 ---
 
 ## ❓ Tanya Jawab & Kendala Umum (FAQ)
 
 ### Q: Apakah akun Roblox saya aman dari ban?
-**A:** Sangat aman. Aplikasi ini bekerja 100% dari luar Roblox sebagai asisten visual. Aplikasi hanya membaca tangkapan layar (screenshot kotak putih) dan menyalin teks ke clipboard Windows Anda. Tidak ada injeksi memori, modifikasi file game, atau intervensi bot ke proses Roblox.
+**A:** Sangat aman. Aplikasi bekerja 100% dari luar Roblox sebagai asisten overlay visual. Aplikasi hanya membaca piksel tangkapan layar dan berinteraksi melalui clipboard Windows standar. Tidak ada injeksi memori, pembacaan proses, atau manipulasi file game Roblox.
 
-### Q: Teks awalan di game tidak terbaca atau akurasinya rendah?
-1. Klik tombol **`👁️ Tes Area`** untuk melihat apakah kotak seleksi pas mengelilingi kotak putih huruf.
-2. Jika posisi game bergeser atau resolusi Roblox berubah, klik kembali **`🎯 Set Area Layar`** dan buat kotak baru di sekeliling kotak putih.
-3. Pastikan tidak ada jendela lain atau avatar pemain yang menutupi kotak putih di dalam game.
+### Q: Teks awalan di game tidak terbaca atau akurasinya berkurang?
+1. Buka menu **`⚙️`** ➔ klik **`👁️ Test Area Deteksi`** untuk memastikan area kotak seleksi pas mengelilingi kotak putih awalan huruf.
+2. Jika posisi jendela Roblox bergeser, pilih **`🎯 Set Area Deteksi`** dan tarik ulang kotak seleksi.
+3. Pastikan tidak ada jendela aplikasi lain atau avatar pemain yang menutupi kotak huruf di dalam game.
 
-### Q: Saat bermain ada huruf yang salah terdeteksi?
-Cukup tekan tombol **`F2`** pada keyboard! Sistem akan seketika mengambil screenshot dan menyimpannya langsung ke folder `sample/kurang_tepat/` tanpa memunculkan popup yang mengganggu fokus permainan. Setelah selesai bermain, buka menu **`📝 Koreksi`** untuk mendata huruf yang benar (tekan `Enter` untuk menyimpan, atau tekan `Del` untuk menghapus sampel langsung tanpa konfirmasi).
+### Q: Ada huruf yang salah terbaca saat bermain?
+Tekan tombol **`F2`** di keyboard! Screenshot akan tersimpan seketika (< 5ms) ke folder `sample/kurang_tepat/` tanpa memunculkan popup yang mengganggu tempo bermain. Setelah selesai bermain, klik **`📝 Koreksi`** untuk melihat gambar diperbesar dan melabeli huruf yang benar.
 
 ### Q: Aplikasi tidak mau terbuka saat klik `run.bat`?
-Pastikan Anda sudah menginstal **Python** di komputer Anda (versi 3.10 ke atas) dan mencentang opsi *"Add Python to PATH"* saat proses instalasi Python.
+Pastikan Anda sudah menginstal **Python** (versi 3.10+) dan mencentang opsi *"Add Python to PATH"* saat instalasi awal.

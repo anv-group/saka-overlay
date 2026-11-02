@@ -1,13 +1,15 @@
-name: OCR Accuracy Regression Test
+name: CI & Regression Tests
 
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  test-ocr:
-    name: Run OCR Accuracy Benchmark (92 Samples)
+  test-suite:
+    name: Run Full Test Suite (OCR + Solver + Gameplay)
     runs-on: windows-latest
 
     steps:
@@ -25,6 +27,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run OCR Accuracy Benchmark
+      - name: Run OCR Accuracy Benchmark (92 Samples)
         run: |
           python test_accuracy.py
+
+      - name: Run Solver & Custom Traps Unit Tests
+        run: |
+          python test_solver.py
+
+      - name: Run Gameplay Indexer Sequence Tests
+        run: |
+          python test_gameplay_indexer.py
