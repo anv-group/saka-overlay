@@ -6,6 +6,8 @@ import time
 import os
 import re
 import ctypes
+import cv2
+import numpy as np
 
 def enable_dpi_awareness():
     try:
@@ -1370,15 +1372,18 @@ class SambungKataApp:
             self._classifier_tk_img = ImageTk.PhotoImage(resized)
             self.lbl_class_img.config(image=self._classifier_tk_img, text="")
 
-            # Coba jalankan OCR cepat pada crop gameplay untuk mengisi otomatis kata yang terbaca
-            cv_img = cv2.cvtColor(np.array(crop_pil), cv2.COLOR_RGB2BGR)
-            raw_lines = self.gameplay_indexer.ocr_crop(cv_img[:min(180, cv_img.shape[0]), :])
+            # Coba jalankan OCR cepat pada crop gameplay untuk mengisi otomatis kata yang terbaca (opsional)
             detected_clean = ""
-            for line in raw_lines:
-                clean = "".join(c for c in line if c.isalpha()).upper()
-                if len(clean) >= 2 and not any(k in clean.lower() for k in ['sudah', 'guna', 'pakai', 'sud']):
-                    detected_clean = clean
-                    break
+            try:
+                cv_img = cv2.cvtColor(np.array(crop_pil), cv2.COLOR_RGB2BGR)
+                raw_lines = self.gameplay_indexer.ocr_crop(cv_img[:min(180, cv_img.shape[0]), :])
+                for line in raw_lines:
+                    clean = "".join(c for c in line if c.isalpha()).upper()
+                    if len(clean) >= 2 and not any(k in clean.lower() for k in ['sudah', 'guna', 'pakai', 'sud']):
+                        detected_clean = clean
+                        break
+            except Exception:
+                pass
 
             self.entry_class_word.delete(0, tk.END)
             if detected_clean:
