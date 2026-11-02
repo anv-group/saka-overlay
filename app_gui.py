@@ -1118,7 +1118,22 @@ class SambungKataApp:
             cursor="hand2",
             command=lambda: os.startfile(self._classifier_unclassified_dir)
         )
-        btn_folder.pack(side=tk.RIGHT)
+        btn_folder.pack(side=tk.RIGHT, padx=(4, 0))
+
+        btn_clear_all = tk.Button(
+            hdr,
+            text="🧹 Kosongkan",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#f38ba8",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=2,
+            cursor="hand2",
+            command=self._classifier_clear_all_unclassified
+        )
+        btn_clear_all.pack(side=tk.RIGHT)
 
         # Counter & Info bar
         bar_info = tk.Frame(self.classifier_win, bg="#24273a", padx=10, pady=6)
@@ -1181,7 +1196,7 @@ class SambungKataApp:
         # Action Buttons Frame
         btn_box = tk.LabelFrame(
             self.classifier_win,
-            text=" Pilih Klasifikasi (Tekan 1 / 2 / 3 / Del) ",
+            text=" Pilih Klasifikasi (Tekan 1 / 2 / 3 / 0 / Del) ",
             font=("Segoe UI", 8, "bold"),
             fg="#a6adc8",
             bg="#1e1e2e",
@@ -1190,7 +1205,7 @@ class SambungKataApp:
         )
         btn_box.pack(fill=tk.X, padx=12, pady=6)
 
-        # Baris 1: Tiga kategori klasifikasi
+        # Baris 1: Kategori klasifikasi
         row1 = tk.Frame(btn_box, bg="#1e1e2e")
         row1.pack(fill=tk.X, pady=(0, 6))
 
@@ -1202,7 +1217,7 @@ class SambungKataApp:
             fg="#11111b",
             activebackground="#eba0ac",
             relief=tk.FLAT,
-            padx=8,
+            padx=6,
             pady=6,
             cursor="hand2",
             command=lambda: self._classifier_classify_action("kata-tidak-ada")
@@ -1217,7 +1232,7 @@ class SambungKataApp:
             fg="#11111b",
             activebackground="#f5e0dc",
             relief=tk.FLAT,
-            padx=8,
+            padx=6,
             pady=6,
             cursor="hand2",
             command=lambda: self._classifier_classify_action("sudah-dipakai")
@@ -1232,12 +1247,27 @@ class SambungKataApp:
             fg="#11111b",
             activebackground="#94e2d5",
             relief=tk.FLAT,
-            padx=8,
+            padx=6,
             pady=6,
             cursor="hand2",
             command=lambda: self._classifier_classify_action("benar")
         )
         btn_benar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+
+        btn_default = tk.Button(
+            row1,
+            text="[0] ⬜ Sedang Ngetik",
+            font=("Segoe UI", 9, "bold"),
+            bg="#89dceb",
+            fg="#11111b",
+            activebackground="#74c7ec",
+            relief=tk.FLAT,
+            padx=6,
+            pady=6,
+            cursor="hand2",
+            command=lambda: self._classifier_classify_action("default")
+        )
+        btn_default.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
 
         # Baris 2: Navigasi & Hapus
         row2 = tk.Frame(btn_box, bg="#1e1e2e")
@@ -1273,9 +1303,9 @@ class SambungKataApp:
 
         btn_del = tk.Button(
             row2,
-            text="🗑️ Hapus Sampel [Del]",
+            text="🗑️ Abaikan / Hapus [Del]",
             font=("Segoe UI", 8, "bold"),
-            bg="#585b70",
+            bg="#45475a",
             fg="#f38ba8",
             relief=tk.FLAT,
             padx=8,
@@ -1289,6 +1319,7 @@ class SambungKataApp:
         self.classifier_win.bind("1", lambda e: self._classifier_classify_action("kata-tidak-ada"))
         self.classifier_win.bind("2", lambda e: self._classifier_classify_action("sudah-dipakai"))
         self.classifier_win.bind("3", lambda e: self._classifier_classify_action("benar"))
+        self.classifier_win.bind("0", lambda e: self._classifier_classify_action("default"))
         self.classifier_win.bind("<Delete>", lambda e: self._classifier_delete_current())
         self.classifier_win.bind("<Left>", lambda e: self._classifier_prev())
         self.classifier_win.bind("<Right>", lambda e: self._classifier_next())
@@ -1432,10 +1463,30 @@ class SambungKataApp:
             elif target_category == "benar":
                 self.gameplay_indexer.save_to_auto_kata_baru(word, reason="Jawaban benar Roblox (Klasifikasi)")
                 self.show_toast(f"✅ '{word}' disimpan ke deteksi-gameplay/benar & auto_kata_baru.txt")
+        elif target_category == "default":
+            self.show_toast("⬜ Disimpan ke deteksi-gameplay/default/ (Baseline Mengetik)")
 
         # Hapus item dari list dan tampilkan berikutnya
         self._classifier_items.pop(self._classifier_current_idx)
         self._classifier_show_current()
+
+    def _classifier_clear_all_unclassified(self):
+        """Mengosongkan semua gambar di antrean unclassified"""
+        if not self._classifier_items:
+            self.show_toast("Antrean unclassified sudah kosong")
+            return
+        if not messagebox.askyesno("Kosongkan Antrean", f"Hapus semua {len(self._classifier_items)} gambar di antrean unclassified?"):
+            return
+        try:
+            for item in self._classifier_items:
+                if os.path.exists(item): os.remove(item)
+                meta = os.path.splitext(item)[0] + ".json"
+                if os.path.exists(meta): os.remove(meta)
+        except Exception as e:
+            self.show_toast(f"Sebagian file gagal dihapus: {e}")
+
+        self.show_toast("🧹 Antrean unclassified berhasil dikosongkan")
+        self._classifier_load_items()
 
     def _classifier_delete_current(self):
         """Menghapus sampel yang tidak relevan (shortcut Del) tanpa popup konfirmasi"""

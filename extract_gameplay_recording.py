@@ -65,43 +65,49 @@ def extract_gameplay_events(video_path, output_dir=None, progress_callback=None)
 
         H, W = frame.shape[:2]
 
-        # Area fokus gameplay (y: 15%..55%, x: 30%..70%)
-        y1, y2 = int(H * 0.15), int(H * 0.55)
-        x1, x2 = int(W * 0.30), int(W * 0.70)
-        roi = frame[y1:y2, x1:x2]
+        # 1. Area Kotak Teks di atas kepala karakter (y: 18%..42%, x: 35%..65%)
+        y_box1, y_box2 = int(H * 0.18), int(H * 0.42)
+        x_box1, x_box2 = int(W * 0.35), int(W * 0.65)
+        box_roi = frame[y_box1:y_box2, x_box1:x_box2]
 
-        # 1. Hitung Redness Score (Kotak kata salah / sudah digunakan)
-        b, g, r = cv2.split(roi.astype(np.int16))
-        redness = r - np.maximum(b, g)
-        red_score = int(np.count_nonzero((redness > 30) & (r > 90)))
+        # 2. Area Tubuh Karakter Pemain untuk deteksi flash hijau (y: 35%..68%, x: 35%..65%)
+        y_body1, y_body2 = int(H * 0.35), int(H * 0.68)
+        body_roi = frame[y_body1:y_body2, x_box1:x_box2]
 
-        # 2. Hitung Greenness Score (Flash hijau jawaban benar)
-        hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-        green_mask = cv2.inRange(hsv_roi, np.array([35, 70, 70]), np.array([85, 255, 255]))
-        green_score = int(np.count_nonzero(green_mask))
+        # Hitung Redness Kotak Teks (Warna merah pekat Roblox: R > 150, G < 95, B < 95)
+        br_b, br_g, br_r = cv2.split(box_roi.astype(np.int16))
+        pure_red = (br_r > 150) & (br_g < 95) & (br_b < 95)
+        red_box_px = int(np.count_nonzero(pure_red))
 
-        # 3. Hitung Frame Difference Kasar
-        gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-        if prev_gray_roi is not None:
-            diff_score = int(np.count_nonzero(cv2.absdiff(gray_roi, prev_gray_roi) > 30))
-        else:
-            diff_score = 0
-        prev_gray_roi = gray_roi
+        # Hitung Greenness Tubuh Karakter (Flash hijau Roblox jawaban benar)
+        hsv_body = cv2.cvtColor(body_roi, cv2.COLOR_BGR2HSV)
+        green_mask = cv2.inRange(hsv_body, np.array([35, 80, 80]), np.array([85, 255, 255]))
+        green_body_px = int(np.count_nonzero(green_mask))
 
-        # Evaluasi Trigger (Jaring Lebar)
+        # Lewati 2 frame pertama untuk stabilisasi baseline (mencegah spike palsu di detik 0)
+        if frame_idx <= step * 2:
+            prev_red = red_box_px
+            prev_green = green_body_px
+            continue
+
+        # Evaluasi Trigger Presisi (Wajib lonjakan tajam dari frame sebelumnya)
         is_in_cooldown = (frame_idx - last_trigger_frame) < cooldown_frames
         trigger_type = None
         trigger_reason = ""
 
-        # A. Trigger Merah (Kotak berubah merah)
-        if not is_in_cooldown and red_score > 1000 and (red_score - prev_red > 400 or red_score > 2000):
+        # A. Trigger Merah: Kotak teks berubah merah (Kata Salah / Sudah Dipakai)
+        # Nilai minimal 3000 piksel DAN delta lonjakan tajam minimal 2500 piksel
+        delta_red = red_box_px - prev_red
+        if not is_in_cooldown and red_box_px > 3000 and delta_red > 2500:
             trigger_type = "RED_SPIKE"
-            trigger_reason = f"Redness melonjak: {red_score} px (delta={red_score - prev_red})"
+            trigger_reason = f"Kotak Merah muncul: {red_box_px} px (lonjakan delta={delta_red})"
 
-        # B. Trigger Hijau (Tubuh flash hijau)
-        elif not is_in_cooldown and green_score > 6000 and (green_score - prev_green > 3000 or green_score > 12000):
+        # B. Trigger Hijau: Karakter flash hijau terang (Jawaban Benar Diterima)
+        # Nilai minimal 15000 piksel DAN delta lonjakan tajam minimal 10000 piksel
+        delta_green = green_body_px - prev_green
+        if not is_in_cooldown and green_body_px > 15000 and delta_green > 10000:
             trigger_type = "GREEN_FLASH"
-            trigger_reason = f"Greenness melonjak: {green_score} px (delta={green_score - prev_green})"
+            trigger_reason = f"Karakter Flash Hijau: {green_body_px} px (lonjakan delta={delta_green})"
 
         if trigger_type:
             last_trigger_frame = frame_idx
@@ -124,9 +130,10 @@ def extract_gameplay_events(video_path, output_dir=None, progress_callback=None)
                 "trigger_type": trigger_type,
                 "trigger_reason": trigger_reason,
                 "metrics": {
-                    "red_score": red_score,
-                    "green_score": green_score,
-                    "diff_score": diff_score
+                    "red_box_px": red_box_px,
+                    "delta_red": delta_red,
+                    "green_body_px": green_body_px,
+                    "delta_green": delta_green
                 }
             }
             with open(meta_path, "w", encoding="utf-8") as f:
@@ -134,8 +141,8 @@ def extract_gameplay_events(video_path, output_dir=None, progress_callback=None)
 
             print(f"  [+] Momen {saved_count:2d} terdeteksi di detik {cur_sec:6.1f}s ({trigger_type})")
 
-        prev_red = red_score
-        prev_green = green_score
+        prev_red = red_box_px
+        prev_green = green_body_px
 
         # Laporan progres
         pct = int((frame_idx / total_frames) * 100)
