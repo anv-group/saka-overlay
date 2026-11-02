@@ -1193,6 +1193,30 @@ class SambungKataApp:
         )
         self.entry_class_word.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
+        btn_clr_entry = tk.Button(
+            input_box,
+            text="❌ Kosongkan",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#f38ba8",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=2,
+            cursor="hand2",
+            command=lambda: self.entry_class_word.delete(0, tk.END)
+        )
+        btn_clr_entry.pack(side=tk.LEFT, padx=(4, 0))
+
+        lbl_hint = tk.Label(
+            self.classifier_win,
+            text="💡 Tip: Kosongkan kolom jika tidak tahu kata aslinya. Gambar tetap tersimpan rapi.",
+            font=("Segoe UI", 8, "italic"),
+            fg="#6c7086",
+            bg="#1e1e2e"
+        )
+        lbl_hint.pack(anchor="w", padx=16, pady=(0, 2))
+
         # Action Buttons Frame
         btn_box = tk.LabelFrame(
             self.classifier_win,
@@ -1403,16 +1427,44 @@ class SambungKataApp:
             self._classifier_tk_img = ImageTk.PhotoImage(resized)
             self.lbl_class_img.config(image=self._classifier_tk_img, text="")
 
-            # Coba jalankan OCR cepat pada crop gameplay untuk mengisi otomatis kata yang terbaca (opsional)
+            # Coba jalankan OCR cerdas: Cari kontur kotak kata (putih / merah) terlebih dahulu agar tidak membaca username Roblox
             detected_clean = ""
             try:
                 cv_img = cv2.cvtColor(np.array(crop_pil), cv2.COLOR_RGB2BGR)
-                raw_lines = self.gameplay_indexer.ocr_crop(cv_img[:min(180, cv_img.shape[0]), :])
-                for line in raw_lines:
-                    clean = "".join(c for c in line if c.isalpha()).upper()
-                    if len(clean) >= 2 and not any(k in clean.lower() for k in ['sudah', 'guna', 'pakai', 'sud']):
-                        detected_clean = clean
+                H_c, W_c = cv_img.shape[:2]
+                
+                # Deteksi kotak input (putih atau merah) di tengah layar
+                gray_c = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+                _, thresh_white = cv2.threshold(gray_c, 210, 255, cv2.THRESH_BINARY)
+                
+                # Mask merah pekat
+                br_b, br_g, br_r = cv2.split(cv_img.astype(np.int16))
+                pure_red = (br_r > 140) & (br_g < 95) & (br_b < 95)
+                mask_red = pure_red.astype(np.uint8) * 255
+                
+                combined_box = cv2.bitwise_or(thresh_white, mask_red)
+                cnts, _ = cv2.findContours(combined_box, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                
+                target_crop = None
+                for c in cnts:
+                    x, y, w, h = cv2.boundingRect(c)
+                    # Kotak kata di Roblox biasanya rasio 1.0 s/d 4.0 dan ukuran w > 50, h > 30
+                    if w >= 50 and h >= 28 and 0.8 <= (w / h) <= 4.5 and y < int(H_c * 0.6):
+                        target_crop = cv_img[max(0, y-4):min(H_c, y+h+4), max(0, x-4):min(W_c, x+w+4)]
                         break
+                
+                # Jika kotak ditemukan, OCR tepat di kotak tersebut.
+                # JANGAN OCR jika kotak tidak ditemukan (misal momen GREEN_FLASH di mana kotak sudah hilang),
+                # untuk mencegah OCR membaca spanduk/background arena (seperti "Buy & Gift to your friends").
+                if target_crop is not None:
+                    raw_lines = self.gameplay_indexer.ocr_crop(target_crop)
+                    for line in raw_lines:
+                        clean = "".join(c for c in line if c.isalpha()).upper()
+                        has_vowel = any(v in clean for v in 'AIUEO')
+                        is_subtext = any(k in clean.lower() for k in ['sudah', 'guna', 'pakai', 'sud'])
+                        if 2 <= len(clean) <= 12 and has_vowel and not is_subtext:
+                            detected_clean = clean
+                            break
             except Exception:
                 pass
 
