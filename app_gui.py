@@ -1495,17 +1495,36 @@ class SambungKataApp:
             import shutil
             shutil.move(img_path, dest_img_path)
 
-            # Pindahkan metadata JSON jika ada
+            # Pindahkan metadata JSON jika ada dan tambahkan info labeled_text
             meta_path = os.path.splitext(img_path)[0] + ".json"
+            dest_meta_path = os.path.join(dest_dir, os.path.basename(meta_path))
+            meta_dict = {}
             if os.path.exists(meta_path):
-                shutil.move(meta_path, os.path.join(dest_dir, os.path.basename(meta_path)))
+                try:
+                    with open(meta_path, "r", encoding="utf-8") as f:
+                        meta_dict = json.load(f)
+                except Exception:
+                    pass
+            
+            meta_dict["category"] = target_category
+            meta_dict["labeled_text"] = word
+            with open(dest_meta_path, "w", encoding="utf-8") as f:
+                json.dump(meta_dict, f, indent=4)
+
+            if os.path.exists(meta_path) and meta_path != dest_meta_path:
+                try: os.remove(meta_path)
+                except Exception: pass
 
         except Exception as e:
             self.show_toast(f"Gagal memindahkan sampel: {e}")
             return
 
         # Catat kata ke file staging terisolasi
-        if word and len(word) >= 2:
+        if target_category == "default":
+            # Baseline saat mengetik: TIDAK dimasukkan ke kamus atau blacklist mana pun
+            txt_info = f"'{word}' " if word else ""
+            self.show_toast(f"⬜ Sampel {txt_info}disimpan ke deteksi-gameplay/default/ (Tidak masuk kamus)")
+        elif word and len(word) >= 2:
             if target_category == "kata-tidak-ada":
                 self.gameplay_indexer.save_to_auto_blacklist(word)
                 self.show_toast(f"❌ '{word}' disimpan ke deteksi-gameplay/kata-tidak-ada & auto_blacklist.txt")
@@ -1515,8 +1534,6 @@ class SambungKataApp:
             elif target_category == "benar":
                 self.gameplay_indexer.save_to_auto_kata_baru(word, reason="Jawaban benar Roblox (Klasifikasi)")
                 self.show_toast(f"✅ '{word}' disimpan ke deteksi-gameplay/benar & auto_kata_baru.txt")
-        elif target_category == "default":
-            self.show_toast("⬜ Disimpan ke deteksi-gameplay/default/ (Baseline Mengetik)")
 
         # Hapus item dari list dan tampilkan berikutnya
         self._classifier_items.pop(self._classifier_current_idx)
