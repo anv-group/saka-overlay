@@ -101,6 +101,17 @@ def run_tests():
                             })
             print(f"    Hasil: {sub_pass}/{sub_total} lolos ({sub_pass/sub_total*100:.1f}%)")
 
+    # Laporkan sampel mentah/belum diklasifikasi yang dilewati
+    unclassified_count = 0
+    for rel_folder in ["sample/kurang_tepat", "sample/tidak_dikenali"]:
+        folder = os.path.join(base_dir, rel_folder.replace("/", os.sep))
+        if os.path.exists(folder):
+            for f in os.listdir(folder):
+                if f.endswith(".png") and os.path.isfile(os.path.join(folder, f)) and "_seharusnya_" not in f:
+                    unclassified_count += 1
+    if unclassified_count > 0:
+        print(f"\n[*] Catatan: {unclassified_count} sampel mentah/belum dikoreksi dilewati (hanya menguji dataset benchmark terverifikasi).")
+
     print("\n" + "=" * 65)
     print(f"[STATUS] TOTAL HASIL AKHIR: {passed}/{total} Lolos Bersih ({passed/total*100:.1f}%)")
     print("=" * 65)

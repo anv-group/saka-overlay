@@ -10,5 +10,7 @@
     "mode_santai": false,
     "report_hotkey": "F2",
     "ocr_engine": "winocr",
-    "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
+    "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+    "updater_mode": "prompt",
+    "auto_check_update_on_startup": true
 }
