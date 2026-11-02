@@ -40,16 +40,33 @@ class SambungKataApp:
         screen_h = self.root.winfo_screenheight()
 
         target_w = 440
-        # Sesuaikan tinggi agar pas di layar pengguna mendekati 1075px dari ui-size-min.png
-        target_h = max(720, min(1075, screen_h - 40))
-        target_x = max(0, screen_w - target_w - 15)
+        # Sesuaikan tinggi agar muat di layar pengguna (misal 1536x960 pada scaling 125%)
+        target_h = max(600, min(880, screen_h - 60))
+        target_x = max(10, screen_w - target_w - 20)
         target_y = 15
         default_geom = f"{target_w}x{target_h}+{target_x}+{target_y}"
 
         saved_geom = self.config.get("window_geometry")
         if saved_geom:
             try:
-                self.root.geometry(saved_geom)
+                import re
+                m = re.match(r"^(\d+)x(\d+)\+([+-]?\d+)\+([+-]?\d+)$", saved_geom.strip())
+                if m:
+                    gw, gh, gx, gy = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+                    # Clamp agar selalu aman dan tidak off-screen
+                    gw = max(438, min(gw, screen_w - 20))
+                    gh = max(550, min(gh, screen_h - 50))
+                    if gx + gw > screen_w - 15:
+                        gx = screen_w - gw - 25
+                    if gx < 0:
+                        gx = 10
+                    if gy + gh > screen_h - 20:
+                        gy = max(10, screen_h - gh - 50)
+                    if gy < 0:
+                        gy = 10
+                    self.root.geometry(f"{gw}x{gh}+{gx}+{gy}")
+                else:
+                    self.root.geometry(default_geom)
             except Exception:
                 self.root.geometry(default_geom)
         else:
@@ -110,34 +127,36 @@ class SambungKataApp:
 
     def _build_ui(self):
         # 0. Custom Frameless Titlebar (Dark Theme, Judul Penuh & Hanya Tombol Close ✕)
-        self.custom_title_bar = tk.Frame(self.root, bg="#11111b", height=28)
+        self.custom_title_bar = tk.Frame(self.root, bg="#11111b", height=30)
         self.custom_title_bar.pack(fill=tk.X, side=tk.TOP)
 
-        self.lbl_title_bar = tk.Label(
-            self.custom_title_bar,
-            text="Sambung Kata Overlay",
-            font=("Segoe UI", 8, "bold"),
-            fg="#cdd6f4",
-            bg="#11111b"
-        )
-        self.lbl_title_bar.pack(side=tk.LEFT, padx=8, pady=4)
-
+        # Tombol Close '✕' dipack PERTAMA di sisi kanan agar selalu terjamin di dalam window dan mudah diklik
         self.btn_title_close = tk.Button(
             self.custom_title_bar,
             text="✕",
-            font=("Segoe UI", 9, "bold"),
+            font=("Segoe UI", 10, "bold"),
             fg="#cdd6f4",
             bg="#11111b",
             activebackground="#f38ba8",
             activeforeground="#11111b",
             relief=tk.FLAT,
             bd=0,
-            padx=10,
-            pady=2,
+            padx=14,
+            pady=3,
             cursor="hand2",
             command=self.on_close
         )
-        self.btn_title_close.pack(side=tk.RIGHT)
+        self.btn_title_close.pack(side=tk.RIGHT, padx=(0, 4), pady=2)
+
+        self.lbl_title_bar = tk.Label(
+            self.custom_title_bar,
+            text="Sambung Kata Overlay",
+            font=("Segoe UI", 8, "bold"),
+            fg="#cdd6f4",
+            bg="#11111b",
+            anchor="w"
+        )
+        self.lbl_title_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(10, 4), pady=4)
 
         self.btn_title_close.bind("<Enter>", lambda e: self.btn_title_close.config(bg="#f38ba8", fg="#11111b"))
         self.btn_title_close.bind("<Leave>", lambda e: self.btn_title_close.config(bg="#11111b", fg="#cdd6f4"))
@@ -161,6 +180,25 @@ class SambungKataApp:
         # Garis pemisah 1px di bawah titlebar
         sep_title = tk.Frame(self.root, bg="#313244", height=1)
         sep_title.pack(fill=tk.X, side=tk.TOP)
+
+        # Resize grip di sisi kiri (karena window di kanan layar, resize paling nyaman dari sisi kiri)
+        self.left_grip = tk.Frame(self.root, bg="#313244", width=4, cursor="size_we")
+        self.left_grip.place(x=0, y=0, relheight=1.0, width=4)
+
+        self._lg_data = {}
+        def _start_left_grip(event):
+            self._lg_data["x_root"] = event.x_root
+            self._lg_data["win_x"] = self.root.winfo_x()
+            self._lg_data["win_w"] = self.root.winfo_width()
+
+        def _on_left_grip(event):
+            dx = event.x_root - self._lg_data["x_root"]
+            new_w = max(438, self._lg_data["win_w"] - dx)
+            new_x = self._lg_data["win_x"] + (self._lg_data["win_w"] - new_w)
+            self.root.geometry(f"{new_w}x{self.root.winfo_height()}+{new_x}+{self.root.winfo_y()}")
+
+        self.left_grip.bind("<ButtonPress-1>", _start_left_grip)
+        self.left_grip.bind("<B1-Motion>", _on_left_grip)
 
         # 1. Baris Atas Compact: Tombol Aksi Utama (Mulai, Tambah Kata, Restart, Mode Santai, Settings ⚙️)
         top_bar = tk.Frame(self.root, bg="#181825", padx=8, pady=4)
@@ -369,19 +407,19 @@ class SambungKataApp:
         is_santai_init = self.config.get("mode_santai", False)
         recom_title = " Rekomendasi Kata (SANTAI) " if is_santai_init else " Rekomendasi Kata (NORMAL) "
         recom_fg = "#a6e3a1" if is_santai_init else "#f38ba8"
-        # Resize grip di sudut kanan bawah window
-        self.grip_bar = tk.Frame(self.root, bg="#11111b", height=14)
+        # Resize grip di sudut kanan bawah & tepi bawah window
+        self.grip_bar = tk.Frame(self.root, bg="#11111b", height=16, cursor="size_ns")
         self.grip_bar.pack(fill=tk.X, side=tk.BOTTOM)
 
         lbl_grip = tk.Label(
             self.grip_bar,
             text="⋰",
-            font=("Segoe UI", 8),
-            fg="#6c7086",
+            font=("Segoe UI", 9, "bold"),
+            fg="#89b4fa",
             bg="#11111b",
             cursor="size_nw_se"
         )
-        lbl_grip.pack(side=tk.RIGHT, padx=4)
+        lbl_grip.pack(side=tk.RIGHT, padx=6)
 
         self._resize_data = {}
         def _start_resize(event):
