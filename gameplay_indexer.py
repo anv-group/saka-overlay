@@ -137,31 +137,33 @@ class GameplayIndexer:
         word_roi = crop[0:word_h, :]
         raw_lines = self.ocr_crop(word_roi)
 
-        # Deteksi warna kotak kata di area tengah (y: 20..90, x: 25%..75% W)
-        box_y1, box_y2 = int(word_h * 0.15), int(word_h * 0.55)
-        box_x1, box_x2 = int(W * 0.22), int(W * 0.78)
+        # Deteksi warna kotak kata di area tengah (y: 15%..60%, x: 20%..80% W)
+        box_y1, box_y2 = int(word_h * 0.15), int(word_h * 0.60)
+        box_x1, box_x2 = int(W * 0.20), int(W * 0.80)
         box_sample = word_roi[box_y1:box_y2, box_x1:box_x2]
 
-        b, g, r = box_sample.mean(axis=(0, 1))
+        # Warna Merah Pekat Roblox (R > 140, G < 95, B < 95)
         b_int, g_int, r_int = cv2.split(box_sample.astype(np.int16))
-        redness = r_int - np.maximum(b_int, g_int)
-        red_count = np.count_nonzero(redness > 35)
+        pure_red = (r_int > 140) & (g_int < 95) & (b_int < 95)
+        red_count = int(np.count_nonzero(pure_red))
 
-        is_box_red = (red_count > 1000 and r > 100 and r > g * 1.3)
-        is_box_white = (r > 150 and g > 150 and b > 150 and abs(r - g) < 30)
+        # Warna Putih Kotak Normal (R,G,B > 210 dan selisih rendah)
+        gray_sample = cv2.cvtColor(box_sample, cv2.COLOR_BGR2GRAY)
+        pure_white = (gray_sample > 210) & (np.abs(r_int - g_int) < 25) & (np.abs(g_int - b_int) < 25)
+        white_count = int(np.count_nonzero(pure_white))
+
+        is_box_red = (red_count > 600)
+        is_box_white = (white_count > 1500)
 
         full_text_lower = " ".join(raw_lines).lower()
-        has_sudah_digunakan = (
-            'sud' in full_text_lower or
-            'guna' in full_text_lower or
-            'pakai' in full_text_lower or
-            len(raw_lines) >= 2
-        )
+        has_sudah_digunakan = any(k in full_text_lower for k in [
+            'sud', 'guna', 'pakai', 'digunakan', 'sudffh', 'sudah'
+        ])
 
         main_word = ""
         for line in raw_lines:
             clean = "".join(c for c in line if c.isalpha()).upper()
-            if len(clean) >= 2 and not any(k in clean.lower() for k in ['sudah', 'guna', 'pakai', 'sud']):
+            if 2 <= len(clean) <= 12 and not any(k in clean.lower() for k in ['sudah', 'guna', 'pakai', 'sud', 'cift', 'buy']):
                 main_word = clean
                 break
 
@@ -174,9 +176,11 @@ class GameplayIndexer:
                 state = "KATA_SALAH"
         elif is_box_white and main_word:
             state = "SEDANG_KETIK"
-        elif not main_word and is_char_green and self.last_typing_word:
+            self.last_typing_word = main_word
+        elif not is_box_red and is_char_green:
             state = "KATA_BENAR"
-            main_word = self.last_typing_word
+            if not main_word and self.last_typing_word:
+                main_word = self.last_typing_word
 
         details = {
             'is_box_red': is_box_red,
