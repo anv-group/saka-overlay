@@ -1183,8 +1183,18 @@ class SambungKataApp:
         )
         lbl_w.pack(side=tk.LEFT, padx=(0, 6))
 
+        self._classifier_word_var = tk.StringVar()
+        def _on_word_var_change(*args):
+            val = self._classifier_word_var.get()
+            # Hapus angka jika sempat masuk dan ubah otomatis ke uppercase
+            cleaned = "".join(c for c in val if not c.isdigit()).upper()
+            if val != cleaned:
+                self._classifier_word_var.set(cleaned)
+        self._classifier_word_var.trace_add("write", _on_word_var_change)
+
         self.entry_class_word = tk.Entry(
             input_box,
+            textvariable=self._classifier_word_var,
             font=("Segoe UI", 11, "bold"),
             bg="#313244",
             fg="#f9e2af",
@@ -1339,15 +1349,56 @@ class SambungKataApp:
         )
         btn_del.pack(side=tk.RIGHT, padx=2)
 
-        # Keyboard shortcuts
-        self.classifier_win.bind("1", lambda e: self._classifier_classify_action("kata-tidak-ada"))
-        self.classifier_win.bind("2", lambda e: self._classifier_classify_action("sudah-dipakai"))
-        self.classifier_win.bind("3", lambda e: self._classifier_classify_action("benar"))
-        self.classifier_win.bind("0", lambda e: self._classifier_classify_action("default"))
-        self.classifier_win.bind("<Delete>", lambda e: self._classifier_delete_current())
-        self.classifier_win.bind("<Left>", lambda e: self._classifier_prev())
-        self.classifier_win.bind("<Right>", lambda e: self._classifier_next())
-        self.classifier_win.bind("<Escape>", lambda e: self.classifier_win.destroy())
+        # Keyboard shortcuts cerdas: 0, 1, 2, 3 selalu bertindak sebagai tombol aksi klasifikasi
+        def _on_classifier_keypress(e):
+            # Cek penekanan angka (baik baris angka keyboard maupun Numpad)
+            if e.keysym in ("0", "KP_0") or e.char == "0":
+                self._classifier_classify_action("default")
+                return "break"
+            elif e.keysym in ("1", "KP_1") or e.char == "1":
+                self._classifier_classify_action("kata-tidak-ada")
+                return "break"
+            elif e.keysym in ("2", "KP_2") or e.char == "2":
+                self._classifier_classify_action("sudah-dipakai")
+                return "break"
+            elif e.keysym in ("3", "KP_3") or e.char == "3":
+                self._classifier_classify_action("benar")
+                return "break"
+
+            # Navigasi panah
+            elif e.keysym == "Left":
+                if e.widget != self.entry_class_word or self.entry_class_word.index(tk.INSERT) == 0:
+                    self._classifier_prev()
+                    return "break"
+            elif e.keysym == "Right":
+                if e.widget != self.entry_class_word or self.entry_class_word.index(tk.INSERT) == len(self.entry_class_word.get()):
+                    self._classifier_next()
+                    return "break"
+
+            # Tombol Delete: abaikan/hapus sampel
+            elif e.keysym == "Delete":
+                if e.widget != self.entry_class_word or not self.entry_class_word.select_present():
+                    self._classifier_delete_current()
+                    return "break"
+
+            # Tombol Escape: kosongkan input atau tutup jendela
+            elif e.keysym == "Escape":
+                if self.entry_class_word.get():
+                    self.entry_class_word.delete(0, tk.END)
+                else:
+                    self.classifier_win.destroy()
+                return "break"
+
+            # Jika mengetik huruf alfabet (a-z / A-Z) dan fokus berada di luar entry,
+            # otomatis pindahkan fokus ke entry dan masukkan hurufnya
+            elif len(e.char) == 1 and e.char.isalpha() and e.widget != self.entry_class_word:
+                self.entry_class_word.focus_set()
+                self.entry_class_word.delete(0, tk.END)
+                self.entry_class_word.insert(tk.END, e.char.upper())
+                return "break"
+
+        self.classifier_win.bind("<KeyPress>", _on_classifier_keypress)
+        self.entry_class_word.bind("<KeyPress>", _on_classifier_keypress)
 
         self._classifier_load_items()
 
@@ -1472,6 +1523,12 @@ class SambungKataApp:
             self.entry_class_word.delete(0, tk.END)
             if detected_clean:
                 self.entry_class_word.insert(0, detected_clean)
+
+            # Otomatis fokuskan ke kolom entry kata dan seleksi semua teks
+            # sehingga jika user langsung mengetik huruf, teks auto-detect lama langsung tertimpa
+            self.entry_class_word.focus_set()
+            self.entry_class_word.select_range(0, tk.END)
+            self.entry_class_word.icursor(tk.END)
 
         except Exception as e:
             self.lbl_class_img.config(image="", text=f"Gagal memuat gambar: {e}")
