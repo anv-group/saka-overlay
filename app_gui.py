@@ -532,7 +532,15 @@ class SambungKataApp:
 
     def _open_settings_menu(self):
         """Membuka dropdown menu pengaturan tambahan tanpa memenuhi layar game"""
-        menu = tk.Menu(self.root, tearoff=0, bg="#181825", fg="#cdd6f4", activebackground="#313244", activeforeground="#f5e0dc")
+        menu = tk.Menu(
+            self.root,
+            tearoff=0,
+            bg="#181825",
+            fg="#cdd6f4",
+            activebackground="#313244",
+            activeforeground="#f5e0dc",
+            selectcolor="#a6e3a1"
+        )
         # Kelompok 1: Area Deteksi Awalan Huruf
         menu.add_command(label="🎯 Set Area Deteksi", command=self.open_region_selector)
         menu.add_command(label="👁️ Test Area Deteksi", command=self.preview_selected_area)
@@ -550,10 +558,25 @@ class SambungKataApp:
         menu.add_command(label="📸 Screenshot Area Gameplay (F3)", command=self.on_capture_gameplay_kalibrasi)
         menu.add_command(label="📋 Log Gameplay", command=self.open_gameplay_history_window)
         menu.add_separator()
-        menu.add_checkbutton(label="📋 Auto-copy sisa kata", variable=self.auto_copy_var, command=self.on_toggle_autocopy)
+
+        autocopy_status = "✅ AKTIF" if self.auto_copy_var.get() else "⚪ NONAKTIF"
+        menu.add_checkbutton(
+            label=f"📋 Auto-copy sisa kata  [{autocopy_status}]",
+            variable=self.auto_copy_var,
+            command=self.on_toggle_autocopy,
+            selectcolor="#a6e3a1"
+        )
 
         # Submenu Pilihan Kecepatan Scan (Pilih langsung sekali klik tanpa ganti-ganti mode)
-        speed_menu = tk.Menu(menu, tearoff=0, bg="#181825", fg="#cdd6f4", activebackground="#313244", activeforeground="#f5e0dc")
+        speed_menu = tk.Menu(
+            menu,
+            tearoff=0,
+            bg="#181825",
+            fg="#cdd6f4",
+            activebackground="#313244",
+            activeforeground="#f5e0dc",
+            selectcolor="#a6e3a1"
+        )
         curr_speed = self.config.get("scan_interval_sec", 0.08)
         self.scan_speed_var = tk.DoubleVar(value=curr_speed)
         for sec, label in self.speed_options:
@@ -561,7 +584,8 @@ class SambungKataApp:
                 label=label,
                 variable=self.scan_speed_var,
                 value=sec,
-                command=lambda s=sec, l=label: self._set_scan_speed(s, l)
+                command=lambda s=sec, l=label: self._set_scan_speed(s, l),
+                selectcolor="#a6e3a1"
             )
         menu.add_cascade(label="⚡ Kecepatan Scan", menu=speed_menu)
 
