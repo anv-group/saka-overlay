@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
 import threading
 import time
@@ -24,6 +24,7 @@ from config import load_config, save_config
 from region_selector import RegionSelector
 from updater import GitUpdater
 from gameplay_indexer import GameplayIndexer
+from extract_gameplay_recording import extract_gameplay_events
 
 class SambungKataApp:
     def __init__(self, root):
@@ -362,6 +363,21 @@ class SambungKataApp:
             command=self.on_capture_gameplay_kalibrasi
         )
         btn_game_calib.pack(side=tk.LEFT, padx=2)
+
+        btn_game_video = tk.Button(
+            gameplay_frame,
+            text="🎬 Video",
+            font=("Segoe UI", 8, "bold"),
+            bg="#313244",
+            fg="#89b4fa",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=1,
+            cursor="hand2",
+            command=self.open_gameplay_classifier_window
+        )
+        btn_game_video.pack(side=tk.LEFT, padx=2)
 
         # Area Info Deteksi
         info_frame = tk.LabelFrame(
@@ -1028,6 +1044,461 @@ class SambungKataApp:
         self.gameplay_indexer.history.clear()
         self._refresh_gameplay_history_table()
         self.show_toast("Riwayat auto-index dibersihkan")
+
+    def open_gameplay_classifier_window(self):
+        """Membuka dialog visual untuk mengklasifikasikan kandidat momen gameplay (hasil video extractor atau auto-capture)"""
+        if hasattr(self, "classifier_win") and self.classifier_win and self.classifier_win.winfo_exists():
+            self.classifier_win.lift()
+            self.classifier_win.focus_force()
+            return
+
+        self.classifier_win = tk.Toplevel(self.root)
+        self.classifier_win.title("🎮 Klasifikasi Momen Gameplay")
+        self.classifier_win.geometry("540x670")
+        self.classifier_win.minsize(480, 580)
+        self.classifier_win.attributes("-topmost", True)
+        self.classifier_win.configure(bg="#1e1e2e")
+
+        try:
+            x = self.root.winfo_x() + 25
+            y = self.root.winfo_y() + 15
+            self.classifier_win.geometry(f"540x670+{x}+{y}")
+        except Exception:
+            pass
+
+        self._classifier_unclassified_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "deteksi-gameplay", "unclassified"
+        )
+        os.makedirs(self._classifier_unclassified_dir, exist_ok=True)
+
+        self._classifier_items = []
+        self._classifier_current_idx = 0
+        self._classifier_tk_img = None
+
+        # Header Frame
+        hdr = tk.Frame(self.classifier_win, bg="#181825", padx=12, pady=10)
+        hdr.pack(fill=tk.X)
+
+        title_lbl = tk.Label(
+            hdr,
+            text="🎮 Klasifikasi Momen Gameplay",
+            font=("Segoe UI", 12, "bold"),
+            fg="#89b4fa",
+            bg="#181825"
+        )
+        title_lbl.pack(side=tk.LEFT)
+
+        btn_extract = tk.Button(
+            hdr,
+            text="🎬 Ekstrak Video",
+            font=("Segoe UI", 8, "bold"),
+            bg="#313244",
+            fg="#a6e3a1",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=2,
+            cursor="hand2",
+            command=self._classifier_pick_and_extract_video
+        )
+        btn_extract.pack(side=tk.RIGHT, padx=(4, 0))
+
+        btn_folder = tk.Button(
+            hdr,
+            text="📂 Folder",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=2,
+            cursor="hand2",
+            command=lambda: os.startfile(self._classifier_unclassified_dir)
+        )
+        btn_folder.pack(side=tk.RIGHT)
+
+        # Counter & Info bar
+        bar_info = tk.Frame(self.classifier_win, bg="#24273a", padx=10, pady=6)
+        bar_info.pack(fill=tk.X)
+
+        self.lbl_class_counter = tk.Label(
+            bar_info,
+            text="Memuat sampel...",
+            font=("Segoe UI", 9, "bold"),
+            fg="#cdd6f4",
+            bg="#24273a"
+        )
+        self.lbl_class_counter.pack(side=tk.LEFT)
+
+        self.lbl_class_trigger = tk.Label(
+            bar_info,
+            text="",
+            font=("Segoe UI", 8, "italic"),
+            fg="#fab387",
+            bg="#24273a"
+        )
+        self.lbl_class_trigger.pack(side=tk.RIGHT)
+
+        # Preview Container
+        preview_container = tk.Frame(self.classifier_win, bg="#181825", padx=6, pady=6)
+        preview_container.pack(fill=tk.BOTH, expand=True, padx=12, pady=6)
+
+        self.lbl_class_img = tk.Label(
+            preview_container,
+            text="Tidak ada sampel untuk diklasifikasi\nKlik '🎬 Ekstrak Video' atau taruh file rekaman.",
+            font=("Segoe UI", 10),
+            fg="#6c7086",
+            bg="#181825"
+        )
+        self.lbl_class_img.pack(fill=tk.BOTH, expand=True)
+
+        # Input Kata Field
+        input_box = tk.Frame(self.classifier_win, bg="#1e1e2e", padx=12, pady=4)
+        input_box.pack(fill=tk.X)
+
+        lbl_w = tk.Label(
+            input_box,
+            text="Kata Terbaca:",
+            font=("Segoe UI", 9, "bold"),
+            fg="#cdd6f4",
+            bg="#1e1e2e"
+        )
+        lbl_w.pack(side=tk.LEFT, padx=(0, 6))
+
+        self.entry_class_word = tk.Entry(
+            input_box,
+            font=("Segoe UI", 11, "bold"),
+            bg="#313244",
+            fg="#f9e2af",
+            insertbackground="#f9e2af",
+            relief=tk.FLAT
+        )
+        self.entry_class_word.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Action Buttons Frame
+        btn_box = tk.LabelFrame(
+            self.classifier_win,
+            text=" Pilih Klasifikasi (Tekan 1 / 2 / 3 / Del) ",
+            font=("Segoe UI", 8, "bold"),
+            fg="#a6adc8",
+            bg="#1e1e2e",
+            padx=8,
+            pady=8
+        )
+        btn_box.pack(fill=tk.X, padx=12, pady=6)
+
+        # Baris 1: Tiga kategori klasifikasi
+        row1 = tk.Frame(btn_box, bg="#1e1e2e")
+        row1.pack(fill=tk.X, pady=(0, 6))
+
+        btn_salah = tk.Button(
+            row1,
+            text="[1] ❌ Kata Salah",
+            font=("Segoe UI", 9, "bold"),
+            bg="#f38ba8",
+            fg="#11111b",
+            activebackground="#eba0ac",
+            relief=tk.FLAT,
+            padx=8,
+            pady=6,
+            cursor="hand2",
+            command=lambda: self._classifier_classify_action("kata-tidak-ada")
+        )
+        btn_salah.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+
+        btn_used = tk.Button(
+            row1,
+            text="[2] ⚠️ Sudah Dipakai",
+            font=("Segoe UI", 9, "bold"),
+            bg="#f9e2af",
+            fg="#11111b",
+            activebackground="#f5e0dc",
+            relief=tk.FLAT,
+            padx=8,
+            pady=6,
+            cursor="hand2",
+            command=lambda: self._classifier_classify_action("sudah-dipakai")
+        )
+        btn_used.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+
+        btn_benar = tk.Button(
+            row1,
+            text="[3] ✅ Kata Benar",
+            font=("Segoe UI", 9, "bold"),
+            bg="#a6e3a1",
+            fg="#11111b",
+            activebackground="#94e2d5",
+            relief=tk.FLAT,
+            padx=8,
+            pady=6,
+            cursor="hand2",
+            command=lambda: self._classifier_classify_action("benar")
+        )
+        btn_benar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+
+        # Baris 2: Navigasi & Hapus
+        row2 = tk.Frame(btn_box, bg="#1e1e2e")
+        row2.pack(fill=tk.X)
+
+        btn_prev = tk.Button(
+            row2,
+            text="◀ Sebelumnya",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#cdd6f4",
+            relief=tk.FLAT,
+            padx=8,
+            pady=3,
+            cursor="hand2",
+            command=self._classifier_prev
+        )
+        btn_prev.pack(side=tk.LEFT, padx=2)
+
+        btn_next = tk.Button(
+            row2,
+            text="Selanjutnya ▶",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#cdd6f4",
+            relief=tk.FLAT,
+            padx=8,
+            pady=3,
+            cursor="hand2",
+            command=self._classifier_next
+        )
+        btn_next.pack(side=tk.LEFT, padx=2)
+
+        btn_del = tk.Button(
+            row2,
+            text="🗑️ Hapus Sampel [Del]",
+            font=("Segoe UI", 8, "bold"),
+            bg="#585b70",
+            fg="#f38ba8",
+            relief=tk.FLAT,
+            padx=8,
+            pady=3,
+            cursor="hand2",
+            command=self._classifier_delete_current
+        )
+        btn_del.pack(side=tk.RIGHT, padx=2)
+
+        # Keyboard shortcuts
+        self.classifier_win.bind("1", lambda e: self._classifier_classify_action("kata-tidak-ada"))
+        self.classifier_win.bind("2", lambda e: self._classifier_classify_action("sudah-dipakai"))
+        self.classifier_win.bind("3", lambda e: self._classifier_classify_action("benar"))
+        self.classifier_win.bind("<Delete>", lambda e: self._classifier_delete_current())
+        self.classifier_win.bind("<Left>", lambda e: self._classifier_prev())
+        self.classifier_win.bind("<Right>", lambda e: self._classifier_next())
+        self.classifier_win.bind("<Escape>", lambda e: self.classifier_win.destroy())
+
+        self._classifier_load_items()
+
+    def _classifier_load_items(self):
+        """Memuat daftar gambar PNG yang belum diklasifikasi di folder unclassified"""
+        self._classifier_items = []
+        if os.path.exists(self._classifier_unclassified_dir):
+            for f in sorted(os.listdir(self._classifier_unclassified_dir)):
+                if f.lower().endswith(".png"):
+                    self._classifier_items.append(os.path.join(self._classifier_unclassified_dir, f))
+
+        self._classifier_current_idx = 0
+        self._classifier_show_current()
+
+    def _classifier_show_current(self):
+        """Menampilkan gambar dan info kandidat momen saat ini"""
+        total = len(self._classifier_items)
+        if total == 0:
+            self.lbl_class_counter.config(text="Tidak ada sampel tersisa (0 / 0)", fg="#a6adc8")
+            self.lbl_class_trigger.config(text="")
+            self.lbl_class_img.config(
+                image="",
+                text="Semua momen sudah diklasifikasikan! 🎉\nKlik '🎬 Ekstrak Video' untuk memproses video rekaman baru."
+            )
+            self.entry_class_word.delete(0, tk.END)
+            self._classifier_tk_img = None
+            return
+
+        if self._classifier_current_idx >= total:
+            self._classifier_current_idx = total - 1
+        elif self._classifier_current_idx < 0:
+            self._classifier_current_idx = 0
+
+        img_path = self._classifier_items[self._classifier_current_idx]
+        fn = os.path.basename(img_path)
+
+        # Baca metadata JSON jika ada
+        meta_path = os.path.splitext(img_path)[0] + ".json"
+        trigger_str = ""
+        meta_dict = {}
+        if os.path.exists(meta_path):
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta_dict = json.load(f)
+                tt = meta_dict.get("trigger_type", "")
+                ts = meta_dict.get("timestamp_sec", "")
+                trigger_str = f"{tt} (detik {ts}s)"
+            except Exception:
+                pass
+
+        self.lbl_class_counter.config(
+            text=f"Momen {self._classifier_current_idx + 1} / {total}: {fn[:30]}",
+            fg="#cdd6f4"
+        )
+        self.lbl_class_trigger.config(text=trigger_str)
+
+        # Muat gambar dan resize proporsional untuk ditampilkan (maks 500x320)
+        try:
+            pil_img = Image.open(img_path)
+            orig_w, orig_h = pil_img.size
+
+            # Jika full screenshot 1920x1200, lakukan crop fokus gameplay tengah agar teks terlihat jelas
+            if orig_w >= 1200 and orig_h >= 700:
+                # Crop area gameplay (y: 18%..55%, x: 32%..68%)
+                cy1, cy2 = int(orig_h * 0.18), int(orig_h * 0.55)
+                cx1, cx2 = int(orig_w * 0.32), int(orig_w * 0.68)
+                crop_pil = pil_img.crop((cx1, cy1, cx2, cy2))
+            else:
+                crop_pil = pil_img
+
+            cw, ch = crop_pil.size
+            max_w, max_h = 500, 310
+            scale = min(max_w / cw, max_h / ch)
+            new_w, new_h = max(1, int(cw * scale)), max(1, int(ch * scale))
+            resized = crop_pil.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+            self._classifier_tk_img = ImageTk.PhotoImage(resized)
+            self.lbl_class_img.config(image=self._classifier_tk_img, text="")
+
+            # Coba jalankan OCR cepat pada crop gameplay untuk mengisi otomatis kata yang terbaca
+            cv_img = cv2.cvtColor(np.array(crop_pil), cv2.COLOR_RGB2BGR)
+            raw_lines = self.gameplay_indexer.ocr_crop(cv_img[:min(180, cv_img.shape[0]), :])
+            detected_clean = ""
+            for line in raw_lines:
+                clean = "".join(c for c in line if c.isalpha()).upper()
+                if len(clean) >= 2 and not any(k in clean.lower() for k in ['sudah', 'guna', 'pakai', 'sud']):
+                    detected_clean = clean
+                    break
+
+            self.entry_class_word.delete(0, tk.END)
+            if detected_clean:
+                self.entry_class_word.insert(0, detected_clean)
+
+        except Exception as e:
+            self.lbl_class_img.config(image="", text=f"Gagal memuat gambar: {e}")
+
+    def _classifier_classify_action(self, target_category):
+        """Memindahkan sampel ke folder kategori yang dipilih dan mencatat ke file terisolasi"""
+        if not self._classifier_items or self._classifier_current_idx >= len(self._classifier_items):
+            return
+
+        img_path = self._classifier_items[self._classifier_current_idx]
+        fn = os.path.basename(img_path)
+        word = self.entry_class_word.get().strip().upper()
+
+        dest_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "deteksi-gameplay", target_category
+        )
+        os.makedirs(dest_dir, exist_ok=True)
+
+        # Pindahkan file PNG
+        dest_img_path = os.path.join(dest_dir, fn)
+        try:
+            import shutil
+            shutil.move(img_path, dest_img_path)
+
+            # Pindahkan metadata JSON jika ada
+            meta_path = os.path.splitext(img_path)[0] + ".json"
+            if os.path.exists(meta_path):
+                shutil.move(meta_path, os.path.join(dest_dir, os.path.basename(meta_path)))
+
+        except Exception as e:
+            self.show_toast(f"Gagal memindahkan sampel: {e}")
+            return
+
+        # Catat kata ke file staging terisolasi
+        if word and len(word) >= 2:
+            if target_category == "kata-tidak-ada":
+                self.gameplay_indexer.save_to_auto_blacklist(word)
+                self.show_toast(f"❌ '{word}' disimpan ke deteksi-gameplay/kata-tidak-ada & auto_blacklist.txt")
+            elif target_category == "sudah-dipakai":
+                self.gameplay_indexer.save_to_auto_kata_baru(word, reason="Sudah digunakan di Roblox (Klasifikasi)")
+                self.show_toast(f"⚠️ '{word}' disimpan ke deteksi-gameplay/sudah-dipakai & auto_kata_baru.txt")
+            elif target_category == "benar":
+                self.gameplay_indexer.save_to_auto_kata_baru(word, reason="Jawaban benar Roblox (Klasifikasi)")
+                self.show_toast(f"✅ '{word}' disimpan ke deteksi-gameplay/benar & auto_kata_baru.txt")
+
+        # Hapus item dari list dan tampilkan berikutnya
+        self._classifier_items.pop(self._classifier_current_idx)
+        self._classifier_show_current()
+
+    def _classifier_delete_current(self):
+        """Menghapus sampel yang tidak relevan (shortcut Del) tanpa popup konfirmasi"""
+        if not self._classifier_items or self._classifier_current_idx >= len(self._classifier_items):
+            return
+
+        img_path = self._classifier_items[self._classifier_current_idx]
+        meta_path = os.path.splitext(img_path)[0] + ".json"
+
+        try:
+            if os.path.exists(img_path): os.remove(img_path)
+            if os.path.exists(meta_path): os.remove(meta_path)
+        except Exception:
+            pass
+
+        self.show_toast("🗑️ Sampel dihapus")
+        self._classifier_items.pop(self._classifier_current_idx)
+        self._classifier_show_current()
+
+    def _classifier_prev(self):
+        if self._classifier_current_idx > 0:
+            self._classifier_current_idx -= 1
+            self._classifier_show_current()
+
+    def _classifier_next(self):
+        if self._classifier_current_idx < len(self._classifier_items) - 1:
+            self._classifier_current_idx += 1
+            self._classifier_show_current()
+
+    def _classifier_pick_and_extract_video(self):
+        """Membuka dialog file untuk memilih file video recording dan mengekstrak momennya di background thread"""
+        rec_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "deteksi-gameplay", "recordings"
+        )
+        os.makedirs(rec_dir, exist_ok=True)
+
+        vid_path = filedialog.askopenfilename(
+            parent=self.classifier_win if hasattr(self, "classifier_win") and self.classifier_win else self.root,
+            title="Pilih File Video Rekaman Roblox Sambung Kata",
+            initialdir=rec_dir,
+            filetypes=[
+                ("Video Files", "*.mp4 *.mkv *.avi *.mov *.webm"),
+                ("Semua File", "*.*")
+            ]
+        )
+        if not vid_path:
+            return
+
+        self.show_toast(f"⏳ Mengekstrak momen dari '{os.path.basename(vid_path)}'...")
+
+        def _worker():
+            try:
+                count, out_dir = extract_gameplay_events(
+                    video_path=vid_path,
+                    output_dir=self._classifier_unclassified_dir
+                )
+                self.root.after(0, lambda: self._on_video_extract_done(count, vid_path))
+            except Exception as err:
+                self.root.after(0, lambda: self.show_toast(f"⚠️ Gagal ekstraksi video: {err}"))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_video_extract_done(self, count, vid_path):
+        self.show_toast(f"✅ Ekstraksi selesai! {count} momen siap diklasifikasikan.")
+        if hasattr(self, "classifier_win") and self.classifier_win and self.classifier_win.winfo_exists():
+            self._classifier_load_items()
+        else:
+            self.open_gameplay_classifier_window()
 
     def on_report_kurang_tepat(self):
         """
