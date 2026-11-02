@@ -114,79 +114,114 @@ class GameplayIndexer:
 
         return lines
 
+    def find_gameplay_box(self, crop):
+        """
+        Mendeteksi posisi kotak kata (putih atau merah) secara presisi.
+        Mengembalikan: (box_crop, box_type, box_rect)
+        - box_type: 'WHITE' (sedang mengetik), 'RED' (salah/sudah dipakai), atau None
+        Mencegah OCR membaca spanduk/background arena Roblox.
+        """
+        if crop is None or crop.shape[0] < 80 or crop.shape[1] < 80:
+            return None, None, None
+
+        H, W = crop.shape[:2]
+        word_h = min(H, int(H * 0.60))
+        upper_roi = crop[:word_h, :]
+        gray = cv2.cvtColor(upper_roi, cv2.COLOR_BGR2GRAY)
+
+        # 1. Cek Kotak Putih (Sedang Mengetik)
+        _, thresh_w = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY)
+        cnts_w, _ = cv2.findContours(thresh_w, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        for c in cnts_w:
+            x, y, w, h = cv2.boundingRect(c)
+            area = cv2.contourArea(c)
+            if w >= 55 and 30 <= h <= 140 and 0.9 <= (w / h) <= 5.5 and area >= 2000:
+                box_sample = upper_roi[y:y+h, x:x+w]
+                b, g, r = box_sample.mean(axis=(0, 1))
+                if r > 175 and g > 175 and b > 175 and abs(r - g) < 25 and abs(g - b) < 25:
+                    return box_sample, 'WHITE', (x, y, w, h)
+
+        # 2. Cek Kotak Merah (Kata Salah / Sudah Dipakai)
+        br_b, br_g, br_r = cv2.split(upper_roi.astype(np.int16))
+        pure_red = (br_r > 135) & (br_g < 100) & (br_b < 100)
+        cnts_r, _ = cv2.findContours(pure_red.astype(np.uint8) * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        for c in cnts_r:
+            x, y, w, h = cv2.boundingRect(c)
+            area = cv2.contourArea(c)
+            if w >= 55 and 30 <= h <= 140 and 0.9 <= (w / h) <= 5.5 and area >= 2000:
+                box_sample = upper_roi[y:y+h, x:x+w]
+                return box_sample, 'RED', (x, y, w, h)
+
+        return None, None, None
+
     def process_crop(self, crop):
         """
-        Menganalisis satu frame crop area gameplay (lebar ~440, tinggi ~400):
-        Bagian atas (y: 0..180): Kotak kata dan subtext
-        Bagian bawah (y: 70..400): Karakter pemain
+        Menganalisis satu frame area gameplay secara cerdas:
+        1. Kotak kata dipotong secara presisi (HANYA membaca isi dalam kotak, isolasi dari background arena).
+        2. Karakter pemain dianalisis kilatan flash hijaunya saat kata benar.
         """
         if crop is None or crop.shape[0] < 100 or crop.shape[1] < 100:
             return "IDLE", "", {}
 
         H, W = crop.shape[:2]
 
-        # 1. Analisis Tubuh Karakter Pemain (Piksel Hijau)
-        char_roi = crop[int(H * 0.18):H, int(W * 0.12):int(W * 0.88)]
+        # 1. Analisis Tubuh Karakter Pemain (Piksel Hijau saat flash jawaban benar)
+        char_roi = crop[int(H * 0.22):H, int(W * 0.15):int(W * 0.85)]
         char_hsv = cv2.cvtColor(char_roi, cv2.COLOR_BGR2HSV)
-        green_mask = cv2.inRange(char_hsv, np.array([35, 80, 80]), np.array([85, 255, 255]))
-        green_count = np.count_nonzero(green_mask)
+        green_mask = cv2.inRange(char_hsv, np.array([35, 70, 70]), np.array([85, 255, 255]))
+        green_count = int(np.count_nonzero(green_mask))
         is_char_green = (green_count > 10000)
 
-        # 2. Analisis Kotak Kata & Subtext di bagian atas
-        word_h = min(H, 180)
-        word_roi = crop[0:word_h, :]
-        raw_lines = self.ocr_crop(word_roi)
+        # 2. Deteksi Kotak Kata (Putih / Merah)
+        box_crop, box_type, box_rect = self.find_gameplay_box(crop)
 
-        # Deteksi warna kotak kata di area tengah (y: 15%..60%, x: 20%..80% W)
-        box_y1, box_y2 = int(word_h * 0.15), int(word_h * 0.60)
-        box_x1, box_x2 = int(W * 0.20), int(W * 0.80)
-        box_sample = word_roi[box_y1:box_y2, box_x1:box_x2]
-
-        # Warna Merah Pekat Roblox (R > 140, G < 95, B < 95)
-        b_int, g_int, r_int = cv2.split(box_sample.astype(np.int16))
-        pure_red = (r_int > 140) & (g_int < 95) & (b_int < 95)
-        red_count = int(np.count_nonzero(pure_red))
-
-        # Warna Putih Kotak Normal (R,G,B > 210 dan selisih rendah)
-        gray_sample = cv2.cvtColor(box_sample, cv2.COLOR_BGR2GRAY)
-        pure_white = (gray_sample > 210) & (np.abs(r_int - g_int) < 25) & (np.abs(g_int - b_int) < 25)
-        white_count = int(np.count_nonzero(pure_white))
-
-        is_box_red = (red_count > 600)
-        is_box_white = (white_count > 1500)
-
-        full_text_lower = " ".join(raw_lines).lower()
-        has_sudah_digunakan = any(k in full_text_lower for k in [
-            'sud', 'guna', 'pakai', 'digunakan', 'sudffh', 'sudah'
-        ])
-
+        raw_lines = []
         main_word = ""
-        for line in raw_lines:
-            clean = "".join(c for c in line if c.isalpha()).upper()
-            if 2 <= len(clean) <= 12 and not any(k in clean.lower() for k in ['sudah', 'guna', 'pakai', 'sud', 'cift', 'buy']):
-                main_word = clean
-                break
+        has_sudah_digunakan = False
 
-        # Tentukan status
+        if box_crop is not None:
+            # Jalankan OCR HANYA di dalam potongan kotak kata yang ditemukan (100% bebas dari background)
+            raw_lines = self.ocr_crop(box_crop)
+            for line in raw_lines:
+                clean = "".join(c for c in line if c.isalpha()).upper()
+                if 2 <= len(clean) <= 12 and not any(k in clean.lower() for k in ['sudah', 'guna', 'pakai', 'sud', 'buy', 'gift', 'cift']):
+                    main_word = clean
+                    break
+
+            # Jika kotak merah, periksa teks subtext di bawah kotak merah (y+h sampai y+h+60)
+            if box_type == 'RED':
+                x, y, w, h = box_rect
+                sub_y1, sub_y2 = y + h, min(H, y + h + 65)
+                sub_roi = crop[sub_y1:sub_y2, max(0, x - 30):min(W, x + w + 30)]
+                if sub_roi.shape[0] >= 15 and sub_roi.shape[1] >= 40:
+                    sub_lines = self.ocr_crop(sub_roi)
+                    sub_text = " ".join(sub_lines).lower()
+                    has_sudah_digunakan = any(k in sub_text for k in ['sud', 'guna', 'pakai', 'digunakan', 'sudah', 'vour'])
+
+        # 3. Tentukan status
         state = "IDLE"
-        if is_box_red:
+        if box_type == 'RED':
+            # Jika teks di dalam kotak merah sedang pudar/animasi, gunakan kata yang baru saja diketik
+            if not main_word and self.last_typing_word:
+                main_word = self.last_typing_word
             if has_sudah_digunakan:
                 state = "SUDAH_DIGUNAKAN"
             else:
                 state = "KATA_SALAH"
-        elif is_box_white and main_word:
+        elif box_type == 'WHITE' and main_word:
             state = "SEDANG_KETIK"
             self.last_typing_word = main_word
-        elif not is_box_red and is_char_green:
+        elif box_type is None and is_char_green and self.last_typing_word:
             state = "KATA_BENAR"
-            if not main_word and self.last_typing_word:
-                main_word = self.last_typing_word
+            main_word = self.last_typing_word
 
         details = {
-            'is_box_red': is_box_red,
-            'is_box_white': is_box_white,
+            'box_type': box_type,
+            'is_char_green': is_char_green,
             'green_count': green_count,
-            'red_count': red_count,
+            'main_word': main_word,
             'raw_lines': raw_lines
         }
 
