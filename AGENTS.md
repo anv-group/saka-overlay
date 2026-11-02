@@ -240,12 +240,10 @@ Aplikasi dilengkapi modul `GitUpdater` (`updater.py`) untuk menjaga repository l
 ## 🌿 7. Strategi Branching & CI Workflow
 
 Untuk menghemat kuota komputasi GitHub Actions dan mempercepat siklus development:
-1. **Branch `reoptimized` (Performa Turbo & Widget Pooling):**
-   - Berisi optimasi latensi ekstrem: vertical projection character slicing (1.5ms), RapidOCR early-exit, Tkinter Card Widget Pooling (0.5ms), dan scan interval turbo (40–80ms).
-2. **Branch `dev` (Active Development):**
-   - Seluruh coding aktif, eksperimen OCR, dan penambahan fitur dilakukan di branch `dev`.
+1. **Branch `dev` (Active Development):**
+   - Seluruh coding aktif, eksperimen OCR, optimasi latensi turbo, dan penambahan fitur dilakukan di branch `dev`.
    - Push ke branch `dev` **tidak memicu GitHub Actions** (bebas commit kapan saja tanpa menghabiskan kuota).
-3. **Branch `main` (Production & Release):**
+2. **Branch `main` (Production & Release):**
    - Hanya menerima kode stabil hasil merge.
    - Setiap kali terjadi push atau merge ke `main`, GitHub Actions (`test.yml`) otomatis menjalankan rangkaian pengujian lengkap: OCR Benchmark (92 sampel), Solver & Custom Traps Unit Tests, dan Gameplay Indexer Sequence Tests di runner Windows.
 

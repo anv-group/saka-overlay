@@ -73,7 +73,7 @@ Aplikasi ini secara otomatis mendeteksi kotak awalan huruf giliran Anda di layar
 Aplikasi sudah dilengkapi modul pembaruan otomatis di latar belakang:
 - **Saat Startup:** Jika ada commit baru di repositori GitHub, dialog pembaruan akan otomatis muncul (bisa diatur ke mode *Prompt*, *Auto-Update*, atau *Disabled*).
 - **Pemeriksaan Manual:** Klik tombol **`⚙️`** (Settings) di kanan atas ➔ pilih **`🔄 Cek Update Git...`** ➔ klik **`🚀 Perbarui Sekarang`**.
-- **Pemilihan Branch:** Anda dapat berpindah branch secara instan (misal branch stabil `main` atau branch performa turbo `reoptimized`) langsung dari dropdown updater.
+- **Pemilihan Branch:** Anda dapat berpindah branch secara instan (misal branch stabil `main` atau branch pengembangan `dev`) langsung dari dropdown updater.
 
 ### B. Khusus Pengguna Lama yang Clone Sebelum Fitur Updater Ada:
 Bagi pengguna yang meng-clone repositori ini sebelum modul updater dibuat (sehingga belum ada menu update di GUI):

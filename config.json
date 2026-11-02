@@ -12,7 +12,7 @@
     "ocr_engine": "winocr",
     "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
     "updater_mode": "prompt",
-    "updater_branch": "reoptimized",
+    "updater_branch": "dev",
     "auto_check_update_on_startup": true,
     "use_kbbi": false,
     "use_contek": true,
