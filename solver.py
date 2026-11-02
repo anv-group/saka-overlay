@@ -29,6 +29,7 @@ class SambungKataSolver:
         self.words = []
         self.blacklisted_words = set()
         self.words_by_initial = {}
+        self.custom_endings = []
 
         self.load_blacklist()
         self.load_dictionary()
@@ -223,7 +224,47 @@ class SambungKataSolver:
                 self.words_by_initial[init1] = []
             self.words_by_initial[init1].append(w)
 
-    def cari_jawaban(self, awalan_prefix, limit=12, mode_santai=False):
+    def set_custom_endings(self, custom_endings):
+        """
+        Mengatur daftar akhiran kustom (Custom Traps) dengan prioritas super (di atas X).
+        Format:
+        [
+            {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"},
+            {"suffix": "NGK", "name": "Akhiran NGK", "enabled": True, "color": "#f5c2e7"}
+        ]
+        atau list of string: ["NS", "NGK"]
+        """
+        self.custom_endings = []
+        if not custom_endings:
+            return
+        for item in custom_endings:
+            if isinstance(item, str):
+                s = item.strip().lower()
+                if s:
+                    self.custom_endings.append({
+                        "suffix": s,
+                        "name": f"Akhiran {s.upper()}",
+                        "enabled": True,
+                        "color": "#cba6f7"
+                    })
+            elif isinstance(item, dict):
+                s = item.get("suffix", "").strip().lower()
+                if s:
+                    self.custom_endings.append({
+                        "suffix": s,
+                        "name": item.get("name") or f"Akhiran {s.upper()}",
+                        "enabled": bool(item.get("enabled", True)),
+                        "color": item.get("color", "#cba6f7")
+                    })
+
+    def count_words_by_suffix(self, suffix):
+        """Menghitung berapa banyak kata di kamus aktif yang berakhiran suffix tertentu"""
+        s = suffix.strip().lower()
+        if not s:
+            return 0
+        return sum(1 for w in self.words if w.endswith(s) and w not in self.blacklisted_words)
+
+    def cari_jawaban(self, awalan_prefix, limit=12, mode_santai=False, custom_endings=None):
         """
         Mencari kata yang DIAWALI oleh `awalan_prefix`:
         Contoh:
@@ -233,11 +274,13 @@ class SambungKataSolver:
         - Jika prefix 'IX'  -> mencari kata berawalan 'ix' (ixora, ixodes, dll)
         
         Prioritas Jawaban (Mode Normal):
+        0. Kata berakhiran Kategori Custom / Custom Traps (🔥 Super Jebakan, misal NS, NGK)
         1. Kata berakhiran 'X' (💥 Jebakan Mematikan)
         2. Kata berakhiran huruf sulit 'Z', 'Q', 'V', 'J', 'W', 'F' (⚡ Jebakan Sulit)
         3. Kata normal/seadanya (🛡️ Bertahan)
 
         Prioritas Jawaban (Mode Santai - tanpa X, Q, F):
+        0. Kata berakhiran Kategori Custom yang tidak mengandung X, Q, F
         1. Kata berakhiran 'Z', 'V', 'J', 'W' (⚡ Jebakan Sulit Alternatif)
         2. Kata santai/normal yang nyaman diketik
         (Semua kata berakhiran X, Q, F atau mengandung X, Q dihilangkan)
@@ -262,7 +305,14 @@ class SambungKataSolver:
         if not candidates:
             return []
 
+        # Aturan akhiran kustom yang aktif
+        custom_rules = custom_endings if custom_endings is not None else self.custom_endings
+        active_custom = [c for c in custom_rules if c.get("enabled", True)]
+        # Sort suffix terpanjang lebih dahulu
+        active_custom.sort(key=lambda c: len(c.get("suffix", "")), reverse=True)
+
         vowels = set("aiueo")
+        jebakan_custom = []
         jebakan_x = []
         jebakan_sulit = []
         kata_biasa = []
@@ -277,8 +327,16 @@ class SambungKataSolver:
                 if w[-1] in ("x", "q", "f") or "x" in w or "q" in w:
                     continue
                 
-                last = w[-1]
-                if last in ("z", "v", "j", "w"):
+                # Cek akhiran custom
+                matched_rule = None
+                for rule in active_custom:
+                    if w.endswith(rule["suffix"]):
+                        matched_rule = rule
+                        break
+
+                if matched_rule:
+                    jebakan_custom.append((w, matched_rule))
+                elif w[-1] in ("z", "v", "j", "w"):
                     jebakan_sulit.append(w)
                 else:
                     kata_biasa.append(w)
@@ -289,10 +347,18 @@ class SambungKataSolver:
                 if len(w) >= 4 and not any(v in w for v in vowels):
                     continue
 
-                last = w[-1]
-                if last == "x":
+                # Cek akhiran custom (Prioritas Super / Paling Atas)
+                matched_rule = None
+                for rule in active_custom:
+                    if w.endswith(rule["suffix"]):
+                        matched_rule = rule
+                        break
+
+                if matched_rule:
+                    jebakan_custom.append((w, matched_rule))
+                elif w[-1] == "x":
                     jebakan_x.append(w)
-                elif last in HURUF_SULIT_AKHIRAN:
+                elif w[-1] in HURUF_SULIT_AKHIRAN:
                     jebakan_sulit.append(w)
                 else:
                     kata_biasa.append(w)
@@ -310,17 +376,33 @@ class SambungKataSolver:
                 prio = 3
             return (prio, l)
 
+        jebakan_custom.sort(key=lambda item: sort_key(item[0]))
         jebakan_x.sort(key=sort_key)
         jebakan_sulit.sort(key=sort_key)
         kata_biasa.sort(key=sort_key)
 
         hasil = []
+        # TIER 0: Custom Traps (Prioritas Super)
+        for w, rule in jebakan_custom:
+            sfx = rule["suffix"].upper()
+            hasil.append({
+                "kata": w,
+                "tipe": "CUSTOM_TRAP",
+                "suffix": sfx,
+                "badge_name": rule.get("name") or f"AKHIRAN {sfx}",
+                "color": rule.get("color", "#cba6f7"),
+                "deskripsi": f"Akhiran {sfx} (Super Jebakan)"
+            })
+
+        # TIER 1: Jebakan X
         for w in jebakan_x:
             hasil.append({"kata": w, "tipe": "JEBAKAN_X", "deskripsi": "Akhiran X (Mematikan)"})
 
+        # TIER 2: Jebakan Sulit
         for w in jebakan_sulit:
             hasil.append({"kata": w, "tipe": "JEBAKAN_SULIT", "deskripsi": f"Akhiran {w[-1].upper()} (Sulit)"})
 
+        # TIER 3: Kata Biasa
         for w in kata_biasa:
             desc = "Kata Santai" if mode_santai else "Kata Normal"
             hasil.append({"kata": w, "tipe": "BIASA", "deskripsi": desc})

@@ -29,7 +29,11 @@ DEFAULT_CONFIG = {
         "height": 400
     },
     "auto_blacklist_invalid": True,  # Otomatis blacklist kata yang ditolak game Roblox
-    "auto_learn_valid": True  # Otomatis simpan kata valid yang belum ada di kamus
+    "auto_learn_valid": True,  # Otomatis simpan kata valid yang belum ada di kamus
+    "custom_trap_endings": [  # Kategori custom akhiran jebakan super (prioritas di atas X)
+        {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"},
+        {"suffix": "NGK", "name": "Akhiran NGK", "enabled": True, "color": "#f5c2e7"}
+    ]
 }
 
 def load_config():

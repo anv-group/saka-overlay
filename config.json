@@ -16,7 +16,7 @@
     "auto_check_update_on_startup": true,
     "use_kbbi": false,
     "use_contek": true,
-    "gameplay_indexing_enabled": true,
+    "gameplay_indexing_enabled": false,
     "gameplay_area": {
         "left": 744,
         "top": 230,
@@ -24,5 +24,19 @@
         "height": 578
     },
     "auto_blacklist_invalid": true,
-    "auto_learn_valid": true
+    "auto_learn_valid": true,
+    "custom_trap_endings": [
+        {
+            "suffix": "NS",
+            "name": "Akhiran NS",
+            "enabled": true,
+            "color": "#cba6f7"
+        },
+        {
+            "suffix": "NGK",
+            "name": "Akhiran NGK",
+            "enabled": true,
+            "color": "#f5c2e7"
+        }
+    ]
 }

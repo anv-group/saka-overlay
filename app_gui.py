@@ -47,6 +47,7 @@ class SambungKataApp:
             use_kbbi=use_kbbi,
             use_contek=use_contek
         )
+        self.solver.set_custom_endings(self.config.get("custom_trap_endings", []))
         self.ocr = OCREngine(self.config)
         self.updater = GitUpdater()
         self.gameplay_indexer = GameplayIndexer(
@@ -163,6 +164,20 @@ class SambungKataApp:
             pady=4
         )
         self.btn_blocklist.pack(side=tk.LEFT, padx=2)
+
+        self.btn_custom_cats = tk.Button(
+            toolbar,
+            text="🏷️ Akhiran Custom",
+            font=("Segoe UI", 10),
+            bg="#cba6f7",
+            fg="#11111b",
+            activebackground="#b4befe",
+            command=self.open_custom_categories_window,
+            relief=tk.FLAT,
+            padx=6,
+            pady=4
+        )
+        self.btn_custom_cats.pack(side=tk.LEFT, padx=2)
 
         area = self.config.get("screen_area", {})
         self.lbl_coords = tk.Label(
@@ -1949,7 +1964,13 @@ class SambungKataApp:
         else:
             sisa = kata_upper
 
-        if tipe == "JEBAKAN_X":
+        if tipe == "CUSTOM_TRAP":
+            card_bg = "#313244"
+            badge_bg = item.get("color", "#cba6f7")
+            badge_fg = "#11111b"
+            b_name = item.get("badge_name") or f"AKHIRAN {item.get('suffix', '')}"
+            badge_text = f"🔥 {b_name}"
+        elif tipe == "JEBAKAN_X":
             card_bg = "#45475a"
             badge_bg = "#f38ba8"
             badge_fg = "#11111b"
@@ -2282,6 +2303,333 @@ class SambungKataApp:
         if hasattr(self, "last_detected_word") and self.last_detected_word:
             self.update_results(self.last_detected_word)
         self.show_toast("🔄 Blocklist dimuat ulang dari disk")
+
+    def open_custom_categories_window(self):
+        """Membuka dialog popup untuk mengelola kategori & akhiran kustom (Custom Traps)"""
+        if hasattr(self, "custom_cats_win") and self.custom_cats_win and self.custom_cats_win.winfo_exists():
+            self.custom_cats_win.lift()
+            self.custom_cats_win.focus_force()
+            if hasattr(self, "entry_cat_sfx") and self.entry_cat_sfx.winfo_exists():
+                self.entry_cat_sfx.focus_set()
+                self.entry_cat_sfx.select_range(0, tk.END)
+            return
+
+        self.custom_cats_win = tk.Toplevel(self.root)
+        self.custom_cats_win.title("🏷️ Kategori & Akhiran Kustom (Custom Traps)")
+        self.custom_cats_win.geometry("460x580")
+        self.custom_cats_win.minsize(420, 500)
+        self.custom_cats_win.attributes("-topmost", True)
+        self.custom_cats_win.configure(bg="#1e1e2e")
+        self.custom_cats_win.bind("<Escape>", lambda e: self.custom_cats_win.destroy())
+
+        # Header
+        hdr = tk.Frame(self.custom_cats_win, bg="#181825", padx=14, pady=10)
+        hdr.pack(fill=tk.X)
+
+        title_lbl = tk.Label(
+            hdr,
+            text="🏷️ Kategori Akhiran Kustom",
+            font=("Segoe UI", 12, "bold"),
+            fg="#cba6f7",
+            bg="#181825"
+        )
+        title_lbl.pack(side=tk.LEFT)
+
+        subtitle_lbl = tk.Label(
+            self.custom_cats_win,
+            text="Kata berakhiran ini diprioritaskan paling atas (Super Jebakan, di atas X)\nuntuk menjebak lawan dengan awalan yang hampir mustahil disambung.",
+            font=("Segoe UI", 8),
+            fg="#a6adc8",
+            bg="#1e1e2e",
+            justify=tk.LEFT,
+            padx=14,
+            pady=6
+        )
+        subtitle_lbl.pack(fill=tk.X)
+
+        # Form Tambah Akhiran Baru
+        add_box = tk.LabelFrame(
+            self.custom_cats_win,
+            text=" Tambah Akhiran / Kategori Baru ",
+            font=("Segoe UI", 9, "bold"),
+            fg="#cba6f7",
+            bg="#181825",
+            padx=10,
+            pady=8
+        )
+        add_box.pack(fill=tk.X, padx=14, pady=6)
+
+        row1 = tk.Frame(add_box, bg="#181825")
+        row1.pack(fill=tk.X, pady=2)
+
+        lbl_sfx = tk.Label(row1, text="Akhiran:", font=("Segoe UI", 9, "bold"), fg="#cdd6f4", bg="#181825", width=8, anchor="w")
+        lbl_sfx.pack(side=tk.LEFT)
+
+        self.entry_cat_sfx = tk.Entry(row1, font=("Segoe UI", 10, "bold"), bg="#313244", fg="#f5e0dc", insertbackground="white", width=9)
+        self.entry_cat_sfx.pack(side=tk.LEFT, padx=4)
+        self.entry_cat_sfx.focus_set()
+        self.entry_cat_sfx.bind("<Return>", lambda e: self._on_add_custom_category())
+
+        lbl_name = tk.Label(row1, text="Nama:", font=("Segoe UI", 9), fg="#cdd6f4", bg="#181825", width=6, anchor="w")
+        lbl_name.pack(side=tk.LEFT, padx=(6, 0))
+
+        self.entry_cat_name = tk.Entry(row1, font=("Segoe UI", 9), bg="#313244", fg="#cdd6f4", insertbackground="white")
+        self.entry_cat_name.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+        self.entry_cat_name.bind("<Return>", lambda e: self._on_add_custom_category())
+
+        btn_add = tk.Button(
+            add_box,
+            text="➕ Tambah Kategori Akhiran",
+            font=("Segoe UI", 9, "bold"),
+            bg="#a6e3a1",
+            fg="#11111b",
+            activebackground="#94e2d5",
+            relief=tk.FLAT,
+            command=self._on_add_custom_category,
+            pady=3
+        )
+        btn_add.pack(fill=tk.X, pady=(6, 2))
+
+        # List Area Container
+        lbl_list_title = tk.Label(
+            self.custom_cats_win,
+            text="Daftar Kategori Akhiran:",
+            font=("Segoe UI", 9, "bold"),
+            fg="#cdd6f4",
+            bg="#1e1e2e",
+            padx=14,
+            anchor="w"
+        )
+        lbl_list_title.pack(fill=tk.X, pady=(6, 2))
+
+        # Scrollable list container
+        list_container = tk.Frame(self.custom_cats_win, bg="#181825")
+        list_container.pack(fill=tk.BOTH, expand=True, padx=14, pady=4)
+
+        canvas = tk.Canvas(list_container, bg="#181825", highlightthickness=0)
+        scrollbar = tk.Scrollbar(list_container, orient=tk.VERTICAL, command=canvas.yview)
+        self.custom_cats_inner = tk.Frame(canvas, bg="#181825")
+
+        self.custom_cats_inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=self.custom_cats_inner, anchor="nw", width=410)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Render item list
+        self._render_custom_category_items()
+
+        # Footer Actions
+        footer = tk.Frame(self.custom_cats_win, bg="#1e1e2e", padx=14, pady=8)
+        footer.pack(fill=tk.X)
+
+        btn_reset = tk.Button(
+            footer,
+            text="↩️ Reset Default (NS & NGK)",
+            font=("Segoe UI", 9),
+            bg="#45475a",
+            fg="#cdd6f4",
+            activebackground="#585b70",
+            relief=tk.FLAT,
+            command=self._on_reset_custom_categories,
+            padx=8,
+            pady=4
+        )
+        btn_reset.pack(side=tk.LEFT)
+
+        btn_close = tk.Button(
+            footer,
+            text="Tutup",
+            font=("Segoe UI", 9),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            command=self.custom_cats_win.destroy,
+            padx=12,
+            pady=4
+        )
+        btn_close.pack(side=tk.RIGHT)
+
+    def _render_custom_category_items(self):
+        """Merender baris daftar kategori akhiran kustom di canvas"""
+        if not hasattr(self, "custom_cats_inner") or not self.custom_cats_inner.winfo_exists():
+            return
+
+        for w in self.custom_cats_inner.winfo_children():
+            w.destroy()
+
+        categories = self.config.get("custom_trap_endings", [])
+        if not categories:
+            empty_lbl = tk.Label(
+                self.custom_cats_inner,
+                text="Belum ada kategori akhiran kustom.\nSilakan tambah di form atas (misal: NS atau NGK).",
+                font=("Segoe UI", 9, "italic"),
+                fg="#6c7086",
+                bg="#181825",
+                pady=20
+            )
+            empty_lbl.pack(fill=tk.X)
+            return
+
+        for idx, cat in enumerate(categories):
+            sfx = cat.get("suffix", "").upper()
+            name = cat.get("name") or f"Akhiran {sfx}"
+            enabled = cat.get("enabled", True)
+            color = cat.get("color", "#cba6f7")
+            cnt = self.solver.count_words_by_suffix(sfx) if hasattr(self.solver, "count_words_by_suffix") else 0
+
+            row = tk.Frame(self.custom_cats_inner, bg="#1e1e2e", padx=8, pady=6)
+            row.pack(fill=tk.X, padx=4, pady=3)
+
+            # Checkbox toggle
+            var = tk.BooleanVar(value=enabled)
+            cb = tk.Checkbutton(
+                row,
+                variable=var,
+                bg="#1e1e2e",
+                activebackground="#1e1e2e",
+                selectcolor="#313244",
+                command=lambda i=idx, v=var: self._on_toggle_custom_category(i, v.get())
+            )
+            cb.pack(side=tk.LEFT)
+
+            # Badge Suffix
+            badge = tk.Label(
+                row,
+                text=sfx,
+                font=("Segoe UI", 9, "bold"),
+                bg=color,
+                fg="#11111b",
+                padx=6,
+                pady=1
+            )
+            badge.pack(side=tk.LEFT, padx=(2, 8))
+
+            # Nama dan Info Kata
+            info_frame = tk.Frame(row, bg="#1e1e2e")
+            info_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+            lbl_name = tk.Label(
+                info_frame,
+                text=name,
+                font=("Segoe UI", 9, "bold"),
+                fg="#cdd6f4" if enabled else "#6c7086",
+                bg="#1e1e2e",
+                anchor="w"
+            )
+            lbl_name.pack(anchor="w")
+
+            lbl_cnt = tk.Label(
+                info_frame,
+                text=f"{cnt} kata tersedia di kamus",
+                font=("Segoe UI", 8),
+                fg="#a6adc8" if enabled else "#585b70",
+                bg="#1e1e2e",
+                anchor="w"
+            )
+            lbl_cnt.pack(anchor="w")
+
+            # Tombol Hapus
+            btn_del = tk.Button(
+                row,
+                text="🗑️",
+                font=("Segoe UI", 9),
+                bg="#1e1e2e",
+                fg="#f38ba8",
+                activebackground="#313244",
+                relief=tk.FLAT,
+                cursor="hand2",
+                command=lambda i=idx: self._on_delete_custom_category(i)
+            )
+            btn_del.pack(side=tk.RIGHT)
+
+    def _on_add_custom_category(self):
+        """Menambahkan kategori akhiran baru dari input"""
+        if not hasattr(self, "entry_cat_sfx"):
+            return
+        raw_sfx = self.entry_cat_sfx.get().strip().upper()
+        sfx = "".join(c for c in raw_sfx if c.isalpha())
+        if not sfx:
+            self.show_toast("Akhiran harus berupa huruf alfabet (misal: NS atau NGK)!")
+            return
+
+        raw_name = self.entry_cat_name.get().strip() if hasattr(self, "entry_cat_name") else ""
+        name = raw_name if raw_name else f"Akhiran {sfx}"
+
+        categories = self.config.get("custom_trap_endings", [])
+        # Cek apakah sudah ada
+        for c in categories:
+            if c.get("suffix", "").upper() == sfx:
+                self.show_toast(f"Kategori akhiran '{sfx}' sudah ada!")
+                return
+
+        palette = ["#cba6f7", "#f5c2e7", "#89dceb", "#f9e2af", "#a6e3a1", "#fab387", "#94e2d5"]
+        chosen_color = palette[len(categories) % len(palette)]
+
+        categories.append({
+            "suffix": sfx,
+            "name": name,
+            "enabled": True,
+            "color": chosen_color
+        })
+
+        self.config["custom_trap_endings"] = categories
+        save_config(self.config)
+        self.solver.set_custom_endings(categories)
+
+        self.entry_cat_sfx.delete(0, tk.END)
+        self.entry_cat_name.delete(0, tk.END)
+        self.entry_cat_sfx.focus_set()
+
+        self._render_custom_category_items()
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+
+        cnt = self.solver.count_words_by_suffix(sfx)
+        self.show_toast(f"✅ Kategori '{name}' ({sfx}) ditambahkan ({cnt} kata)!")
+
+    def _on_toggle_custom_category(self, idx, new_val):
+        """Toggle aktif/nonaktif kategori akhiran"""
+        categories = self.config.get("custom_trap_endings", [])
+        if 0 <= idx < len(categories):
+            categories[idx]["enabled"] = bool(new_val)
+            self.config["custom_trap_endings"] = categories
+            save_config(self.config)
+            self.solver.set_custom_endings(categories)
+            self._render_custom_category_items()
+            if hasattr(self, "last_detected_word") and self.last_detected_word:
+                self.update_results(self.last_detected_word)
+            status_str = "diaktifkan" if new_val else "dinonaktifkan"
+            self.show_toast(f"Kategori '{categories[idx].get('name')}' {status_str}")
+
+    def _on_delete_custom_category(self, idx):
+        """Menghapus kategori akhiran kustom"""
+        categories = self.config.get("custom_trap_endings", [])
+        if 0 <= idx < len(categories):
+            removed = categories.pop(idx)
+            self.config["custom_trap_endings"] = categories
+            save_config(self.config)
+            self.solver.set_custom_endings(categories)
+            self._render_custom_category_items()
+            if hasattr(self, "last_detected_word") and self.last_detected_word:
+                self.update_results(self.last_detected_word)
+            self.show_toast(f"🗑️ Kategori '{removed.get('name')}' dihapus")
+
+    def _on_reset_custom_categories(self):
+        """Mereset daftar kategori akhiran ke default NS & NGK"""
+        categories = [
+            {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"},
+            {"suffix": "NGK", "name": "Akhiran NGK", "enabled": True, "color": "#f5c2e7"}
+        ]
+        self.config["custom_trap_endings"] = categories
+        save_config(self.config)
+        self.solver.set_custom_endings(categories)
+        self._render_custom_category_items()
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+        self.show_toast("↩️ Kategori akhiran direset ke default (NS & NGK)")
 
     def copy_to_clipboard(self, sisa_text, full_word=None, show_toast_flag=True):
         self.root.clipboard_clear()
