@@ -5,7 +5,7 @@ import json
 import cv2
 import numpy as np
 
-def extract_gameplay_events(video_path, output_dir=None, progress_callback=None):
+def extract_gameplay_events(video_path, output_dir=None, progress_callback=None, event_callback=None):
     """
     Mengekstrak momen-momen gameplay kunci dari file video recording Roblox Sambung Kata
     menggunakan jaring lebar (High-Recall Visual Motion & Color Spike Filter).
@@ -140,18 +140,26 @@ def extract_gameplay_events(video_path, output_dir=None, progress_callback=None)
                 json.dump(metadata, f, indent=4)
 
             print(f"  [+] Momen {saved_count:2d} terdeteksi di detik {cur_sec:6.1f}s ({trigger_type})")
+            if event_callback:
+                try:
+                    event_callback(saved_count, cur_sec, trigger_type, img_path)
+                except Exception:
+                    pass
 
         prev_red = red_box_px
         prev_green = green_body_px
 
         # Laporan progres
         pct = int((frame_idx / total_frames) * 100)
-        if pct != last_reported_pct and pct % 10 == 0:
+        if pct != last_reported_pct and (pct - last_reported_pct >= 2 or pct == 100):
             last_reported_pct = pct
             elapsed = time.time() - t_start
             print(f"    Progres: {pct}% ({frame_idx}/{total_frames} frame, waktu: {elapsed:.1f}s)")
             if progress_callback:
-                progress_callback(pct, saved_count)
+                try:
+                    progress_callback(pct, saved_count, frame_idx / fps)
+                except Exception:
+                    pass
 
     cap.release()
     total_time = time.time() - t_start

@@ -1090,7 +1090,7 @@ class SambungKataApp:
         )
         title_lbl.pack(side=tk.LEFT)
 
-        btn_extract = tk.Button(
+        self.btn_classifier_extract = tk.Button(
             hdr,
             text="🎬 Ekstrak Video",
             font=("Segoe UI", 8, "bold"),
@@ -1103,7 +1103,7 @@ class SambungKataApp:
             cursor="hand2",
             command=self._classifier_pick_and_extract_video
         )
-        btn_extract.pack(side=tk.RIGHT, padx=(4, 0))
+        self.btn_classifier_extract.pack(side=tk.RIGHT, padx=(4, 0))
 
         btn_folder = tk.Button(
             hdr,
@@ -1710,26 +1710,51 @@ class SambungKataApp:
         if not vid_path:
             return
 
-        self.show_toast(f"⏳ Mengekstrak momen dari '{os.path.basename(vid_path)}'...")
+        vname = os.path.basename(vid_path)
+        self.show_toast(f"⏳ Memulai ekstraksi: '{vname}'...")
+        if hasattr(self, "btn_classifier_extract") and self.btn_classifier_extract:
+            self.btn_classifier_extract.config(text="⏳ Memproses...", state=tk.DISABLED)
+
+        def _on_prog(pct, saved, sec):
+            if hasattr(self, "classifier_win") and self.classifier_win and self.classifier_win.winfo_exists():
+                self.lbl_class_counter.config(
+                    text=f"⏳ Ekstraksi: {pct}% | Tertangkap: {saved} momen | Video: {sec:.1f}s",
+                    fg="#fab387"
+                )
+
+        def _on_event(saved, sec, tr_type, img_p):
+            # Notifikasi info seketika momen berhasil di-capture ke unclassified
+            self.show_toast(f"📸 Momen #{saved} tertangkap: {tr_type} ({sec:.1f}s)")
+            if hasattr(self, "classifier_win") and self.classifier_win and self.classifier_win.winfo_exists():
+                self.lbl_class_trigger.config(text=f"📸 Baru: {tr_type} ({sec:.1f}s)")
 
         def _worker():
             try:
                 count, out_dir = extract_gameplay_events(
                     video_path=vid_path,
-                    output_dir=self._classifier_unclassified_dir
+                    output_dir=self._classifier_unclassified_dir,
+                    progress_callback=lambda p, s, sec: self.root.after(0, lambda: _on_prog(p, s, sec)),
+                    event_callback=lambda s, sec, tr, p: self.root.after(0, lambda: _on_event(s, sec, tr, p))
                 )
                 self.root.after(0, lambda: self._on_video_extract_done(count, vid_path))
             except Exception as err:
-                self.root.after(0, lambda: self.show_toast(f"⚠️ Gagal ekstraksi video: {err}"))
+                self.root.after(0, lambda: self._on_video_extract_error(err))
 
         threading.Thread(target=_worker, daemon=True).start()
 
     def _on_video_extract_done(self, count, vid_path):
+        if hasattr(self, "btn_classifier_extract") and self.btn_classifier_extract:
+            self.btn_classifier_extract.config(text="🎬 Ekstrak Video", state=tk.NORMAL)
         self.show_toast(f"✅ Ekstraksi selesai! {count} momen siap diklasifikasikan.")
         if hasattr(self, "classifier_win") and self.classifier_win and self.classifier_win.winfo_exists():
             self._classifier_load_items()
         else:
             self.open_gameplay_classifier_window()
+
+    def _on_video_extract_error(self, err):
+        if hasattr(self, "btn_classifier_extract") and self.btn_classifier_extract:
+            self.btn_classifier_extract.config(text="🎬 Ekstrak Video", state=tk.NORMAL)
+        self.show_toast(f"⚠️ Gagal ekstraksi video: {err}")
 
     def on_report_kurang_tepat(self):
         """
