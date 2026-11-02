@@ -567,6 +567,11 @@ class SambungKataApp:
         )
         self._toast_timer = None
 
+        # Baris Horizontal Quick Toggle Kategori Custom (di atas Rekomendasi Kata)
+        self.custom_cats_bar = tk.Frame(self.root, bg="#1e1e2e")
+        self.custom_cats_bar.pack(fill=tk.X, padx=10, pady=(2, 2))
+        self._render_custom_category_quick_bar()
+
         # Daftar Rekomendasi Jawaban
         is_santai_init = self.config.get("mode_santai", False)
         recom_title = " Rekomendasi Kata (🌿 Mode Santai) " if is_santai_init else " Rekomendasi Kata (Klik untuk Salin) "
@@ -2528,6 +2533,86 @@ class SambungKataApp:
         )
         btn_close.pack(side=tk.RIGHT)
 
+    def _render_custom_category_quick_bar(self):
+        """Merender tombol toggle horizontal untuk tiap kategori custom di atas Rekomendasi Kata"""
+        if not hasattr(self, "custom_cats_bar") or not self.custom_cats_bar.winfo_exists():
+            return
+
+        for w in self.custom_cats_bar.winfo_children():
+            w.destroy()
+
+        categories = self.config.get("custom_trap_endings", [])
+
+        # Label Header baris
+        lbl_title = tk.Label(
+            self.custom_cats_bar,
+            text="🏷️ Custom:",
+            font=("Segoe UI", 9, "bold"),
+            fg="#cdd6f4",
+            bg="#1e1e2e"
+        )
+        lbl_title.pack(side=tk.LEFT, padx=(0, 6))
+
+        # Tombol Kelola '⚙️' di ujung kanan horizontal
+        btn_manage = tk.Button(
+            self.custom_cats_bar,
+            text="⚙️ Kelola",
+            font=("Segoe UI", 8),
+            bg="#181825",
+            fg="#a6adc8",
+            activebackground="#313244",
+            activeforeground="#cdd6f4",
+            relief=tk.FLAT,
+            padx=6,
+            pady=2,
+            cursor="hand2",
+            command=self.open_custom_categories_window
+        )
+        btn_manage.pack(side=tk.RIGHT, padx=(4, 0))
+
+        if not categories:
+            lbl_none = tk.Label(
+                self.custom_cats_bar,
+                text="(Belum ada kategori)",
+                font=("Segoe UI", 8, "italic"),
+                fg="#6c7086",
+                bg="#1e1e2e"
+            )
+            lbl_none.pack(side=tk.LEFT, padx=(0, 4))
+            return
+
+        for idx, cat in enumerate(categories):
+            sfx = cat.get("suffix", "").upper()
+            enabled = cat.get("enabled", True)
+            col = cat.get("color", "#cba6f7")
+
+            if enabled:
+                btn_text = f"✓ {sfx}"
+                btn_bg = col
+                btn_fg = "#11111b"
+                btn_abg = "#f5e0dc"
+            else:
+                btn_text = f"✕ {sfx}"
+                btn_bg = "#313244"
+                btn_fg = "#6c7086"
+                btn_abg = "#45475a"
+
+            btn = tk.Button(
+                self.custom_cats_bar,
+                text=btn_text,
+                font=("Segoe UI", 8, "bold"),
+                bg=btn_bg,
+                fg=btn_fg,
+                activebackground=btn_abg,
+                activeforeground="#11111b" if enabled else "#cdd6f4",
+                relief=tk.FLAT,
+                padx=8,
+                pady=2,
+                cursor="hand2",
+                command=lambda i=idx, cur=enabled: self._on_toggle_custom_category(i, not cur)
+            )
+            btn.pack(side=tk.LEFT, padx=3)
+
     def _render_custom_category_items(self):
         """Merender baris daftar kategori akhiran kustom di canvas"""
         if not hasattr(self, "custom_cats_inner") or not self.custom_cats_inner.winfo_exists():
@@ -2660,6 +2745,7 @@ class SambungKataApp:
         self.entry_cat_sfx.focus_set()
 
         self._render_custom_category_items()
+        self._render_custom_category_quick_bar()
         if hasattr(self, "last_detected_word") and self.last_detected_word:
             self.update_results(self.last_detected_word)
 
@@ -2675,6 +2761,7 @@ class SambungKataApp:
             save_config(self.config)
             self.solver.set_custom_endings(categories)
             self._render_custom_category_items()
+            self._render_custom_category_quick_bar()
             if hasattr(self, "last_detected_word") and self.last_detected_word:
                 self.update_results(self.last_detected_word)
             status_str = "diaktifkan" if new_val else "dinonaktifkan"
@@ -2689,6 +2776,7 @@ class SambungKataApp:
             save_config(self.config)
             self.solver.set_custom_endings(categories)
             self._render_custom_category_items()
+            self._render_custom_category_quick_bar()
             if hasattr(self, "last_detected_word") and self.last_detected_word:
                 self.update_results(self.last_detected_word)
             self.show_toast(f"🗑️ Kategori '{removed.get('name')}' dihapus")
@@ -2703,6 +2791,7 @@ class SambungKataApp:
         save_config(self.config)
         self.solver.set_custom_endings(categories)
         self._render_custom_category_items()
+        self._render_custom_category_quick_bar()
         if hasattr(self, "last_detected_word") and self.last_detected_word:
             self.update_results(self.last_detected_word)
         self.show_toast("↩️ Kategori akhiran direset ke default (NS & NGK)")
