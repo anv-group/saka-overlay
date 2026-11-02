@@ -1891,7 +1891,8 @@ class SambungKataApp:
             card_bg = "#313244"
             badge_bg = "#fab387"
             badge_fg = "#11111b"
-            badge_text = f"⚡ {deskripsi}"
+            clean_desc = deskripsi.replace(" (Sulit)", "").replace("(Sulit)", "").strip()
+            badge_text = f"⚡ {clean_desc.upper()}"
         else:
             card_bg = "#1e1e2e"
             badge_bg = "#a6e3a1"

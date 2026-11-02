@@ -400,7 +400,7 @@ class SambungKataSolver:
 
         # TIER 2: Jebakan Sulit
         for w in jebakan_sulit:
-            hasil.append({"kata": w, "tipe": "JEBAKAN_SULIT", "deskripsi": f"Akhiran {w[-1].upper()} (Sulit)"})
+            hasil.append({"kata": w, "tipe": "JEBAKAN_SULIT", "deskripsi": f"Akhiran {w[-1].upper()}"})
 
         # TIER 3: Kata Biasa
         for w in kata_biasa:
