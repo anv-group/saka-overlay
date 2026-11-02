@@ -135,17 +135,18 @@ Kamus bawaan aplikasi ini merupakan gabungan cerdas (*Hybrid Merge*):
 
 ---
 
-## 🔄 Sistem Pembaruan Otomatis (Updater)
+## 🔄 Sistem Pembaruan Otomatis (Updater) & Pemilihan Branch
 
 Aplikasi dilengkapi modul Git Updater otomatis yang terintegrasi langsung dengan repositori GitHub:
 
-- **Pengecekan Saat Startup:** Saat aplikasi pertama kali dibuka, sistem akan memeriksa apakah ada commit baru di repositori GitHub (`origin/main`) di latar belakang tanpa membuat aplikasi lambat.
+- **Pengecekan Saat Startup:** Saat aplikasi pertama kali dibuka, sistem akan memeriksa apakah ada commit baru di branch target GitHub di latar belakang tanpa membuat aplikasi lambat.
+- **Dukungan Multi-Branch (Main, Dev, dll.):** Anda dapat memilih branch target update melalui dropdown di dialog update (misal: branch stabil `main` atau branch pengembangan aktif `dev`). Bot akan otomatis beralih branch (*branch switch*) dan melakukan sinkronisasi dengan aman.
 - **Daftar Commit Perubahan:** Jika ada pembaruan, jendela dialog akan memunculkan daftar commit baru lengkap dengan pesan commit (contoh: penambahan kosakata baru, kalibrasi OCR, atau perbaikan bug).
 - **3 Mode Pembaruan:**
   1. **🔔 Tanya Dulu (Prompt - Default):** Menampilkan dialog konfirmasi dan rincian commit sebelum memperbarui.
   2. **⚡ Otomatis (Auto):** Mengunduh dan memasang pembaruan otomatis di latar belakang saat startup, lalu menampilkan tombol *Restart* halus.
   3. **🚫 Nonaktifkan (Disabled):** Menonaktifkan pengecekan pembaruan otomatis saat startup. Anda tetap bisa memeriksa secara manual kapan saja via tombol **`🔄 Update`** di header aplikasi.
-- **Pembaruan 1-Klik:** Mengklik tombol **`🚀 Perbarui Sekarang`** akan otomatis menjalankan `git pull` dan menginstal dependensi baru (jika `requirements.txt` diperbarui).
+- **Pembaruan 1-Klik:** Mengklik tombol **`🚀 Perbarui Sekarang`** (atau **`🔀 Beralih ke '<branch>' & Update`**) akan otomatis menjalankan git pull/checkout dan menginstal dependensi baru (jika `requirements.txt` diperbarui).
 
 ---
 
