@@ -155,16 +155,7 @@ class SambungKataApp:
         )
         self.chk_santai.pack(side=tk.LEFT, padx=(6, 2))
 
-        # Status Dot & Settings Menu (⚙️) di ujung kanan
-        self.status_lbl = tk.Label(
-            top_bar,
-            text="●",
-            font=("Segoe UI", 10),
-            fg="#6c7086",
-            bg="#181825"
-        )
-        self.status_lbl.pack(side=tk.RIGHT, padx=(4, 0))
-
+        # Settings Menu (⚙️) di ujung kanan
         self.btn_settings = tk.Button(
             top_bar,
             text="⚙️",
@@ -180,6 +171,9 @@ class SambungKataApp:
             command=self._open_settings_menu
         )
         self.btn_settings.pack(side=tk.RIGHT, padx=(0, 2))
+
+        # Status label disimpan untuk kompatibilitas tanpa memakan ruang UI (karena sudah ada tombol Mulai/Stop)
+        self.status_lbl = tk.Label(self.root)
 
         # 2. Baris Awalan OCR (Fixed Width di Kiri) & Pencarian Manual (Realtime + Clear Permanen di Kanan)
         search_prefix_row = tk.Frame(self.root, bg="#1e1e2e", padx=8, pady=3)
@@ -395,8 +389,8 @@ class SambungKataApp:
     def _open_settings_menu(self):
         """Membuka dropdown menu pengaturan tambahan tanpa memenuhi layar game"""
         menu = tk.Menu(self.root, tearoff=0, bg="#181825", fg="#cdd6f4", activebackground="#313244", activeforeground="#f5e0dc")
-        menu.add_command(label="🎯 Set Area ROI Awalan", command=self.open_region_selector)
-        menu.add_command(label="👁️ Tes Tangkap Screenshot Area", command=self.preview_selected_area)
+        menu.add_command(label="🎯 Set Area Deteksi", command=self.open_region_selector)
+        menu.add_command(label="👁️ Test Area Deteksi", command=self.preview_selected_area)
         menu.add_separator()
         menu.add_command(label="🚫 Buka Blocklist Kata", command=self.open_blacklist_window)
         menu.add_command(label="📝 Pendataan Koreksi (F2)", command=self.open_koreksi_window)
@@ -407,7 +401,20 @@ class SambungKataApp:
         menu.add_command(label="📸 Ambil Snapshot Kalibrasi (F3)", command=self.on_capture_gameplay_kalibrasi)
         menu.add_separator()
         menu.add_checkbutton(label="📋 Auto-copy sisa kata", variable=self.auto_copy_var, command=self.on_toggle_autocopy)
-        menu.add_command(label="⚡ Kecepatan Scan...", command=self.cycle_scan_speed)
+
+        # Submenu Pilihan Kecepatan Scan (Pilih langsung sekali klik tanpa ganti-ganti mode)
+        speed_menu = tk.Menu(menu, tearoff=0, bg="#181825", fg="#cdd6f4", activebackground="#313244", activeforeground="#f5e0dc")
+        curr_speed = self.config.get("scan_interval_sec", 0.08)
+        self.scan_speed_var = tk.DoubleVar(value=curr_speed)
+        for sec, label in self.speed_options:
+            speed_menu.add_radiobutton(
+                label=label,
+                variable=self.scan_speed_var,
+                value=sec,
+                command=lambda s=sec, l=label: self._set_scan_speed(s, l)
+            )
+        menu.add_cascade(label="⚡ Kecepatan Scan", menu=speed_menu)
+
         menu.add_command(label="🔄 Cek Update Git...", command=lambda: self.check_for_updates(manual=True))
 
         try:
@@ -416,6 +423,14 @@ class SambungKataApp:
             menu.tk_popup(x, y)
         finally:
             menu.grab_release()
+
+    def _set_scan_speed(self, sec, label):
+        """Mengatur interval scan langsung ke nilai yang dipilih"""
+        self.config["scan_interval_sec"] = sec
+        save_config(self.config)
+        if hasattr(self, "btn_speed"):
+            self.btn_speed.config(text=label)
+        self.show_toast(f"⚡ Kecepatan scan diatur ke: {label}")
 
     def _on_search_text_changed(self, *args):
         """Pencarian manual realtime saat pengguna mengetik (Auto-search & overwrite OCR)"""
