@@ -90,463 +90,189 @@ class SambungKataApp:
             self.root.after(1200, lambda: threading.Thread(target=self._startup_update_check, daemon=True).start())
 
     def _build_ui(self):
-        # Header Frame
-        header = tk.Frame(self.root, bg="#181825", padx=12, pady=10)
-        header.pack(fill=tk.X)
+        # 1. Baris Atas Compact: Tombol Aksi Utama (Mulai, Tambah Kata, Restart, Mode Santai, Settings ⚙️)
+        top_bar = tk.Frame(self.root, bg="#181825", padx=8, pady=4)
+        top_bar.pack(fill=tk.X)
 
-        title_lbl = tk.Label(
-            header,
-            text="⚔️ Roblox Sambung Kata Bot",
-            font=("Segoe UI", 13, "bold"),
-            fg="#cdd6f4",
-            bg="#181825"
+        self.btn_toggle = tk.Button(
+            top_bar,
+            text="▶️ Mulai",
+            font=("Segoe UI", 9, "bold"),
+            bg="#a6e3a1",
+            fg="#11111b",
+            activebackground="#94e2d5",
+            relief=tk.FLAT,
+            padx=10,
+            pady=3,
+            cursor="hand2",
+            command=self.toggle_scan
         )
-        title_lbl.pack(side=tk.LEFT)
+        self.btn_toggle.pack(side=tk.LEFT, padx=(0, 4))
 
-        self.status_lbl = tk.Label(
-            header,
-            text="● SIAP",
-            font=("Segoe UI", 10, "bold"),
-            fg="#a6adc8",
-            bg="#181825"
+        self.btn_add_word = tk.Button(
+            top_bar,
+            text="➕ Kamus",
+            font=("Segoe UI", 9, "bold"),
+            bg="#89b4fa",
+            fg="#11111b",
+            activebackground="#b4befe",
+            relief=tk.FLAT,
+            padx=8,
+            pady=3,
+            cursor="hand2",
+            command=self.open_add_word_dialog
         )
-        self.status_lbl.pack(side=tk.RIGHT)
+        self.btn_add_word.pack(side=tk.LEFT, padx=3)
 
         self.btn_restart = tk.Button(
-            header,
+            top_bar,
             text="⚡ Restart",
-            font=("Segoe UI", 8, "bold"),
+            font=("Segoe UI", 9, "bold"),
             bg="#313244",
             fg="#fab387",
             activebackground="#45475a",
             relief=tk.FLAT,
-            padx=6,
-            pady=1,
+            padx=8,
+            pady=3,
             cursor="hand2",
             command=self._restart_app_cleanly
         )
-        self.btn_restart.pack(side=tk.RIGHT, padx=(0, 4))
+        self.btn_restart.pack(side=tk.LEFT, padx=3)
 
-        self.btn_update = tk.Button(
-            header,
-            text="🔄 Update",
-            font=("Segoe UI", 8, "bold"),
-            bg="#313244",
-            fg="#89b4fa",
-            activebackground="#45475a",
-            relief=tk.FLAT,
-            padx=6,
-            pady=1,
-            cursor="hand2",
-            command=lambda: self.check_for_updates(manual=True)
-        )
-        self.btn_update.pack(side=tk.RIGHT, padx=(0, 4))
-
-        # Toolbar Frame
-        toolbar = tk.Frame(self.root, bg="#1e1e2e", padx=10, pady=8)
-        toolbar.pack(fill=tk.X)
-
-        self.btn_toggle = tk.Button(
-            toolbar,
-            text="▶️ Mulai Auto-Scan",
-            font=("Segoe UI", 10, "bold"),
-            bg="#a6e3a1",
-            fg="#11111b",
-            activebackground="#94e2d5",
-            command=self.toggle_scan,
-            relief=tk.FLAT,
-            padx=10,
-            pady=4
-        )
-        self.btn_toggle.pack(side=tk.LEFT, padx=3)
-
-        self.btn_roi = tk.Button(
-            toolbar,
-            text="🎯 Set Area",
-            font=("Segoe UI", 10),
-            bg="#89b4fa",
-            fg="#11111b",
-            activebackground="#b4befe",
-            command=self.open_region_selector,
-            relief=tk.FLAT,
-            padx=8,
-            pady=4
-        )
-        self.btn_roi.pack(side=tk.LEFT, padx=2)
-
-        self.btn_preview = tk.Button(
-            toolbar,
-            text="👁️ Tes",
-            font=("Segoe UI", 10),
-            bg="#b4befe",
-            fg="#11111b",
-            activebackground="#cdd6f4",
-            command=self.preview_selected_area,
-            relief=tk.FLAT,
-            padx=6,
-            pady=4
-        )
-        self.btn_preview.pack(side=tk.LEFT, padx=2)
-
-        self.btn_blocklist = tk.Button(
-            toolbar,
-            text="🚫 Blocklist",
-            font=("Segoe UI", 10),
-            bg="#f38ba8",
-            fg="#11111b",
-            activebackground="#eba0ac",
-            command=self.open_blacklist_window,
-            relief=tk.FLAT,
-            padx=6,
-            pady=4
-        )
-        self.btn_blocklist.pack(side=tk.LEFT, padx=2)
-
-        self.btn_custom_cats = tk.Button(
-            toolbar,
-            text="🏷️ Akhiran Custom",
-            font=("Segoe UI", 10),
-            bg="#cba6f7",
-            fg="#11111b",
-            activebackground="#b4befe",
-            command=self.open_custom_categories_window,
-            relief=tk.FLAT,
-            padx=6,
-            pady=4
-        )
-        self.btn_custom_cats.pack(side=tk.LEFT, padx=2)
-
-        area = self.config.get("screen_area", {})
-        self.lbl_coords = tk.Label(
-            self.root,
-            text=f"Area: X={area.get('left',0)} Y={area.get('top',0)} | {area.get('width',0)}x{area.get('height',0)} px",
-            font=("Segoe UI", 8),
-            fg="#6c7086",
-            bg="#1e1e2e"
-        )
-        self.lbl_coords.pack(anchor=tk.W, padx=12, pady=1)
-
-        # Opsi Pengaturan Cepat
-        opts_frame = tk.Frame(self.root, bg="#1e1e2e")
-        opts_frame.pack(fill=tk.X, padx=12, pady=2)
-
-        self.auto_copy_var = tk.BooleanVar(value=self.config.get("auto_copy_top_word", False))
-        chk_copy = tk.Checkbutton(
-            opts_frame,
-            text="📋 Auto-copy sisa kata",
-            variable=self.auto_copy_var,
-            command=self.on_toggle_autocopy,
-            font=("Segoe UI", 9),
-            fg="#bac2de",
-            bg="#1e1e2e",
-            selectcolor="#313244",
-            activebackground="#1e1e2e",
-            activeforeground="#cdd6f4"
-        )
-        chk_copy.pack(side=tk.LEFT)
-
+        # Mode Santai Toggle
         self.mode_santai_var = tk.BooleanVar(value=self.config.get("mode_santai", False))
         self.chk_santai = tk.Checkbutton(
-            opts_frame,
-            text="🌿 Mode Santai (Tanpa X, Q, F)",
+            top_bar,
+            text="🌿 Santai",
             variable=self.mode_santai_var,
             command=self.on_toggle_mode_santai,
             font=("Segoe UI", 9, "bold"),
             fg="#a6e3a1",
-            bg="#1e1e2e",
+            bg="#181825",
             selectcolor="#313244",
-            activebackground="#1e1e2e",
+            activebackground="#181825",
             activeforeground="#a6e3a1"
         )
-        self.chk_santai.pack(side=tk.RIGHT)
+        self.chk_santai.pack(side=tk.LEFT, padx=(6, 2))
 
-        # Baris Opsi Kecepatan Scan
-        speed_frame = tk.Frame(self.root, bg="#1e1e2e")
-        speed_frame.pack(fill=tk.X, padx=12, pady=(1, 3))
-
-        lbl_speed = tk.Label(
-            speed_frame,
-            text="Kecepatan Scan:",
-            font=("Segoe UI", 9),
-            fg="#a6adc8",
-            bg="#1e1e2e"
-        )
-        lbl_speed.pack(side=tk.LEFT)
-
-        self.speed_options = [
-            (0.04, "🔥 40ms (Ultra Instan)"),
-            (0.08, "⚡ 80ms (Kilat Turbo)"),
-            (0.15, "🚀 150ms (Cepat)"),
-            (0.30, "🐢 300ms (Santai)")
-        ]
-        curr_interval = self.config.get("scan_interval_sec", 0.08)
-        btn_text = "⚡ 80ms (Kilat Turbo)"
-        for sec, text in self.speed_options:
-            if abs(sec - curr_interval) < 0.03:
-                btn_text = text
-                break
-
-        self.btn_speed = tk.Button(
-            speed_frame,
-            text=btn_text,
-            font=("Segoe UI", 8, "bold"),
-            bg="#313244",
-            fg="#fab387",
-            activebackground="#45475a",
-            activeforeground="#f9e2af",
-            relief=tk.FLAT,
-            padx=8,
-            pady=1,
-            cursor="hand2",
-            command=self.cycle_scan_speed
-        )
-        self.btn_speed.pack(side=tk.LEFT, padx=6)
-
-        # Baris Pemilihan Sumber Kata / Kamus
-        dict_source_frame = tk.Frame(self.root, bg="#1e1e2e")
-        dict_source_frame.pack(fill=tk.X, padx=12, pady=(1, 3))
-
-        lbl_dict_title = tk.Label(
-            dict_source_frame,
-            text="Sumber Kamus:",
-            font=("Segoe UI", 9),
-            fg="#a6adc8",
-            bg="#1e1e2e"
-        )
-        lbl_dict_title.pack(side=tk.LEFT)
-
-        self.use_kbbi_var = tk.BooleanVar(value=self.config.get("use_kbbi", True))
-        self.chk_kbbi = tk.Checkbutton(
-            dict_source_frame,
-            text="KBBI",
-            variable=self.use_kbbi_var,
-            command=self.on_toggle_dict_source,
-            font=("Segoe UI", 9, "bold"),
-            fg="#89b4fa",
-            bg="#1e1e2e",
-            selectcolor="#313244",
-            activebackground="#1e1e2e",
-            activeforeground="#89b4fa"
-        )
-        self.chk_kbbi.pack(side=tk.LEFT, padx=(6, 4))
-
-        self.use_contek_var = tk.BooleanVar(value=self.config.get("use_contek", True))
-        self.chk_contek = tk.Checkbutton(
-            dict_source_frame,
-            text="Contek Sambung Kata",
-            variable=self.use_contek_var,
-            command=self.on_toggle_dict_source,
-            font=("Segoe UI", 9, "bold"),
-            fg="#f9e2af",
-            bg="#1e1e2e",
-            selectcolor="#313244",
-            activebackground="#1e1e2e",
-            activeforeground="#f9e2af"
-        )
-        self.chk_contek.pack(side=tk.LEFT, padx=(2, 0))
-
-        self.lbl_dict_count = tk.Label(
-            dict_source_frame,
-            text=f"({len(self.solver.words):,} kata)",
-            font=("Segoe UI", 8),
-            fg="#6c7086",
-            bg="#1e1e2e"
-        )
-        self.lbl_dict_count.pack(side=tk.RIGHT)
-
-        # Baris Fitur Gameplay Indexing (Auto-Learn & Auto-Blacklist)
-        gameplay_frame = tk.Frame(self.root, bg="#1e1e2e")
-        gameplay_frame.pack(fill=tk.X, padx=12, pady=(1, 3))
-
-        self.gameplay_indexing_var = tk.BooleanVar(value=self.config.get("gameplay_indexing_enabled", True))
-        self.chk_gameplay = tk.Checkbutton(
-            gameplay_frame,
-            text="🎮 Auto-Index Game",
-            variable=self.gameplay_indexing_var,
-            command=self.on_toggle_gameplay_indexing,
-            font=("Segoe UI", 9, "bold"),
-            fg="#a6e3a1",
-            bg="#1e1e2e",
-            selectcolor="#313244",
-            activebackground="#1e1e2e",
-            activeforeground="#a6e3a1"
-        )
-        self.chk_gameplay.pack(side=tk.LEFT)
-
-        btn_game_roi = tk.Button(
-            gameplay_frame,
-            text="🎯 Area Game",
-            font=("Segoe UI", 8),
-            bg="#313244",
-            fg="#89dceb",
-            activebackground="#45475a",
-            relief=tk.FLAT,
-            padx=6,
-            pady=1,
-            cursor="hand2",
-            command=self.open_gameplay_region_selector
-        )
-        btn_game_roi.pack(side=tk.LEFT, padx=(6, 2))
-
-        btn_game_log = tk.Button(
-            gameplay_frame,
-            text="📋 Log",
-            font=("Segoe UI", 8),
-            bg="#313244",
-            fg="#cdd6f4",
-            activebackground="#45475a",
-            relief=tk.FLAT,
-            padx=6,
-            pady=1,
-            cursor="hand2",
-            command=self.open_gameplay_history_window
-        )
-        btn_game_log.pack(side=tk.LEFT, padx=2)
-
-        btn_game_calib = tk.Button(
-            gameplay_frame,
-            text="📸 F3",
-            font=("Segoe UI", 8, "bold"),
-            bg="#313244",
-            fg="#f9e2af",
-            activebackground="#45475a",
-            relief=tk.FLAT,
-            padx=6,
-            pady=1,
-            cursor="hand2",
-            command=self.on_capture_gameplay_kalibrasi
-        )
-        btn_game_calib.pack(side=tk.LEFT, padx=2)
-
-        btn_game_video = tk.Button(
-            gameplay_frame,
-            text="🎬 Video",
-            font=("Segoe UI", 8, "bold"),
-            bg="#313244",
-            fg="#89b4fa",
-            activebackground="#45475a",
-            relief=tk.FLAT,
-            padx=6,
-            pady=1,
-            cursor="hand2",
-            command=self.open_gameplay_classifier_window
-        )
-        btn_game_video.pack(side=tk.LEFT, padx=2)
-
-        # Area Info Deteksi
-        info_frame = tk.LabelFrame(
-            self.root,
-            text=" Status Deteksi Layar ",
-            font=("Segoe UI", 9, "bold"),
-            fg="#89dceb",
-            bg="#1e1e2e",
-            padx=10,
-            pady=6
-        )
-        info_frame.pack(fill=tk.X, padx=10, pady=4)
-
-        self.lbl_detected = tk.Label(
-            info_frame,
-            text="Awalan Terdeteksi: -",
+        # Status Dot & Settings Menu (⚙️) di ujung kanan
+        self.status_lbl = tk.Label(
+            top_bar,
+            text="●",
             font=("Segoe UI", 10),
-            fg="#cdd6f4",
-            bg="#1e1e2e",
-            anchor=tk.W
+            fg="#6c7086",
+            bg="#181825"
         )
-        self.lbl_detected.pack(fill=tk.X)
+        self.status_lbl.pack(side=tk.RIGHT, padx=(4, 0))
 
-        self.lbl_target = tk.Label(
-            info_frame,
-            text="Mencari Kata Awalan: -",
+        self.btn_settings = tk.Button(
+            top_bar,
+            text="⚙️",
+            font=("Segoe UI", 9),
+            bg="#181825",
+            fg="#a6adc8",
+            activebackground="#313244",
+            activeforeground="#cdd6f4",
+            relief=tk.FLAT,
+            padx=5,
+            pady=2,
+            cursor="hand2",
+            command=self._open_settings_menu
+        )
+        self.btn_settings.pack(side=tk.RIGHT, padx=(0, 2))
+
+        # 2. Baris Pencarian Manual (Realtime Auto-Search + Clear) & Hasil Deteksi OCR (Teks Besar)
+        search_prefix_row = tk.Frame(self.root, bg="#1e1e2e", padx=8, pady=3)
+        search_prefix_row.pack(fill=tk.X)
+
+        # Kontainer Input Pencarian Manual
+        search_box = tk.Frame(search_prefix_row, bg="#313244", padx=6, pady=2)
+        search_box.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
+
+        lbl_icon = tk.Label(search_box, text="🔍", font=("Segoe UI", 9), fg="#a6adc8", bg="#313244")
+        lbl_icon.pack(side=tk.LEFT, padx=(0, 4))
+
+        self.search_var = tk.StringVar()
+        self.entry_manual = tk.Entry(
+            search_box,
+            textvariable=self.search_var,
             font=("Segoe UI", 11, "bold"),
-            fg="#f9e2af",
-            bg="#1e1e2e",
-            anchor=tk.W
+            bg="#313244",
+            fg="#cdd6f4",
+            insertbackground="#cdd6f4",
+            relief=tk.FLAT
         )
-        self.lbl_target.pack(fill=tk.X)
+        self.entry_manual.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.search_var.trace_add("write", self._on_search_text_changed)
 
-        # Baris Keyakinan & Tombol Lapor Deteksi Salah
-        conf_btn_row = tk.Frame(info_frame, bg="#1e1e2e")
-        conf_btn_row.pack(fill=tk.X, pady=(2, 0))
+        self.btn_clear_search = tk.Button(
+            search_box,
+            text="✕",
+            font=("Segoe UI", 9, "bold"),
+            bg="#313244",
+            fg="#f38ba8",
+            activebackground="#45475a",
+            activeforeground="#f38ba8",
+            relief=tk.FLAT,
+            bd=0,
+            padx=4,
+            pady=0,
+            cursor="hand2",
+            command=self.clear_manual_search
+        )
+        self.btn_clear_search.pack(side=tk.RIGHT)
+
+        # Box Hasil Deteksi Awalan OCR (Teks Besar & Jelas)
+        self.prefix_badge_frame = tk.Frame(search_prefix_row, bg="#181825", padx=10, pady=2, relief=tk.FLAT)
+        self.prefix_badge_frame.pack(side=tk.RIGHT)
+
+        self.lbl_prefix_display = tk.Label(
+            self.prefix_badge_frame,
+            text="-",
+            font=("Segoe UI", 16, "bold"),
+            fg="#f9e2af",
+            bg="#181825"
+        )
+        self.lbl_prefix_display.pack(side=tk.LEFT)
 
         self.lbl_conf = tk.Label(
-            conf_btn_row,
-            text="Tingkat Keyakinan: -",
-            font=("Segoe UI", 9),
+            self.prefix_badge_frame,
+            text="",
+            font=("Segoe UI", 8),
             fg="#a6adc8",
-            bg="#1e1e2e",
-            anchor=tk.W
+            bg="#181825"
         )
-        self.lbl_conf.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.lbl_conf.pack(side=tk.LEFT, padx=(4, 0))
 
-        self.report_hotkey = self.config.get("report_hotkey", "F2").upper()
+        # Alias kompatibilitas
+        self.lbl_detected = self.lbl_prefix_display
+        self.lbl_target = self.lbl_prefix_display
 
-        self.btn_kurang_tepat = tk.Button(
-            conf_btn_row,
-            text=f"🚩 Deteksi Salah ({self.report_hotkey})",
-            font=("Segoe UI", 8, "bold"),
-            bg="#eba0ac",
-            fg="#11111b",
-            activebackground="#f38ba8",
-            relief=tk.FLAT,
-            padx=7,
-            pady=2,
-            command=self.on_report_kurang_tepat
-        )
-        self.btn_kurang_tepat.pack(side=tk.RIGHT, padx=2)
+        # 3. Baris Horizontal Quick Toggle Kategori Custom
+        self.custom_cats_bar = tk.Frame(self.root, bg="#1e1e2e")
+        self.custom_cats_bar.pack(fill=tk.X, padx=8, pady=(1, 2))
+        self._render_custom_category_quick_bar()
 
-        self.btn_koreksi = tk.Button(
-            conf_btn_row,
-            text="📝 Koreksi (0)",
-            font=("Segoe UI", 8, "bold"),
-            bg="#313244",
-            fg="#cdd6f4",
-            activebackground="#45475a",
-            relief=tk.FLAT,
-            padx=6,
-            pady=2,
-            cursor="hand2",
-            command=self.open_koreksi_window
-        )
-        self.btn_koreksi.pack(side=tk.RIGHT, padx=2)
-
-        # Shortcut lokal Tkinter (F2 untuk awalan, F3 untuk gameplay)
-        self.root.bind(f"<{self.report_hotkey}>", lambda e: self.on_report_kurang_tepat())
-        self.gameplay_calib_hotkey = "F3"
-        self.root.bind(f"<{self.gameplay_calib_hotkey}>", lambda e: self.on_capture_gameplay_kalibrasi())
-
-        # Global Hotkey menggunakan keyboard library agar bisa ditekan saat fokus di game Roblox
-        try:
-            import keyboard
-            keyboard.add_hotkey(self.report_hotkey.lower(), lambda: self.root.after(0, self.on_report_kurang_tepat))
-            keyboard.add_hotkey(self.gameplay_calib_hotkey.lower(), lambda: self.root.after(0, self.on_capture_gameplay_kalibrasi))
-        except Exception as e:
-            print(f"[!] Warning: Gagal mendaftarkan global hotkey: {e}")
-
-        # Frame Peringatan Keyakinan Rendah & Alternatif
-        self.warning_frame = tk.Frame(info_frame, bg="#313244", padx=6, pady=4)
-        
+        # 4. Toast Frame & Warning Keyakinan Rendah
+        self.warning_frame = tk.Frame(self.root, bg="#313244", padx=6, pady=2)
         self.lbl_warning_msg = tk.Label(
             self.warning_frame,
-            text="⚠️ Keyakinan Rendah! Gambar disimpan ke sample/tidak_dikenali",
+            text="⚠️ Keyakinan Rendah!",
             font=("Segoe UI", 8, "bold"),
             fg="#fab387",
-            bg="#313244",
-            anchor=tk.W
+            bg="#313244"
         )
-        self.lbl_warning_msg.pack(fill=tk.X)
-
+        self.lbl_warning_msg.pack(side=tk.LEFT)
         self.alt_container = tk.Frame(self.warning_frame, bg="#313244")
-        self.alt_container.pack(fill=tk.X, pady=2)
+        self.alt_container.pack(side=tk.LEFT, padx=4)
 
-        # Toast / Clipboard Notifikasi & Undo Frame
         self.toast_frame = tk.Frame(self.root, bg="#1e1e2e")
-        self.toast_frame.pack(fill=tk.X, padx=10, pady=1)
+        self.toast_frame.pack(fill=tk.X, padx=8, pady=1)
 
         self.lbl_toast = tk.Label(
             self.toast_frame,
             text="",
-            font=("Segoe UI", 9, "italic"),
+            font=("Segoe UI", 8, "italic"),
             fg="#a6e3a1",
             bg="#1e1e2e"
         )
@@ -567,12 +293,7 @@ class SambungKataApp:
         )
         self._toast_timer = None
 
-        # Baris Horizontal Quick Toggle Kategori Custom (di atas Rekomendasi Kata)
-        self.custom_cats_bar = tk.Frame(self.root, bg="#1e1e2e")
-        self.custom_cats_bar.pack(fill=tk.X, padx=10, pady=(2, 2))
-        self._render_custom_category_quick_bar()
-
-        # Daftar Rekomendasi Jawaban
+        # 5. Daftar Rekomendasi Jawaban (Memenuhi sisa seluruh window)
         is_santai_init = self.config.get("mode_santai", False)
         recom_title = " Rekomendasi Kata (🌿 Mode Santai) " if is_santai_init else " Rekomendasi Kata (Klik untuk Salin) "
         recom_fg = "#a6e3a1" if is_santai_init else "#f38ba8"
@@ -582,10 +303,10 @@ class SambungKataApp:
             font=("Segoe UI", 9, "bold"),
             fg=recom_fg,
             bg="#1e1e2e",
-            padx=6,
-            pady=6
+            padx=4,
+            pady=4
         )
-        self.recom_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+        self.recom_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=2)
 
         # Canvas & Scrollbar untuk daftar kata
         self.canvas = tk.Canvas(self.recom_frame, bg="#181825", highlightthickness=0)
@@ -611,7 +332,7 @@ class SambungKataApp:
         self.scrollable_frame.bind("<Enter>", self._bind_mousewheel)
         self.scrollable_frame.bind("<Leave>", self._unbind_mousewheel)
 
-        # Widget Pool untuk kartu kata (menghindari create/destroy berat pada tiap scan)
+        # Widget Pool untuk kartu kata
         self.word_card_pool = []
         self.lbl_empty_results = tk.Label(
             self.scrollable_frame,
@@ -622,55 +343,94 @@ class SambungKataApp:
             pady=10
         )
 
-        # Manual Input Bar
-        manual_frame = tk.Frame(self.root, bg="#181825", padx=10, pady=8)
-        manual_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        # Objek pendukung & konfigurasi kompatibilitas
+        self.auto_copy_var = tk.BooleanVar(value=self.config.get("auto_copy_top_word", False))
+        self.use_kbbi_var = tk.BooleanVar(value=self.config.get("use_kbbi", True))
+        self.use_contek_var = tk.BooleanVar(value=self.config.get("use_contek", True))
+        self.gameplay_indexing_var = tk.BooleanVar(value=self.config.get("gameplay_indexing_enabled", True))
+        self.speed_options = [
+            (0.04, "🔥 40ms (Ultra Instan)"),
+            (0.08, "⚡ 80ms (Kilat Turbo)"),
+            (0.15, "🚀 150ms (Cepat)"),
+            (0.30, "🐢 300ms (Santai)")
+        ]
 
-        lbl_manual = tk.Label(
-            manual_frame,
-            text="Ketik Manual:",
-            font=("Segoe UI", 9),
-            fg="#a6adc8",
-            bg="#181825"
-        )
-        lbl_manual.pack(side=tk.LEFT, padx=4)
+        # Dummy widgets untuk kompatibilitas fungsi eksisting
+        self.lbl_coords = tk.Label(self.root)
+        self.btn_speed = tk.Button(self.root)
+        self.chk_kbbi = tk.Checkbutton(self.root)
+        self.chk_contek = tk.Checkbutton(self.root)
+        self.lbl_dict_count = tk.Label(self.root)
+        self.chk_gameplay = tk.Checkbutton(self.root)
+        self.btn_kurang_tepat = tk.Button(self.root)
+        self.btn_koreksi = tk.Button(self.root)
+        self.btn_roi = tk.Button(self.root)
+        self.btn_preview = tk.Button(self.root)
+        self.btn_blocklist = tk.Button(self.root)
+        self.btn_custom_cats = tk.Button(self.root)
 
-        self.entry_manual = tk.Entry(
-            manual_frame,
-            font=("Segoe UI", 10),
-            bg="#313244",
-            fg="#cdd6f4",
-            insertbackground="#cdd6f4",
-            relief=tk.FLAT
-        )
-        self.entry_manual.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
-        self.entry_manual.bind("<Return>", self.on_manual_submit)
+        # Shortcut lokal Tkinter (F2 untuk awalan, F3 untuk gameplay)
+        self.report_hotkey = self.config.get("report_hotkey", "F2").upper()
+        self.root.bind(f"<{self.report_hotkey}>", lambda e: self.on_report_kurang_tepat())
+        self.gameplay_calib_hotkey = "F3"
+        self.root.bind(f"<{self.gameplay_calib_hotkey}>", lambda e: self.on_capture_gameplay_kalibrasi())
 
-        btn_cari = tk.Button(
-            manual_frame,
-            text="Cari",
-            font=("Segoe UI", 9, "bold"),
-            bg="#cba6f7",
-            fg="#11111b",
-            relief=tk.FLAT,
-            command=self.on_manual_submit,
-            padx=8
-        )
-        btn_cari.pack(side=tk.LEFT, padx=2)
+        # Global Hotkey menggunakan keyboard library
+        try:
+            import keyboard
+            keyboard.add_hotkey(self.report_hotkey.lower(), lambda: self.root.after(0, self.on_report_kurang_tepat))
+            keyboard.add_hotkey(self.gameplay_calib_hotkey.lower(), lambda: self.root.after(0, self.on_capture_gameplay_kalibrasi))
+        except Exception as e:
+            print(f"[!] Warning: Gagal mendaftarkan global hotkey: {e}")
 
-        btn_tambah_kamus = tk.Button(
-            manual_frame,
-            text="➕ Kamus",
-            font=("Segoe UI", 9, "bold"),
-            bg="#a6e3a1",
-            fg="#11111b",
-            activebackground="#94e2d5",
-            relief=tk.FLAT,
-            command=self.open_add_word_dialog,
-            padx=8
-        )
-        btn_tambah_kamus.pack(side=tk.LEFT, padx=2)
         self._update_koreksi_badge()
+
+    def _open_settings_menu(self):
+        """Membuka dropdown menu pengaturan tambahan tanpa memenuhi layar game"""
+        menu = tk.Menu(self.root, tearoff=0, bg="#181825", fg="#cdd6f4", activebackground="#313244", activeforeground="#f5e0dc")
+        menu.add_command(label="🎯 Set Area ROI Awalan", command=self.open_region_selector)
+        menu.add_command(label="👁️ Tes Tangkap Screenshot Area", command=self.preview_selected_area)
+        menu.add_separator()
+        menu.add_command(label="🚫 Buka Blocklist Kata", command=self.open_blacklist_window)
+        menu.add_command(label="📝 Pendataan Koreksi (F2)", command=self.open_koreksi_window)
+        menu.add_command(label="🏷️ Kelola Kategori Custom", command=self.open_custom_categories_window)
+        menu.add_separator()
+        menu.add_command(label="🎮 Set Area Gameplay (F3)", command=self.open_gameplay_region_selector)
+        menu.add_command(label="📋 Log Gameplay", command=self.open_gameplay_history_window)
+        menu.add_command(label="📸 Ambil Snapshot Kalibrasi (F3)", command=self.on_capture_gameplay_kalibrasi)
+        menu.add_separator()
+        menu.add_checkbutton(label="📋 Auto-copy sisa kata", variable=self.auto_copy_var, command=self.on_toggle_autocopy)
+        menu.add_command(label="⚡ Kecepatan Scan...", command=self.cycle_scan_speed)
+        menu.add_command(label="🔄 Cek Update Git...", command=lambda: self.check_for_updates(manual=True))
+
+        try:
+            x = self.btn_settings.winfo_rootx()
+            y = self.btn_settings.winfo_rooty() + self.btn_settings.winfo_height()
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
+
+    def _on_search_text_changed(self, *args):
+        """Pencarian manual realtime saat pengguna mengetik (Auto-search & overwrite OCR)"""
+        raw_text = self.search_var.get()
+        clean_text = "".join([c for c in raw_text.upper() if c.isalpha()])
+        if clean_text:
+            self.update_results(clean_text)
+        else:
+            if hasattr(self, "last_detected_word") and self.last_detected_word:
+                self.update_results(self.last_res_data or self.last_detected_word)
+            else:
+                self.lbl_prefix_display.config(text="-", fg="#6c7086")
+                self.lbl_conf.config(text="")
+                for slot in self.word_card_pool:
+                    slot["frame"].pack_forget()
+
+    def clear_manual_search(self):
+        """Membersihkan kotak pencarian manual dan kembali ke OCR"""
+        if hasattr(self, "search_var"):
+            self.search_var.set("")
+        if hasattr(self, "entry_manual") and self.entry_manual.winfo_exists():
+            self.entry_manual.focus_set()
 
     def on_toggle_autocopy(self):
         val = self.auto_copy_var.get()
@@ -800,14 +560,14 @@ class SambungKataApp:
     def toggle_scan(self):
         if not self.is_scanning:
             self.is_scanning = True
-            self.btn_toggle.config(text="⏸️ Hentikan Scan", bg="#f38ba8")
-            self.status_lbl.config(text="● MEMANTAU LAYAR", fg="#a6e3a1")
+            self.btn_toggle.config(text="⏹️ Stop", bg="#f38ba8")
+            self.status_lbl.config(text="●", fg="#a6e3a1")
             self.scan_thread = threading.Thread(target=self._scan_loop, daemon=True)
             self.scan_thread.start()
         else:
             self.is_scanning = False
-            self.btn_toggle.config(text="▶️ Mulai Auto-Scan", bg="#a6e3a1")
-            self.status_lbl.config(text="● BERHENTI", fg="#f38ba8")
+            self.btn_toggle.config(text="▶️ Mulai", bg="#a6e3a1")
+            self.status_lbl.config(text="●", fg="#6c7086")
 
     def cycle_scan_speed(self):
         curr = self.config.get("scan_interval_sec", 0.08)
@@ -1859,14 +1619,15 @@ class SambungKataApp:
             self.show_toast("⚠️ Gagal menyimpan screenshot deteksi salah")
 
     def on_manual_submit(self, event=None):
-        text = self.entry_manual.get().strip()
-        if text:
-            self.update_results(text)
+        raw_text = self.search_var.get().strip() if hasattr(self, "search_var") else ""
+        if raw_text:
+            self.update_results(raw_text)
 
     def update_results(self, res_data):
         self.last_res_data = res_data
         # res_data bisa berupa string (manual) atau dict (dari ocr)
-        if isinstance(res_data, str):
+        is_manual = isinstance(res_data, str)
+        if is_manual:
             prefix = res_data
             conf = 1.0
             is_low = False
@@ -1880,58 +1641,71 @@ class SambungKataApp:
             saved_path = res_data.get("saved_path", None)
 
         prefix_clean = "".join([c for c in prefix.upper() if c.isalpha()])
+
+        # Cek apakah pengguna sedang memiliki input di kotak pencarian manual
+        manual_active = ""
+        if hasattr(self, "search_var"):
+            manual_active = "".join([c for c in self.search_var.get().strip().upper() if c.isalpha()])
+
+        if not is_manual:
+            if prefix_clean:
+                self.last_detected_word = prefix_clean
+                self.lbl_prefix_display.config(text=prefix_clean, fg="#f9e2af")
+            else:
+                self.lbl_prefix_display.config(text="-", fg="#6c7086")
+
+            pct = int(conf * 100)
+            if is_low:
+                self.lbl_conf.config(text=f"⚠️ {pct}%", fg="#fab387")
+                # Bersihkan dan buat tombol alternatif
+                for widget in self.alt_container.winfo_children():
+                    widget.destroy()
+
+                if alts:
+                    lbl_alt_title = tk.Label(
+                        self.alt_container,
+                        text="Alt:",
+                        font=("Segoe UI", 8),
+                        fg="#cdd6f4",
+                        bg="#313244"
+                    )
+                    lbl_alt_title.pack(side=tk.LEFT, padx=2)
+
+                    for alt_char in alts:
+                        btn_alt = tk.Button(
+                            self.alt_container,
+                            text=alt_char,
+                            font=("Segoe UI", 8, "bold"),
+                            bg="#f9e2af",
+                            fg="#11111b",
+                            relief=tk.FLAT,
+                            padx=4,
+                            pady=0,
+                            command=lambda ch=alt_char: self.update_results(ch)
+                        )
+                        btn_alt.pack(side=tk.LEFT, padx=1)
+                    self.warning_frame.pack(fill=tk.X, padx=8, pady=1)
+                else:
+                    self.warning_frame.pack_forget()
+            else:
+                self.lbl_conf.config(text="" if pct >= 90 else f"{pct}%", fg="#a6e3a1")
+                self.warning_frame.pack_forget()
+
+            # PENTING: MANUAL SEARCH MENG-OVERWRITE OCR!
+            # Jika user sedang mengetik di search bar, rekomendasi kata TETAP mengikuti search bar
+            if manual_active:
+                return
+        else:
+            self.lbl_prefix_display.config(text=prefix_clean, fg="#89dceb")
+            self.lbl_conf.config(text="Manual", fg="#89dceb")
+            self.warning_frame.pack_forget()
+
         if not prefix_clean:
             return
 
-        self.last_detected_word = prefix_clean
-
-        self.lbl_detected.config(text=f"Awalan Terdeteksi: '{prefix_clean}'")
-        self.lbl_target.config(text=f"Mencari Kata Awalan: '{prefix_clean}'")
-
-        # Tampilkan status keyakinan (Confidence Level)
-        pct = int(conf * 100)
-        if is_low:
-            self.lbl_conf.config(text=f"Akurasi: {pct}% [⚠️ Rendah]", fg="#fab387")
-            msg = "⚠️ Keyakinan Rendah!"
-            if saved_path:
-                msg += " Cuplikan disimpan ke sample/tidak_dikenali"
-            self.lbl_warning_msg.config(text=msg)
-
-            # Bersihkan dan buat tombol alternatif
-            for widget in self.alt_container.winfo_children():
-                widget.destroy()
-
-            if alts:
-                lbl_alt_title = tk.Label(
-                    self.alt_container,
-                    text="Mungkin maksudnya:",
-                    font=("Segoe UI", 8),
-                    fg="#cdd6f4",
-                    bg="#313244"
-                )
-                lbl_alt_title.pack(side=tk.LEFT, padx=3)
-
-                for alt_char in alts:
-                    btn_alt = tk.Button(
-                        self.alt_container,
-                        text=alt_char,
-                        font=("Segoe UI", 8, "bold"),
-                        bg="#f9e2af",
-                        fg="#11111b",
-                        relief=tk.FLAT,
-                        padx=5,
-                        pady=1,
-                        command=lambda ch=alt_char: self.update_results(ch)
-                    )
-                    btn_alt.pack(side=tk.LEFT, padx=2)
-
-            self.warning_frame.pack(fill=tk.X, pady=3)
-        else:
-            self.lbl_conf.config(text=f"Akurasi: {pct}% [✅ Tinggi]", fg="#a6e3a1")
-            self.warning_frame.pack_forget()
-
         is_santai = self.mode_santai_var.get()
-        results = self.solver.cari_jawaban(prefix_clean, limit=14, mode_santai=is_santai)
+        # Muat lebih banyak kata sekaligus (limit=30 kata)
+        results = self.solver.cari_jawaban(prefix_clean, limit=30, mode_santai=is_santai)
 
         if not results:
             for slot in self.word_card_pool:
@@ -1986,9 +1760,9 @@ class SambungKataApp:
         self.root.unbind_all("<Button-5>")
 
     def _alloc_card_slot(self):
-        card = tk.Frame(self.scrollable_frame, bg="#1e1e2e", padx=8, pady=5, relief=tk.FLAT)
-        lbl_kata = tk.Label(card, text="", font=("Segoe UI", 11, "bold"), fg="#cdd6f4", bg="#1e1e2e")
-        lbl_kata.pack(side=tk.LEFT, padx=4)
+        card = tk.Frame(self.scrollable_frame, bg="#1e1e2e", padx=6, pady=2, relief=tk.FLAT)
+        lbl_kata = tk.Label(card, text="", font=("Segoe UI", 10, "bold"), fg="#cdd6f4", bg="#1e1e2e")
+        lbl_kata.pack(side=tk.LEFT, padx=3)
 
         btn_del = tk.Button(
             card,
@@ -2000,7 +1774,7 @@ class SambungKataApp:
             activeforeground="#f38ba8",
             relief=tk.FLAT,
             bd=0,
-            padx=4,
+            padx=3,
             pady=0,
             cursor="hand2"
         )
@@ -2012,10 +1786,10 @@ class SambungKataApp:
             font=("Segoe UI", 8, "bold"),
             fg="#11111b",
             bg="#a6e3a1",
-            padx=6,
-            pady=1
+            padx=5,
+            pady=0
         )
-        lbl_badge.pack(side=tk.RIGHT, padx=4)
+        lbl_badge.pack(side=tk.RIGHT, padx=3)
 
         # Aktifkan scroll roda mouse saat kursor melayang di atas kartu kata
         card.bind("<Enter>", self._bind_mousewheel)
@@ -2082,7 +1856,7 @@ class SambungKataApp:
         lbl_kata.bind("<Button-1>", handler)
         lbl_badge.bind("<Button-1>", handler)
 
-        card.pack(fill=tk.X, padx=4, pady=3)
+        card.pack(fill=tk.X, padx=3, pady=2)
 
     def on_blacklist_word(self, kata):
         """Memasukkan kata ke blacklist dan merefresh rekomendasi"""
