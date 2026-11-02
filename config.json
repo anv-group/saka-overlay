@@ -12,7 +12,7 @@
     "ocr_engine": "winocr",
     "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
     "updater_mode": "prompt",
-    "updater_branch": "dev",
+    "updater_branch": "reoptimized",
     "auto_check_update_on_startup": true,
     "use_kbbi": false,
     "use_contek": true,
@@ -39,5 +39,5 @@
             "color": "#f5c2e7"
         }
     ],
-    "window_geometry": "440x860+1070+20"
+    "window_geometry": "470x1074+1407+47"
 }

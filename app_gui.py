@@ -2906,7 +2906,6 @@ class SambungKataApp:
 
         self._koreksi_items = []
         self._koreksi_current_idx = 0
-        self._koreksi_only_uncorrected = tk.BooleanVar(value=True)
         self._koreksi_tk_img = None
 
         # Header Frame
@@ -2952,6 +2951,11 @@ class SambungKataApp:
         count_kt, count_td = self._get_uncorrected_counts()
         initial_source = "tidak_dikenali" if (count_kt == 0 and count_td > 0) else "kurang_tepat"
         self._koreksi_source = tk.StringVar(value=initial_source)
+
+        # Jika tidak ada sampel yang belum dikoreksi sama sekali di kedua folder,
+        # otomatis jangan centang filter 'hanya belum dikoreksi' agar sampel yang ada tetap tampil
+        has_uncorrected = (count_kt > 0 or count_td > 0)
+        self._koreksi_only_uncorrected = tk.BooleanVar(value=has_uncorrected)
 
         self.rb_kt = tk.Radiobutton(
             source_frame,
@@ -3119,9 +3123,9 @@ class SambungKataApp:
         nav_frame = tk.Frame(self.koreksi_win, bg="#1e1e2e", padx=12, pady=6)
         nav_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
-        btn_prev = tk.Button(
+        self.btn_koreksi_prev = tk.Button(
             nav_frame,
-            text="◀️ Sebelumnya",
+            text="◀️ Sebelumnya (←)",
             font=("Segoe UI", 8),
             bg="#313244",
             fg="#cdd6f4",
@@ -3131,11 +3135,11 @@ class SambungKataApp:
             pady=2,
             command=self._koreksi_prev
         )
-        btn_prev.pack(side=tk.LEFT)
+        self.btn_koreksi_prev.pack(side=tk.LEFT)
 
-        btn_next = tk.Button(
+        self.btn_koreksi_next = tk.Button(
             nav_frame,
-            text="Berikutnya ▶️",
+            text="Berikutnya ▶️ (→)",
             font=("Segoe UI", 8),
             bg="#313244",
             fg="#cdd6f4",
@@ -3145,7 +3149,7 @@ class SambungKataApp:
             pady=2,
             command=self._koreksi_next
         )
-        btn_next.pack(side=tk.LEFT, padx=4)
+        self.btn_koreksi_next.pack(side=tk.LEFT, padx=4)
 
         btn_delete = tk.Button(
             nav_frame,
@@ -3164,6 +3168,21 @@ class SambungKataApp:
         # Shortcut Del / Delete untuk hapus sampel seketika tanpa konfirmasi
         self.koreksi_win.bind("<Delete>", lambda e: (self._koreksi_delete_current(), "break")[1])
         self.entry_koreksi_text.bind("<Delete>", lambda e: (self._koreksi_delete_current(), "break")[1])
+
+        # Shortcut Panah Kiri, Kanan, Atas, Bawah, PgUp, PgDn untuk navigasi sampel / halaman
+        self.koreksi_win.bind("<Left>", lambda e: (self._koreksi_prev(), "break")[1])
+        self.koreksi_win.bind("<Right>", lambda e: (self._koreksi_next(), "break")[1])
+        self.koreksi_win.bind("<Up>", lambda e: (self._koreksi_prev(), "break")[1])
+        self.koreksi_win.bind("<Down>", lambda e: (self._koreksi_next(), "break")[1])
+        self.koreksi_win.bind("<Prior>", lambda e: (self._koreksi_prev(), "break")[1])
+        self.koreksi_win.bind("<Next>", lambda e: (self._koreksi_next(), "break")[1])
+
+        self.entry_koreksi_text.bind("<Left>", lambda e: (self._koreksi_prev(), "break")[1])
+        self.entry_koreksi_text.bind("<Right>", lambda e: (self._koreksi_next(), "break")[1])
+        self.entry_koreksi_text.bind("<Up>", lambda e: (self._koreksi_prev(), "break")[1])
+        self.entry_koreksi_text.bind("<Down>", lambda e: (self._koreksi_next(), "break")[1])
+        self.entry_koreksi_text.bind("<Prior>", lambda e: (self._koreksi_prev(), "break")[1])
+        self.entry_koreksi_text.bind("<Next>", lambda e: (self._koreksi_next(), "break")[1])
 
         self._koreksi_reload_items()
 
@@ -3289,6 +3308,10 @@ class SambungKataApp:
             self.lbl_koreksi_progress.config(text="0 / 0")
             self.entry_koreksi_text.delete(0, tk.END)
             self.entry_koreksi_text.config(state=tk.DISABLED)
+            if hasattr(self, "btn_koreksi_prev") and self.btn_koreksi_prev.winfo_exists():
+                self.btn_koreksi_prev.config(state=tk.DISABLED)
+            if hasattr(self, "btn_koreksi_next") and self.btn_koreksi_next.winfo_exists():
+                self.btn_koreksi_next.config(state=tk.DISABLED)
             return
 
         self.entry_koreksi_text.config(state=tk.NORMAL)
@@ -3318,7 +3341,17 @@ class SambungKataApp:
             self.lbl_koreksi_status.config(text="⚠️ Belum Dikoreksi", fg="#fab387")
 
         total = len(self._koreksi_items)
-        self.lbl_koreksi_progress.config(text=f"Sampel {self._koreksi_current_idx + 1} dari {total}")
+        if total > 1:
+            nav_state = tk.NORMAL
+            self.lbl_koreksi_progress.config(text=f"Sampel {self._koreksi_current_idx + 1} dari {total}")
+        else:
+            nav_state = tk.DISABLED
+            self.lbl_koreksi_progress.config(text=f"Sampel 1 dari 1 (Hanya 1 sampel)")
+
+        if hasattr(self, "btn_koreksi_prev") and self.btn_koreksi_prev.winfo_exists():
+            self.btn_koreksi_prev.config(state=nav_state)
+        if hasattr(self, "btn_koreksi_next") and self.btn_koreksi_next.winfo_exists():
+            self.btn_koreksi_next.config(state=nav_state)
 
         self.entry_koreksi_text.delete(0, tk.END)
         if item["seh"]:
