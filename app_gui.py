@@ -90,6 +90,21 @@ class SambungKataApp:
         )
         self.status_lbl.pack(side=tk.RIGHT)
 
+        self.btn_restart = tk.Button(
+            header,
+            text="⚡ Restart",
+            font=("Segoe UI", 8, "bold"),
+            bg="#313244",
+            fg="#fab387",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=1,
+            cursor="hand2",
+            command=self._restart_app_cleanly
+        )
+        self.btn_restart.pack(side=tk.RIGHT, padx=(0, 4))
+
         self.btn_update = tk.Button(
             header,
             text="🔄 Update",
@@ -103,7 +118,7 @@ class SambungKataApp:
             cursor="hand2",
             command=lambda: self.check_for_updates(manual=True)
         )
-        self.btn_update.pack(side=tk.RIGHT, padx=(0, 6))
+        self.btn_update.pack(side=tk.RIGHT, padx=(0, 4))
 
         # Toolbar Frame
         toolbar = tk.Frame(self.root, bg="#1e1e2e", padx=10, pady=8)
