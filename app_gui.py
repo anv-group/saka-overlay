@@ -181,30 +181,50 @@ class SambungKataApp:
         )
         self.btn_settings.pack(side=tk.RIGHT, padx=(0, 2))
 
-        # 2. Baris Pencarian Manual (Realtime Auto-Search + Clear) & Hasil Deteksi OCR (Teks Besar)
+        # 2. Baris Awalan OCR (Fixed Width di Kiri) & Pencarian Manual (Realtime + Clear Permanen di Kanan)
         search_prefix_row = tk.Frame(self.root, bg="#1e1e2e", padx=8, pady=3)
         search_prefix_row.pack(fill=tk.X)
 
-        # Kontainer Input Pencarian Manual
+        # Box Hasil Deteksi Awalan OCR (Teks Besar & Lebar Terkunci agar tidak menggeser elemen lain)
+        self.prefix_badge_frame = tk.Frame(
+            search_prefix_row,
+            bg="#181825",
+            width=70,
+            height=32,
+            relief=tk.FLAT
+        )
+        self.prefix_badge_frame.pack_propagate(False)
+        self.prefix_badge_frame.pack(side=tk.LEFT, padx=(0, 6))
+
+        self.lbl_prefix_display = tk.Label(
+            self.prefix_badge_frame,
+            text="-",
+            font=("Segoe UI", 15, "bold"),
+            fg="#f9e2af",
+            bg="#181825"
+        )
+        self.lbl_prefix_display.pack(fill=tk.BOTH, expand=True)
+
+        self.lbl_conf = tk.Label(
+            self.prefix_badge_frame,
+            text="",
+            font=("Segoe UI", 8),
+            fg="#a6adc8",
+            bg="#181825"
+        )
+
+        # Alias kompatibilitas
+        self.lbl_detected = self.lbl_prefix_display
+        self.lbl_target = self.lbl_prefix_display
+
+        # Kontainer Input Pencarian Manual (Mengisi sisa ruang ke kanan)
         search_box = tk.Frame(search_prefix_row, bg="#313244", padx=6, pady=2)
-        search_box.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
+        search_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         lbl_icon = tk.Label(search_box, text="🔍", font=("Segoe UI", 9), fg="#a6adc8", bg="#313244")
         lbl_icon.pack(side=tk.LEFT, padx=(0, 4))
 
-        self.search_var = tk.StringVar()
-        self.entry_manual = tk.Entry(
-            search_box,
-            textvariable=self.search_var,
-            font=("Segoe UI", 11, "bold"),
-            bg="#313244",
-            fg="#cdd6f4",
-            insertbackground="#cdd6f4",
-            relief=tk.FLAT
-        )
-        self.entry_manual.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        self.search_var.trace_add("write", self._on_search_text_changed)
-
+        # Tombol Clear '✕' dipack ke RIGHT terlebih dahulu agar menempel permanen di sisi kanan
         self.btn_clear_search = tk.Button(
             search_box,
             text="✕",
@@ -222,31 +242,18 @@ class SambungKataApp:
         )
         self.btn_clear_search.pack(side=tk.RIGHT)
 
-        # Box Hasil Deteksi Awalan OCR (Teks Besar & Jelas)
-        self.prefix_badge_frame = tk.Frame(search_prefix_row, bg="#181825", padx=10, pady=2, relief=tk.FLAT)
-        self.prefix_badge_frame.pack(side=tk.RIGHT)
-
-        self.lbl_prefix_display = tk.Label(
-            self.prefix_badge_frame,
-            text="-",
-            font=("Segoe UI", 16, "bold"),
-            fg="#f9e2af",
-            bg="#181825"
+        self.search_var = tk.StringVar()
+        self.entry_manual = tk.Entry(
+            search_box,
+            textvariable=self.search_var,
+            font=("Segoe UI", 11, "bold"),
+            bg="#313244",
+            fg="#cdd6f4",
+            insertbackground="#cdd6f4",
+            relief=tk.FLAT
         )
-        self.lbl_prefix_display.pack(side=tk.LEFT)
-
-        self.lbl_conf = tk.Label(
-            self.prefix_badge_frame,
-            text="",
-            font=("Segoe UI", 8),
-            fg="#a6adc8",
-            bg="#181825"
-        )
-        self.lbl_conf.pack(side=tk.LEFT, padx=(4, 0))
-
-        # Alias kompatibilitas
-        self.lbl_detected = self.lbl_prefix_display
-        self.lbl_target = self.lbl_prefix_display
+        self.entry_manual.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.search_var.trace_add("write", self._on_search_text_changed)
 
         # 3. Baris Horizontal Quick Toggle Kategori Custom
         self.custom_cats_bar = tk.Frame(self.root, bg="#1e1e2e")
