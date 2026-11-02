@@ -10,7 +10,7 @@ DEFAULT_CONFIG = {
         "width": 400,
         "height": 120
     },
-    "scan_interval_sec": 0.15,
+    "scan_interval_sec": 0.08,
     "auto_copy_top_word": False,
     "mode_santai": False,  # True jika main di Mode Santai (tanpa X, Q, F)
     "report_hotkey": "F2",  # Hotkey screenshot instan deteksi salah
@@ -18,7 +18,22 @@ DEFAULT_CONFIG = {
     "tesseract_path": r"C:\Program Files\Tesseract-OCR\tesseract.exe",
     "updater_mode": "prompt",  # "prompt", "auto", "disabled"
     "updater_branch": "main",  # "main", "dev", atau branch kustom lainnya
-    "auto_check_update_on_startup": True
+    "auto_check_update_on_startup": True,
+    "use_kbbi": True,  # Aktifkan kamus resmi KBBI
+    "use_contek": True,  # Aktifkan kamus Contek Sambung Kata (contek-sambungkata.web.id)
+    "gameplay_indexing_enabled": True,  # Deteksi feedback gameplay (kata salah, kata sudah digunakan, kata benar)
+    "gameplay_area": {  # Area monitoring kata & karakter di layar (1920x1200 default)
+        "left": 740,
+        "top": 250,
+        "width": 440,
+        "height": 400
+    },
+    "auto_blacklist_invalid": True,  # Otomatis blacklist kata yang ditolak game Roblox
+    "auto_learn_valid": True,  # Otomatis simpan kata valid yang belum ada di kamus
+    "custom_trap_endings": [  # Kategori custom akhiran jebakan super (prioritas di atas X)
+        {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"},
+        {"suffix": "NGK", "name": "Akhiran NGK", "enabled": True, "color": "#f5c2e7"}
+    ]
 }
 
 def load_config():

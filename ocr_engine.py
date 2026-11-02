@@ -283,7 +283,8 @@ class OCREngine:
                 repl = {'0': 'O', '1': 'I', '5': 'S', '8': 'B', '|': 'I', 'l': 'I'}
                 clean = "".join([repl.get(c, c) for c in raw.upper()])
                 clean = re.sub(r'[^A-Z]', '', clean)
-                if len(clean) == 3 and conf >= 0.50:
+                # Early exit jika kata 3 huruf atau kata valid panjang dengan confidence tinggi
+                if (len(clean) == 3 and conf >= 0.50) or (len(clean) >= 2 and conf >= 0.70):
                     return clean, conf
                 if best_res is None or len(clean) > len(best_res[0]) or (len(clean) == len(best_res[0]) and conf > best_res[1]):
                     best_res = (clean, conf)
@@ -343,34 +344,58 @@ class OCREngine:
                 comps = [(stats[i, 0], stats[i, 2], i) for i in range(1, n) if stats[i, 4] > 25 and stats[i, 3] > 10]
                 comps.sort()
 
-            # Tentukan apakah 1, 2, atau 3 huruf terpisah bersih
+            # Slicing cerdas untuk huruf yang bersentuhan (misal 'KA' di 'KAR' atau 'AKAN')
+            if len(comps) < 4 and any(48 <= c[1] <= 68 for c in comps):
+                split_comps = []
+                for c in comps:
+                    cx, cw, idx = c[0], c[1], c[2]
+                    if 48 <= cw <= 68:
+                        mask = (lab == idx).astype(np.uint8)
+                        ty, tx = np.where(mask > 0)
+                        x_min, x_max = tx.min(), tx.max()
+                        proj = np.sum(mask > 0, axis=0)
+                        search_start = x_min + int(cw * 0.3)
+                        search_end = x_min + int(cw * 0.7)
+                        dip_idx = search_start + int(np.argmin(proj[search_start:search_end]))
+                        split_comps.append((x_min, dip_idx - x_min, idx, (x_min, dip_idx)))
+                        split_comps.append((dip_idx, x_max - dip_idx, idx, (dip_idx, x_max)))
+                    else:
+                        split_comps.append((cx, cw, idx, None))
+                comps = split_comps
+
+            # Tentukan apakah 1, 2, atau 3-4 huruf terpisah bersih
             # Catatan: Huruf 'W' memiliki lebar hingga 43px, 'M' hingga 38px.
-            # Pada huruf menempel (seperti 'KA' di 'KAR'), lebar komponen >= 50px.
             is_separated = False
             if len(comps) in [1, 2] and all(c[1] < 48 for c in comps):
                 is_separated = True
-            elif len(comps) == 3 and all(c[1] < 44 for c in comps):
+            elif len(comps) in [3, 4] and all(c[1] < 44 for c in comps):
                 is_separated = True
 
             if is_separated:
                 chars = []
                 scores = []
                 alts = []
-                for (cx, cw, idx) in comps:
+                for c in comps:
+                    idx = c[2]
                     mask = (lab == idx).astype(np.uint8) * 255
-                    ty, tx = np.where(mask > 0)
+                    if len(c) >= 4 and c[3] is not None:
+                        x0, x1 = c[3]
+                        crop = mask[:, x0:x1]
+                    else:
+                        crop = mask
+                    ty, tx = np.where(crop > 0)
                     if len(ty) > 0:
-                        crop = mask[ty.min():ty.max()+1, tx.min():tx.max()+1]
-                        ch, score, alt = self._match_single_crop(crop, cw)
+                        crop = crop[ty.min():ty.max()+1, tx.min():tx.max()+1]
+                        ch, score, alt = self._match_single_crop(crop, crop.shape[1])
                         chars.append(ch)
                         scores.append(score)
                         alts.extend(alt)
                 
                 text = "".join(chars)
                 conf = float(np.mean(scores)) if scores else 0.5
-                # Jika 3 huruf, pastikan rata-rata confidence template matching tinggi (>= 0.75)
+                # Jika 3 atau 4 huruf, pastikan rata-rata confidence template matching tinggi (>= 0.75)
                 # agar jika ambigu tetap dapat beralih ke RapidOCR
-                if len(text) in [1, 2] or (len(text) == 3 and conf >= 0.75):
+                if len(text) in [1, 2] or (len(text) >= 3 and conf >= 0.75):
                     is_low = conf < 0.65
                     saved_path = self.auto_save_unknown(img_bgr, text, conf) if (auto_save and is_low) else None
                     return {

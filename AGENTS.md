@@ -27,6 +27,7 @@ sambung-kata/
 ├── main.py              # Entry point GUI (menjalankan app_gui.py)
 ├── main_cli.py          # Entry point Terminal / Headless mode
 ├── ocr_engine.py        # Core Vision & OCR: Dual-Engine (Template Matching + RapidOCR)
+├── gameplay_indexer.py  # Pemantau Gameplay & Auto-Indexer (Deteksi kata salah/sudah dipakai/benar)
 ├── updater.py           # Git Updater Otomatis (Prompt, Auto-update, Disabled, Commit log parser)
 ├── solver.py            # Mesin pencari kata berawalan prefix dengan sistem tier prioritas
 ├── region_selector.py   # DPI-aware transparent overlay untuk seleksi ROI di monitor 1920x1200
@@ -34,18 +35,26 @@ sambung-kata/
 ├── config.json          # Menyimpan area ROI layar, interval scan, dan opsi auto-copy
 ├── blacklist.txt        # Daftar kata yang di-blacklist (kata valid KBBI namun ditolak oleh server Roblox)
 ├── kamus_lengkap.txt    # 147,870+ kata (Hasil Hybrid Merge: KBBI v6 + contek-sambungkata.web.id + istilah Roblox + jebakan X/Z)
+├── kamus_kbbi.txt       # 112,822 kata murni Kamus Besar Bahasa Indonesia (KBBI VI)
+├── kamus_contek.txt     # 108,123 kata dari basis data contek-sambungkata.web.id + jebakan Roblox
 ├── requirements.txt     # Dependensi Python
 ├── run.bat              # Batch script 1-klik untuk user Windows
 ├── test_accuracy.py     # Suite pengujian regresi otomatis (92 sampel benchmark)
+├── test_gameplay_indexer.py # Suite pengujian status gameplay sequence (benar, kata tidak ada, sudah dipakai)
 ├── README.md            # Dokumentasi panduan untuk pengguna akhir
 ├── AGENTS.md            # Dokumen ini (panduan teknis untuk AI Agent)
-└── sample/              # Direktori dataset sampel gambar nyata game
-    ├── 1/               # Sampel 1 huruf (A, F, G, I, K, L, M, N, O, P, Q, R, S, T, Y)
-    ├── 2/               # Sampel 2 huruf (AI, AL, AN, DA, EI, EX, IH, IK, JI, MI, NG, UH, UK)
-    ├── 3/               # Sampel 3 huruf (ANA, ANG, ARE, EXO, ING, KIR, NGI, NUM, ...)
-    ├── tidak_dikenali/  # Subfolder auto-save untuk deteksi berkeyakinan rendah (< 48%)
-    ├── tidak_dikenali_corrected/ # 11 sampel benchmark tantangan tinggi
-    └── kurang_tepat/    # Sampel salah deteksi yang disimpan manual oleh user (F2)
+├── sample/              # Direktori dataset sampel gambar nyata game
+│   ├── 1/               # Sampel 1 huruf (A, F, G, I, K, L, M, N, O, P, Q, R, S, T, Y)
+│   ├── 2/               # Sampel 2 huruf (AI, AL, AN, DA, EI, EX, IH, IK, JI, MI, NG, UH, UK)
+│   ├── 3/               # Sampel 3 huruf (ANA, ANG, ARE, EXO, ING, KIR, NGI, NUM, ...)
+│   ├── tidak_dikenali/  # Subfolder auto-save untuk deteksi berkeyakinan rendah (< 48%)
+│   ├── tidak_dikenali_corrected/ # 11 sampel benchmark tantangan tinggi
+│   └── kurang_tepat/    # Sampel salah deteksi yang disimpan manual oleh user (F2)
+└── deteksi-gameplay/    # Dataset sequence gameplay untuk pengujian status kata
+    ├── benar/           # Urutan frame kata diterima (kotak hilang + tubuh flash hijau)
+    ├── default/         # Full screenshot saat mengetik di kotak putih
+    ├── kata-tidak-ada/  # Urutan 16 frame kata ditolak Roblox (kotak merah tanpa subtext)
+    └── sudah-dipakai/   # Urutan 16 frame kata sudah terpakai (kotak merah + subtext "sudah digunakan")
 ```
 
 ---
@@ -92,15 +101,16 @@ Digunakan untuk 1 atau 2 huruf karena WinOCR/Tesseract sering mengabaikan huruf 
 ### C. Jalur 3 Huruf: Template Matching Komponen Terpisah + Fallback RapidOCR
 1. **Komponen Terpisah (3 Huruf Bersih)**:
    - Jika `len(comps) == 3` dan lebar masing-masing komponen $< 44\text{ px}$ (seperti `HOI`, `ANA`, `GOH`), template matching dijalankan terlebih dahulu. Jika rata-rata confidence $\ge 0.75$, hasil template matching langsung digunakan (menghindari kesalahan urutan pembacaan seperti `HOI` terbaca `1OH`).
-2. **Huruf Menempel / Ambigu (Contoh: `KAR`)**:  
-   Pada kata seperti `KAR`, ujung kaki `K` dan kaki diagonal `A` saling bersentuhan tipis. `connectedComponents` hanya mendeteksi 2 komponen (komponen pertama selebar 54px).  
-   *Aturan:* Jika `len(comps) < 3` namun `bw > 90` atau ada komponen dengan lebar $> 48\text{ px}$, sistem beralih ke RapidOCR.
-3. **Multi-Padding Adaptif (`[8, 0, 15, 20]`)**:  
+2. **Huruf Menempel / Ambigu (Contoh: `KAR`, `AKAN`)**:  
+   Pada kata seperti `KAR` atau `AKAN`, kaki huruf dapat saling bersentuhan tipis sehingga `connectedComponents` menggabungkan keduanya menjadi satu komponen lebar ($48 \le cw \le 68\text{ px}$).  
+   *Slicing Vertikal Cerdas:* Sistem memotong komponen tersebut pada lembah piksel terendah (*vertical projection dip*) di area tengah (30%–70% lebar komponen). Potongan yang dihasilkan langsung dicocokkan via Template Matcher dalam **1–2 ms** (menghemat ~480 ms dibanding deep learning).
+3. **Multi-Padding Adaptif (`[8, 0, 15, 20]`) dengan Early Exit:**  
    Detektor DBNet pada RapidOCR sangat sensitif terhadap padding kotak:
    - `pad = 8`: Padding ideal untuk kata normal (`GOH`, `GAL`, `HAI`). Mencegah huruf pertama terpotong.
    - `pad = 0`: Direct unpadded crop. Sangat penting untuk kata seperti `OXO` di mana penambahan border luar justru mengacaukan deteksi.
    - `pad = 15`: Margin menengah.
    - `pad = 20`: Margin lebar untuk kata yang sangat padat/ringkas seperti `DIH` (lebar 95px).
+   - *Early Exit:* Jika pada `pad = 8` deteksi telah menghasilkan kata 3 huruf dengan keyakinan $\ge 0.50$ atau kata panjang ($\ge 2$ huruf) dengan keyakinan $\ge 0.70$, sistem langsung mengembalikan hasil seketika tanpa perlu mengeksekusi pad berikutnya (memangkas waktu dari 3.4 detik menjadi 0.5 detik).
 
 ### D. Kalibrasi Ambang Batas Keyakinan (*Confidence Level*)
 - **Template Matcher (1–2 huruf):** Skor rata-rata 0.70 – 0.98. Jika skor $< 0.65$, tandai `is_low_confidence = True`.
@@ -159,6 +169,47 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
    - Kata divalidasi (alfabet murni, min 2 huruf, wajib punya vokal `AIUEO`).
    - Disimpan secara persisten ke `kamus_lengkap.txt` dan diindeks langsung ke memori solver ($O(1)$) tanpa perlu restart aplikasi.
    - Jika kata sebelumnya berada di `blacklist.txt`, status blacklist otomatis dibatalkan/dipulihkan.
+6. **Pemilihan Sumber Kamus (KBBI vs Contek Sambung Kata)**:
+   - Pemain dapat memilih sumber kamus yang digunakan melalui checkbox di GUI:
+     - **`KBBI` (`kamus_kbbi.txt`):** 112,822 kosakata baku bahasa Indonesia murni.
+     - **`Contek Sambung Kata` (`kamus_contek.txt`):** 108,123 kosakata dari basis data `contek-sambungkata.web.id` + jebakan kata Roblox.
+   - Mendukung pemilihan salah satu kamus atau penggabungan keduanya (147,886 kata unik).
+   - Pengaturan tersimpan otomatis di `config.json` (`use_kbbi`, `use_contek`) dan peralihan kata terjadi seketika di memori solver (< 15 ms).
+   - Validasi keamanan: Sistem secara otomatis mencegah kedua checkbox dinonaktifkan bersamaan (minimal satu sumber harus aktif).
+
+---
+
+## 🎮 5b. Sistem Pengindeks & Pemantau Gameplay Otomatis (`gameplay_indexer.py`)
+
+Aplikasi dilengkapi modul pemantau visual gameplay otomatis untuk mengenali dan mengindeks kata berdasarkan respon nyata server Roblox Sambung Kata:
+
+1. **Tiga Ciri Visual Status Kata:**
+   - **`KATA_SALAH` (Kata Ditolak / Tidak Terdaftar di Roblox):**
+     - Kotak teks input berubah menjadi latar **merah pekat** ($R > 100, R > G \times 1.3$).
+     - Indikator 'X' merah (nyawa) berubah dari redup menjadi 100% merah.
+     - **TIDAK ADA** subtext `"sudah digunakan!"` di bawah kotak teks.
+     - *Aksi Otomatis (Terisolasi):* Kata dicatat ke file staging terpisah `auto_blacklist.txt` (TIDAK menyentuh atau mencemari `blacklist.txt` resmi), dan notifikasi toast muncul.
+   - **`SUDAH_DIGUNAKAN` (Kata Valid tapi Sudah Terpakai Ronde Ini):**
+     - Kotak teks input berubah menjadi latar **merah pekat**.
+     - Tepat di bawah kotak merah muncul subtext tulisan putih ber-outline hitam: `'"<KATA>" sudah digunakan!'` (terbaca via OCR).
+     - *Aksi Otomatis (Terisolasi):* Kata ini terbukti **VALID** di server Roblox. Jika belum terdaftar di kamus resmi, sistem mencatatnya ke `auto_kata_baru.txt` (TIDAK menyentuh kamus utama).
+   - **`KATA_BENAR` (Jawaban Berhasil & Diterima):**
+     - Kotak kata teks di atas pemain **LENYAP SEKETIKA**.
+     - Tubuh karakter pemain di bawahnya seketika **FLASH HIJAU TERANG** (HSV Green Pixels > 10,000, melonjak masif dari rata-rata ~1,100 px).
+     - *Aksi Otomatis (Terisolasi):* Kata jawaban dicatat ke `auto_kata_baru.txt` jika belum ada di kamus resmi.
+2. **Isolasi Data Kamus & Human-in-the-Loop:**
+   - Kamus resmi (`kamus_kbbi.txt`, `kamus_contek.txt`, `kamus_lengkap.txt`) dan `blacklist.txt` **100% aman dan tidak tersentuh** oleh deteksi otomatis.
+   - Semua hasil auto-detect masuk ke file staging terpisah (`auto_blacklist.txt` dan `auto_kata_baru.txt`) untuk dikurasi atau diverifikasi pengguna.
+3. **Kinerja & Dual-Engine OCR:**
+   - Memanfaatkan **WinOCR** sebagai engine utama untuk pemrosesan ROI kotak gameplay ($440 \times 400\text{ px}$), selesai dalam **4–17 ms** tanpa membebani performa frame rate game.
+   - Fallback otomatis ke RapidOCR jika dijalankan di lingkungan tanpa WinOCR.
+4. **Mekanisme Debounce Anti-Duplikasi:**
+   - Menghindari pemrosesan berulang pada animasi frame transisi (300 ms) dengan jeda cooldown 2.5 detik per kata.
+5. **Alat Kalibrasi Mandiri (Hotkey F3 & Log GUI):**
+   - **Hotkey `F3` (Snapshot Kalibrasi):** Mengambil screenshot snapshot area gameplay seketika dan menyimpan gambar PNG beserta metadata JSON (warna RGB, HSV, piksel merah, piksel hijau, OCR raw lines) ke folder `deteksi-gameplay/sample_kalibrasi/`.
+   - **Tombol `🎮 Auto-Index Game`:** Mengaktifkan/menonaktifkan pemantauan otomatis.
+   - **Tombol `🎯 Area Game`:** Membuka `RegionSelector` untuk memilih area kotak kata & karakter pemain secara visual.
+   - **Tombol `📋 Log`:** Membuka dialog riwayat sesi dengan tombol langsung untuk membuka file `auto_blacklist.txt`, `auto_kata_baru.txt`, dan folder `sample_kalibrasi`.
 
 ---
 
@@ -189,11 +240,13 @@ Aplikasi dilengkapi modul `GitUpdater` (`updater.py`) untuk menjaga repository l
 ## 🌿 7. Strategi Branching & CI Workflow
 
 Untuk menghemat kuota komputasi GitHub Actions dan mempercepat siklus development:
-1. **Branch `dev` (Active Development):**
+1. **Branch `reoptimized` (Performa Turbo & Widget Pooling):**
+   - Berisi optimasi latensi ekstrem: vertical projection character slicing (1.5ms), RapidOCR early-exit, Tkinter Card Widget Pooling (0.5ms), dan scan interval turbo (40–80ms).
+2. **Branch `dev` (Active Development):**
    - Seluruh coding aktif, eksperimen OCR, dan penambahan fitur dilakukan di branch `dev`.
    - Push ke branch `dev` **tidak memicu GitHub Actions** (bebas commit kapan saja tanpa menghabiskan kuota).
-2. **Branch `main` (Production & Release):**
-   - Hanya menerima kode stabil hasil merge dari branch `dev`.
+3. **Branch `main` (Production & Release):**
+   - Hanya menerima kode stabil hasil merge.
    - Setiap kali terjadi push atau merge ke `main`, GitHub Actions (`test.yml`) otomatis menjalankan benchmark OCR (92 sampel) di runner Windows.
 
 ---

@@ -1,16 +1,43 @@
 {
     "screen_area": {
-        "left": 1076,
+        "left": 1082,
         "top": 881,
-        "width": 159,
-        "height": 82
+        "width": 149,
+        "height": 81
     },
-    "scan_interval_sec": 0.1,
+    "scan_interval_sec": 0.04,
     "auto_copy_top_word": false,
     "mode_santai": false,
     "report_hotkey": "F2",
     "ocr_engine": "winocr",
     "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
     "updater_mode": "prompt",
-    "auto_check_update_on_startup": true
+    "updater_branch": "reoptimized",
+    "auto_check_update_on_startup": true,
+    "use_kbbi": false,
+    "use_contek": true,
+    "gameplay_indexing_enabled": false,
+    "gameplay_area": {
+        "left": 744,
+        "top": 230,
+        "width": 449,
+        "height": 578
+    },
+    "auto_blacklist_invalid": true,
+    "auto_learn_valid": true,
+    "custom_trap_endings": [
+        {
+            "suffix": "NS",
+            "name": "Akhiran NS",
+            "enabled": true,
+            "color": "#cba6f7"
+        },
+        {
+            "suffix": "NGK",
+            "name": "Akhiran NGK",
+            "enabled": true,
+            "color": "#f5c2e7"
+        }
+    ],
+    "window_geometry": "463x1060+1443+36"
 }

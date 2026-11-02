@@ -36,3 +36,9 @@ venv.bak/
 *~
 Thumbs.db
 .DS_Store
+
+# Video recordings & gameplay unclassified staging
+deteksi-gameplay/recordings/*
+!deteksi-gameplay/recordings/.gitkeep
+deteksi-gameplay/unclassified/*
+!deteksi-gameplay/unclassified/.gitkeep
