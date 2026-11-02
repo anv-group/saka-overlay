@@ -39,6 +39,14 @@ class GameplayIndexer:
         self.base_dir = base_dir or os.path.dirname(os.path.abspath(__file__))
         self.sct = getattr(mss, "MSS", mss.mss)()
 
+        # Fallback solver jika tidak diinjeksi
+        if self.solver is None:
+            try:
+                from solver import SambungKataSolver
+                self.solver = SambungKataSolver()
+            except Exception:
+                self.solver = None
+
         # File terisolasi khusus auto-detect
         self.auto_blacklist_path = os.path.join(self.base_dir, "auto_blacklist.txt")
         self.auto_kata_baru_path = os.path.join(self.base_dir, "auto_kata_baru.txt")
@@ -114,6 +122,60 @@ class GameplayIndexer:
 
         return lines
 
+    def clean_gameplay_word(self, word):
+        """
+        Membersihkan dan mengoreksi kata hasil OCR gameplay menggunakan kamus solver.
+        Mengatasi kebingungan font Roblox: C vs G (contoh: AANCIN -> ANGIN, NENCOK -> NENGOK).
+        """
+        w = "".join(c for c in word if c.isalpha()).upper()
+        if not w or len(w) < 2:
+            return ""
+
+        if not self.solver:
+            return w
+
+        # 1. Jika sudah ada di kamus persis seperti ini
+        if self.solver.has_word(w):
+            return w
+
+        # 2. Coba ganti "NC" -> "NG" (karena C sering keliru dibaca dari G)
+        if "NC" in w:
+            cand_ng = w.replace("NC", "NG")
+            if self.solver.has_word(cand_ng):
+                return cand_ng
+            # Cek jika ada double vocal awal berlebih, misal AANCIN -> AANGIN -> ANGIN
+            if cand_ng.startswith("AA") and self.solver.has_word(cand_ng[1:]):
+                return cand_ng[1:]
+
+        # 3. Coba ganti semua 'C' menjadi 'G'
+        if "C" in w:
+            cand_g = w.replace("C", "G")
+            if self.solver.has_word(cand_g):
+                return cand_g
+            # Coba ganti per karakter C -> G
+            for i, char in enumerate(w):
+                if char == 'C':
+                    cand = w[:i] + 'G' + w[i+1:]
+                    if self.solver.has_word(cand):
+                        return cand
+
+        # 4. Coba sebaliknya 'G' -> 'C' jika w tidak ada di kamus
+        if "G" in w:
+            cand_c = w.replace("G", "C")
+            if self.solver.has_word(cand_c):
+                return cand_c
+            for i, char in enumerate(w):
+                if char == 'G':
+                    cand = w[:i] + 'C' + w[i+1:]
+                    if self.solver.has_word(cand):
+                        return cand
+
+        # 5. Cek double vokal awal berlebih akibat border font (misal AANGIN -> ANGIN)
+        if len(w) >= 3 and w[0] == w[1] and self.solver.has_word(w[1:]):
+            return w[1:]
+
+        return w
+
     def find_gameplay_box(self, crop):
         """
         Mendeteksi posisi kotak kata (putih atau merah) secara presisi.
@@ -136,6 +198,10 @@ class GameplayIndexer:
         for c in cnts_w:
             x, y, w, h = cv2.boundingRect(c)
             area = cv2.contourArea(c)
+            norm_cx = (x + w / 2.0) / W
+            # Wajib berada di area tengah horizontal karakter (mengabaikan banner samping)
+            if not (0.35 <= norm_cx <= 0.65):
+                continue
             if w >= 55 and 30 <= h <= 140 and 0.9 <= (w / h) <= 5.5 and area >= 2000:
                 box_sample = upper_roi[y:y+h, x:x+w]
                 b, g, r = box_sample.mean(axis=(0, 1))
@@ -150,6 +216,10 @@ class GameplayIndexer:
         for c in cnts_r:
             x, y, w, h = cv2.boundingRect(c)
             area = cv2.contourArea(c)
+            norm_cx = (x + w / 2.0) / W
+            # Wajib berada di area tengah horizontal karakter (mengabaikan timer & 'X' samping)
+            if not (0.35 <= norm_cx <= 0.65):
+                continue
             if w >= 55 and 30 <= h <= 140 and 0.9 <= (w / h) <= 5.5 and area >= 2000:
                 box_sample = upper_roi[y:y+h, x:x+w]
                 return box_sample, 'RED', (x, y, w, h)
@@ -172,7 +242,7 @@ class GameplayIndexer:
         char_hsv = cv2.cvtColor(char_roi, cv2.COLOR_BGR2HSV)
         green_mask = cv2.inRange(char_hsv, np.array([35, 70, 70]), np.array([85, 255, 255]))
         green_count = int(np.count_nonzero(green_mask))
-        is_char_green = (green_count > 10000)
+        is_char_green = (green_count > 5000)
 
         # 2. Deteksi Kotak Kata (Putih / Merah)
         box_crop, box_type, box_rect = self.find_gameplay_box(crop)
@@ -187,22 +257,29 @@ class GameplayIndexer:
             for line in raw_lines:
                 clean = "".join(c for c in line if c.isalpha()).upper()
                 if 2 <= len(clean) <= 12 and not any(k in clean.lower() for k in ['sudah', 'guna', 'pakai', 'sud', 'buy', 'gift', 'cift']):
-                    main_word = clean
+                    main_word = self.clean_gameplay_word(clean)
                     break
 
-            # Jika kotak merah, periksa teks subtext di bawah kotak merah (y+h sampai y+h+60)
+            # Jika kotak merah, periksa teks subtext di bawah kotak merah (y+h sampai y+h+80)
             if box_type == 'RED':
                 x, y, w, h = box_rect
-                sub_y1, sub_y2 = y + h, min(H, y + h + 65)
-                sub_roi = crop[sub_y1:sub_y2, max(0, x - 30):min(W, x + w + 30)]
+                sub_y1, sub_y2 = y + h, min(H, y + h + 80)
+                sub_roi = crop[sub_y1:sub_y2, max(0, x - 40):min(W, x + w + 40)]
                 if sub_roi.shape[0] >= 15 and sub_roi.shape[1] >= 40:
                     sub_lines = self.ocr_crop(sub_roi)
                     sub_text = " ".join(sub_lines).lower()
-                    has_sudah_digunakan = any(k in sub_text for k in ['sud', 'guna', 'pakai', 'digunakan', 'sudah', 'vour'])
+                    has_sudah_digunakan = any(k in sub_text for k in ['sud', 'guna', 'pakai', 'diguna', 'sudah', 'sudan', 'igun', 'iguy', 'vour'])
 
         # 3. Tentukan status
         state = "IDLE"
-        if box_type == 'RED':
+
+        # PRIORITAS 1: KATA_BENAR (Tubuh karakter flash hijau saat kata diterima game)
+        # Karakter Roblox HANYA menyala hijau jika kata benar, mengabaikan segala sisa warna merah di arena
+        if is_char_green and self.last_typing_word:
+            state = "KATA_BENAR"
+            main_word = self.last_typing_word
+            self.last_typing_word = None
+        elif box_type == 'RED':
             # Jika teks di dalam kotak merah sedang pudar/animasi, gunakan kata yang baru saja diketik
             if not main_word and self.last_typing_word:
                 main_word = self.last_typing_word
@@ -210,12 +287,10 @@ class GameplayIndexer:
                 state = "SUDAH_DIGUNAKAN"
             else:
                 state = "KATA_SALAH"
+            self.last_typing_word = None
         elif box_type == 'WHITE' and main_word:
             state = "SEDANG_KETIK"
             self.last_typing_word = main_word
-        elif box_type is None and is_char_green and self.last_typing_word:
-            state = "KATA_BENAR"
-            main_word = self.last_typing_word
 
         details = {
             'box_type': box_type,
