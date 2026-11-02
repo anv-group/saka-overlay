@@ -4,24 +4,37 @@ import os
 HURUF_SULIT_AKHIRAN = ["x", "z", "q", "v", "j", "w", "f"]
 
 class SambungKataSolver:
-    def __init__(self, dictionary_path="kamus_lengkap.txt", blacklist_path="blacklist.txt"):
-        self.dictionary_path = dictionary_path
-        self.blacklist_path = blacklist_path
-        self.words = []
+    def __init__(
+        self,
+        dictionary_path="kamus_lengkap.txt",
+        blacklist_path="blacklist.txt",
+        kbbi_path="kamus_kbbi.txt",
+        contek_path="kamus_contek.txt",
+        use_kbbi=True,
+        use_contek=True
+    ):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.dictionary_path = os.path.join(base_dir, dictionary_path) if not os.path.isabs(dictionary_path) else dictionary_path
+        self.blacklist_path = os.path.join(base_dir, blacklist_path) if not os.path.isabs(blacklist_path) else blacklist_path
+        self.kbbi_path = os.path.join(base_dir, kbbi_path) if not os.path.isabs(kbbi_path) else kbbi_path
+        self.contek_path = os.path.join(base_dir, contek_path) if not os.path.isabs(contek_path) else contek_path
+        
+        self.use_kbbi = use_kbbi
+        self.use_contek = use_contek
+
+        self.kbbi_set = set()
+        self.contek_set = set()
+        self.custom_set = set()
         self.word_set = set()
+        self.words = []
         self.blacklisted_words = set()
         self.words_by_initial = {}
+
         self.load_blacklist()
         self.load_dictionary()
 
     def load_blacklist(self):
         """Memuat daftar kata yang di-blacklist dari blacklist.txt"""
-        if not os.path.exists(self.blacklist_path):
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            alt_path = os.path.join(base_dir, self.blacklist_path)
-            if os.path.exists(alt_path):
-                self.blacklist_path = alt_path
-
         self.blacklisted_words = set()
         if os.path.exists(self.blacklist_path):
             try:
@@ -68,40 +81,97 @@ class SambungKataSolver:
         """Mengembalikan daftar kata yang di-blacklist terurut abjad"""
         return sorted(list(self.blacklisted_words))
 
-    def load_dictionary(self):
-        if not os.path.exists(self.dictionary_path):
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            alt_path = os.path.join(base_dir, self.dictionary_path)
-            if os.path.exists(alt_path):
-                self.dictionary_path = alt_path
-
-        word_set = set()
-        if os.path.exists(self.dictionary_path):
-            with open(self.dictionary_path, "r", encoding="utf-8") as f:
+    def _read_word_file(self, fpath):
+        """Membaca file kata dan menyaring kata yang valid (alpha, min 2 huruf, punya vokal)"""
+        words = set()
+        if not os.path.exists(fpath):
+            return words
+        vowels = set("aiueo")
+        try:
+            with open(fpath, "r", encoding="utf-8") as f:
                 for line in f:
                     w = line.strip().lower()
-                    if w.isalpha() and len(w) >= 2:
-                        word_set.add(w)
-        else:
-            print(f"[!] Warning: Kamus {self.dictionary_path} tidak ditemukan!")
+                    if w.isalpha() and len(w) >= 2 and any(v in w for v in vowels):
+                        words.add(w)
+        except Exception as e:
+            print(f"[!] Gagal membaca {fpath}: {e}")
+        return words
 
-        # Simpan dalam list terurut
-        self.word_set = word_set
-        self.words = sorted(list(word_set))
+    def load_dictionary(self):
+        """Memuat kosakata dari KBBI dan Contek Sambung Kata ke memori"""
+        # 1. Muat KBBI
+        if os.path.exists(self.kbbi_path):
+            self.kbbi_set = self._read_word_file(self.kbbi_path)
+        else:
+            # Fallback ke kata_kbbi.txt jika kamus_kbbi.txt belum dibuat
+            alt_kbbi = os.path.join(os.path.dirname(self.kbbi_path), "kata_kbbi.txt")
+            if os.path.exists(alt_kbbi):
+                self.kbbi_set = self._read_word_file(alt_kbbi)
+
+        # 2. Muat Contek Sambung Kata
+        if os.path.exists(self.contek_path):
+            self.contek_set = self._read_word_file(self.contek_path)
+
+        # 3. Muat kata custom / warisan dari kamus_lengkap.txt
+        if os.path.exists(self.dictionary_path):
+            lengkap_set = self._read_word_file(self.dictionary_path)
+            # Kata yang ada di kamus_lengkap tapi tidak ada di kbbi/contek dianggap custom
+            self.custom_set = lengkap_set - (self.kbbi_set | self.contek_set)
+        else:
+            self.custom_set = set()
+
+        self._rebuild_active_words()
+        print(f"[*] Solver siap: KBBI={len(self.kbbi_set)}, Contek={len(self.contek_set)}, Total Aktif={len(self.words)} kata.")
+
+    def _rebuild_active_words(self):
+        """Membangun ulang daftar kata aktif sesuai sumber kamus yang dipilih"""
+        active = set()
+        if self.use_kbbi:
+            active.update(self.kbbi_set)
+        if self.use_contek:
+            active.update(self.contek_set)
+        
+        # Kata custom selalu aktif
+        active.update(self.custom_set)
+
+        # Keamanan: Jika kedua sumber dimatikan oleh user, aktifkan setidaknya satu
+        if not active:
+            if self.kbbi_set:
+                self.use_kbbi = True
+                active.update(self.kbbi_set)
+            elif self.contek_set:
+                self.use_contek = True
+                active.update(self.contek_set)
+
+        self.word_set = active
+        self.words = sorted(list(self.word_set))
         self._index_words()
-        print(f"[*] Solver siap dengan {len(self.words)} kata.")
+
+    def set_dict_sources(self, use_kbbi=True, use_contek=True):
+        """
+        Mengubah sumber kamus yang aktif (KBBI, Contek, atau keduanya).
+        Menghasilkan pembaruan indeks instan di memori.
+        """
+        if not use_kbbi and not use_contek:
+            # Cegah kedua sumber nonaktif bersamaan
+            return False, len(self.words), "Minimal satu sumber kamus harus dipilih!"
+        
+        self.use_kbbi = bool(use_kbbi)
+        self.use_contek = bool(use_contek)
+        self._rebuild_active_words()
+        return True, len(self.words), f"Kamus aktif diperbarui ({len(self.words):,} kata)."
 
     def has_word(self, word):
-        """Memeriksa apakah kata sudah terdaftar di kamus"""
+        """Memeriksa apakah kata sudah terdaftar di kamus aktif"""
         return word.strip().lower() in self.word_set
 
     def add_word(self, word):
         """
-        Menambahkan kata baru ke kamus (kamus_lengkap.txt) secara manual:
+        Menambahkan kata baru ke kamus (kamus_lengkap.txt & kamus_contek.txt) secara manual:
         - Validasi: huruf alfabet murni, panjang >= 2, wajib memiliki minimal 1 vokal.
-        - Mengecek apakah kata sudah ada di kamus.
+        - Mengecek apakah kata sudah ada di kamus aktif.
         - Jika ada di blacklist, otomatis dihapus dari blacklist.
-        - Menyimpan ke kamus_lengkap.txt.
+        - Menyimpan ke file kamus lokal.
         - Mengindeks kata ke memori solver.
         """
         w = word.strip().lower()
@@ -120,6 +190,8 @@ class SambungKataSolver:
             self.unblacklist_word(w)
 
         # Tambahkan ke memori
+        self.custom_set.add(w)
+        self.contek_set.add(w)
         self.word_set.add(w)
         self.words.append(w)
         self.words.sort()
@@ -131,16 +203,19 @@ class SambungKataSolver:
         self.words_by_initial[init1].append(w)
         self.words_by_initial[init1].sort()
 
-        # Simpan ke file kamus_lengkap.txt
+        # Simpan persisten ke kamus_lengkap.txt dan kamus_contek.txt
         try:
             with open(self.dictionary_path, "a", encoding="utf-8") as f:
                 f.write(f"{w}\n")
+            if os.path.exists(self.contek_path):
+                with open(self.contek_path, "a", encoding="utf-8") as f:
+                    f.write(f"{w}\n")
             return True, f"Kata '{w.upper()}' berhasil ditambahkan ke kamus!"
         except Exception as e:
             return False, f"Gagal menulis ke file kamus: {e}"
 
     def _index_words(self):
-        """Mengindeks kata berdasarkan 1 dan 2 huruf pertama untuk pencarian instan"""
+        """Mengindeks kata berdasarkan 1 huruf pertama untuk pencarian instan O(1)"""
         self.words_by_initial = {}
         for w in self.words:
             init1 = w[0]

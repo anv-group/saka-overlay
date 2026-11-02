@@ -18,7 +18,9 @@ DEFAULT_CONFIG = {
     "tesseract_path": r"C:\Program Files\Tesseract-OCR\tesseract.exe",
     "updater_mode": "prompt",  # "prompt", "auto", "disabled"
     "updater_branch": "main",  # "main", "dev", atau branch kustom lainnya
-    "auto_check_update_on_startup": True
+    "auto_check_update_on_startup": True,
+    "use_kbbi": True,  # Aktifkan kamus resmi KBBI
+    "use_contek": True  # Aktifkan kamus Contek Sambung Kata (contek-sambungkata.web.id)
 }
 
 def load_config():

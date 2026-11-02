@@ -5,12 +5,15 @@
         "width": 159,
         "height": 82
     },
-    "scan_interval_sec": 0.1,
+    "scan_interval_sec": 0.08,
     "auto_copy_top_word": false,
     "mode_santai": false,
     "report_hotkey": "F2",
     "ocr_engine": "winocr",
     "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
     "updater_mode": "prompt",
-    "auto_check_update_on_startup": true
+    "updater_branch": "reoptimized",
+    "auto_check_update_on_startup": true,
+    "use_kbbi": true,
+    "use_contek": true
 }

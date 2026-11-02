@@ -28,13 +28,21 @@ class SambungKataApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Sambung Kata Assistant")
-        self.root.geometry("420x620")
-        self.root.minsize(360, 500)
+        self.root.geometry("440x650")
+        self.root.minsize(380, 520)
         self.root.attributes("-topmost", True)
         self.root.configure(bg="#1e1e2e")
 
         self.config = load_config()
-        self.solver = SambungKataSolver("kamus_lengkap.txt")
+        use_kbbi = self.config.get("use_kbbi", True)
+        use_contek = self.config.get("use_contek", True)
+        self.solver = SambungKataSolver(
+            dictionary_path="kamus_lengkap.txt",
+            kbbi_path="kamus_kbbi.txt",
+            contek_path="kamus_contek.txt",
+            use_kbbi=use_kbbi,
+            use_contek=use_contek
+        )
         self.ocr = OCREngine(self.config)
         self.updater = GitUpdater()
 
@@ -232,6 +240,58 @@ class SambungKataApp:
             command=self.cycle_scan_speed
         )
         self.btn_speed.pack(side=tk.LEFT, padx=6)
+
+        # Baris Pemilihan Sumber Kata / Kamus
+        dict_source_frame = tk.Frame(self.root, bg="#1e1e2e")
+        dict_source_frame.pack(fill=tk.X, padx=12, pady=(1, 3))
+
+        lbl_dict_title = tk.Label(
+            dict_source_frame,
+            text="Sumber Kamus:",
+            font=("Segoe UI", 9),
+            fg="#a6adc8",
+            bg="#1e1e2e"
+        )
+        lbl_dict_title.pack(side=tk.LEFT)
+
+        self.use_kbbi_var = tk.BooleanVar(value=self.config.get("use_kbbi", True))
+        self.chk_kbbi = tk.Checkbutton(
+            dict_source_frame,
+            text="KBBI",
+            variable=self.use_kbbi_var,
+            command=self.on_toggle_dict_source,
+            font=("Segoe UI", 9, "bold"),
+            fg="#89b4fa",
+            bg="#1e1e2e",
+            selectcolor="#313244",
+            activebackground="#1e1e2e",
+            activeforeground="#89b4fa"
+        )
+        self.chk_kbbi.pack(side=tk.LEFT, padx=(6, 4))
+
+        self.use_contek_var = tk.BooleanVar(value=self.config.get("use_contek", True))
+        self.chk_contek = tk.Checkbutton(
+            dict_source_frame,
+            text="Contek Sambung Kata",
+            variable=self.use_contek_var,
+            command=self.on_toggle_dict_source,
+            font=("Segoe UI", 9, "bold"),
+            fg="#f9e2af",
+            bg="#1e1e2e",
+            selectcolor="#313244",
+            activebackground="#1e1e2e",
+            activeforeground="#f9e2af"
+        )
+        self.chk_contek.pack(side=tk.LEFT, padx=(2, 0))
+
+        self.lbl_dict_count = tk.Label(
+            dict_source_frame,
+            text=f"({len(self.solver.words):,} kata)",
+            font=("Segoe UI", 8),
+            fg="#6c7086",
+            bg="#1e1e2e"
+        )
+        self.lbl_dict_count.pack(side=tk.RIGHT)
 
         # Area Info Deteksi
         info_frame = tk.LabelFrame(
@@ -479,6 +539,41 @@ class SambungKataApp:
 
         if self.last_detected_word:
             self.update_results(self.last_detected_word)
+
+    def on_toggle_dict_source(self):
+        """Menangani pemilihan sumber kamus (KBBI dan/atau Contek Sambung Kata)"""
+        use_kbbi = self.use_kbbi_var.get()
+        use_contek = self.use_contek_var.get()
+
+        # Cegah kedua kamus dimatikan sekaligus
+        if not use_kbbi and not use_contek:
+            self.show_toast("⚠️ Minimal satu sumber kamus harus aktif!")
+            self.use_kbbi_var.set(True)
+            use_kbbi = True
+
+        self.config["use_kbbi"] = use_kbbi
+        self.config["use_contek"] = use_contek
+        save_config(self.config)
+
+        success, total_words, msg = self.solver.set_dict_sources(
+            use_kbbi=use_kbbi,
+            use_contek=use_contek
+        )
+
+        if hasattr(self, "lbl_dict_count") and self.lbl_dict_count.winfo_exists():
+            self.lbl_dict_count.config(text=f"({total_words:,} kata)")
+
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+
+        if use_kbbi and use_contek:
+            sumber_str = "KBBI + Contek Sambung Kata"
+        elif use_kbbi:
+            sumber_str = "KBBI Saja"
+        else:
+            sumber_str = "Contek Sambung Kata Saja"
+
+        self.show_toast(f"📚 Sumber: {sumber_str} ({total_words:,} kata)")
 
     def open_region_selector(self):
         RegionSelector(self.on_region_selected)
@@ -1881,6 +1976,8 @@ class SambungKataApp:
             word_clean = "".join([c for c in raw if c.isalpha()]).upper()
             self.lbl_add_feedback.config(text=f"✅ {msg}", fg="#a6e3a1")
             self.lbl_dict_total.config(text=f"{len(self.solver.words):,} kata")
+            if hasattr(self, "lbl_dict_count") and self.lbl_dict_count.winfo_exists():
+                self.lbl_dict_count.config(text=f"({len(self.solver.words):,} kata)")
             self.entry_new_word.delete(0, tk.END)
             self._on_new_word_keyrelease()
             self.show_toast(f"📚 Kata '{word_clean}' berhasil ditambahkan ke kamus!")

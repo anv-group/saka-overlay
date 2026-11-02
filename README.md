@@ -117,12 +117,13 @@ Khusus di room *Mode Santai*, pemain dilarang menggunakan huruf **X**, **Q**, da
 
 ---
 
-## 📚 Kamus Lengkap & Terpercaya (147.870+ Kata)
+## 📚 Pilihan Sumber Kamus (KBBI & Contek Sambung Kata)
 
-Kamus bawaan aplikasi ini merupakan gabungan cerdas (*Hybrid Merge*):
-- **KBBI Daring Edisi VI:** Kosakata baku bahasa Indonesia.
-- **Basis Data Contek Sambung Kata:** Mencakup 108.344 kata yang sering lolos di server Roblox, termasuk kata populer dan gaul (seperti `aho`, `alo`, `wibu`, `noob`, `pro`, `roblox`).
-- **Pembersihan Kata Asing:** Kata bahasa Inggris murni yang ditolak oleh sistem Roblox telah dibersihkan (misal: bot selalu menyarankan `klimaks`, bukan `climax`).
+Aplikasi kini menyediakan kontrol fleksibel bagi pemain untuk memilih sumber kosakata yang ingin digunakan:
+- **[x] KBBI (112.822 kata):** Kosakata resmi Kamus Besar Bahasa Indonesia (KBBI Edisi VI). Cocok untuk permainan ketat yang hanya menerima kata baku.
+- **[x] Contek Sambung Kata (108.123 kata):** Kosakata dari basis data `contek-sambungkata.web.id` yang mencakup kosakata populer, kata gaul, imbuhan fleksibel, serta istilah game Roblox (`aho`, `alo`, `wibu`, `noob`, `pro`, `roblox`) dan kata serangan akhiran X/Z.
+- **Gabungan Keduanya (147.886 kata unik - Rekomendasi):** Centang kedua sumber untuk mendapatkan rekomendasi terlengkap dan peluang menang maksimal.
+- **Pembersihan Kata Asing:** Kata bahasa Inggris non-Indonesia murni yang ditolak oleh sistem Roblox telah disaring (misal: bot selalu menyarankan `klimaks`, bukan `climax`).
 - **Validasi Struktur:** Setiap kata wajib memiliki minimal satu vokal untuk menghindari singkatan aneh yang tidak diterima game.
 
 ---

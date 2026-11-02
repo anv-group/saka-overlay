@@ -34,6 +34,8 @@ sambung-kata/
 ├── config.json          # Menyimpan area ROI layar, interval scan, dan opsi auto-copy
 ├── blacklist.txt        # Daftar kata yang di-blacklist (kata valid KBBI namun ditolak oleh server Roblox)
 ├── kamus_lengkap.txt    # 147,870+ kata (Hasil Hybrid Merge: KBBI v6 + contek-sambungkata.web.id + istilah Roblox + jebakan X/Z)
+├── kamus_kbbi.txt       # 112,822 kata murni Kamus Besar Bahasa Indonesia (KBBI VI)
+├── kamus_contek.txt     # 108,123 kata dari basis data contek-sambungkata.web.id + jebakan Roblox
 ├── requirements.txt     # Dependensi Python
 ├── run.bat              # Batch script 1-klik untuk user Windows
 ├── test_accuracy.py     # Suite pengujian regresi otomatis (92 sampel benchmark)
@@ -160,6 +162,13 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
    - Kata divalidasi (alfabet murni, min 2 huruf, wajib punya vokal `AIUEO`).
    - Disimpan secara persisten ke `kamus_lengkap.txt` dan diindeks langsung ke memori solver ($O(1)$) tanpa perlu restart aplikasi.
    - Jika kata sebelumnya berada di `blacklist.txt`, status blacklist otomatis dibatalkan/dipulihkan.
+6. **Pemilihan Sumber Kamus (KBBI vs Contek Sambung Kata)**:
+   - Pemain dapat memilih sumber kamus yang digunakan melalui checkbox di GUI:
+     - **`KBBI` (`kamus_kbbi.txt`):** 112,822 kosakata baku bahasa Indonesia murni.
+     - **`Contek Sambung Kata` (`kamus_contek.txt`):** 108,123 kosakata dari basis data `contek-sambungkata.web.id` + jebakan kata Roblox.
+   - Mendukung pemilihan salah satu kamus atau penggabungan keduanya (147,886 kata unik).
+   - Pengaturan tersimpan otomatis di `config.json` (`use_kbbi`, `use_contek`) dan peralihan kata terjadi seketika di memori solver (< 15 ms).
+   - Validasi keamanan: Sistem secara otomatis mencegah kedua checkbox dinonaktifkan bersamaan (minimal satu sumber harus aktif).
 
 ---
 
