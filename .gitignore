@@ -46,3 +46,5 @@ deteksi-gameplay/unclassified/*
 # Local user configuration overrides (kebal git pull / update)
 config.local.json
 *.local.json
+
+TODO.md
