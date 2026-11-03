@@ -162,13 +162,13 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
      - Pengguna/developer dapat mengaktifkannya via `⚙️ Settings ➔ 🛠️ Mode Development` atau shortcut `Ctrl+Shift+D`.
      - Pengaturan `dev_mode` disimpan ke `config.local.json` (terdaftar di `.gitignore`).
      - **Kebal Pembaruan Git:** Karena `config.local.json` tidak dilacak oleh Git, saat pengguna melakukan `git pull` atau auto-update repository, mode development dan status tombol restart tetap aktif tanpa ter-reset ke default GitHub.
-   - **🎮 Tiga Mode Permainan (NORMAL, SANTAI, BRUTAL):**
-     - **1-Klik Cycle & Menu Klik-Kanan:** Tombol mode di toolbar atas dapat diklik kiri untuk beralih berurutan (`NORMAL` ➔ `SANTAI` ➔ `BRUTAL` ➔ `NORMAL`) atau diklik kanan untuk membuka dropdown menu pemilihan langsung beserta shortcut pengaturan.
-     - **⚔️ Mode Normal (`game_mode="normal"`):** Mode standar menyerang dengan jebakan X, konsonan sulit, dan tag kustom aktif pengguna.
+   - **🎮 Tiga Mode Permainan (DEFAULT, SANTAI, BRUTAL):**
+     - **1-Klik Cycle & Menu Klik-Kanan:** Tombol mode di toolbar atas dapat diklik kiri untuk beralih berurutan (`DEFAULT` ➔ `SANTAI` ➔ `BRUTAL` ➔ `DEFAULT`) atau diklik kanan untuk membuka dropdown menu pemilihan langsung beserta shortcut pengaturan.
+     - **⚔️ Mode Default (`game_mode="default"`):** Mode standar menyerang dengan jebakan X, konsonan sulit, dan tag kustom aktif pengguna.
      - **🌿 Mode Santai (`game_mode="santai"`):**
        - Dikhususkan untuk room Roblox Mode Santai yang melarang huruf `X`, `Q`, dan `F`.
        - Seluruh kata yang berakhiran `X, Q, F` atau mengandung huruf `X` / `Q` disaring ketat dan dibuang.
-       - Tag kustom yang mengandung `X, Q, F` otomatis dimatikan dan dipulihkan saat kembali ke Mode Normal.
+       - Tag kustom yang mengandung `X, Q, F` otomatis dimatikan dan dipulihkan saat kembali ke Mode Default.
      - **🔥 Mode Brutal (`game_mode="brutal"`):**
        - Dikhususkan untuk room kompetitif/brutal Roblox dengan akhiran mematikan seperti `AMSI` (akamsi, syamsi), `KSO` (bakso, dakso, ekso), `RHU` (borhu, erhu), `TL` (axolotl, ritl), `BD` (apbd, ibd), dll.
         - **Jendela Pengaturan Mode Brutal (`🔥 Pengaturan Mode Brutal`):**
@@ -178,7 +178,7 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
             - **Aktif (BRUTAL):** Latar belakang baris berubah menjadi merah marun pekat (`#381d28`) dengan bingkai highlight merah (`#f38ba8`), teks nama putih tebal (`#f5e0dc`), checkmark merah terang, dan pill status kanan berubah menyala menjadi `🔥 BRUTAL` (latar merah terang `#f38ba8`, font hitam pekat `#11111b`).
             - **Nonaktif:** Latar belakang abu-abu gelap standar (`#1e1e2e`) dengan bingkai halus (`#313244`), teks redup (`#6c7086`), dan pill status kanan berwarna abu-abu redup `⚪ NONAKTIF`.
           - **Perbaikan Scroll Mousewheel Mulus:** Mousewheel terikat secara menyeluruh (`_bind_scroll_recursive` dan routing terisolasi `self.brutal_canvas`) ke seluruh kontainer, canvas, frame inner, scrollbar, dan setiap widget baris, sehingga scrolling roda mouse selalu bekerja mulus tanpa dead spot.
-       - **Isolasi Profil Tag Cerdas:** Tag aktif di Mode Normal disimpan ke `saved_normal_tags`. Saat beralih ke Mode Brutal, tag disetel sesuai daftar `brutal_mode_tags`. Men-toggle tag pada quick-bar saat di Mode Brutal otomatis menyinkronkan daftar Brutal, dan saat kembali ke Mode Normal, daftar tag normal pengguna dipulihkan secara utuh tanpa tercampur.
+       - **Isolasi Profil Tag Cerdas:** Tag aktif di Mode Default disimpan ke `saved_default_tags` (dan `saved_normal_tags`). Saat beralih ke Mode Brutal, tag disetel sesuai daftar `brutal_mode_tags`. Men-toggle tag pada quick-bar saat di Mode Brutal otomatis menyinkronkan daftar Brutal, dan saat kembali ke Mode Default, daftar tag default pengguna dipulihkan secara utuh tanpa tercampur.
 2. **Validasi Vokal**:
    - Setiap kata wajib memiliki minimal 1 huruf vokal (`A, I, U, E, O`) untuk menyaring singkatan atau akronim aneh yang tidak diterima oleh kamus game Roblox.
 3. **Kamus Lengkap (`kamus_lengkap.txt`)**:

@@ -6,7 +6,7 @@
         "height": 81
     },
     "scan_interval_sec": 0.04,
-    "game_mode": "normal",
+    "game_mode": "default",
     "mode_santai": false,
     "brutal_mode_tags": [
         "AMSI",

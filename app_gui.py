@@ -34,6 +34,8 @@ class SambungKataApp:
         self.root.title("Sambung Kata Overlay")
 
         self.config = load_config()
+        if self.config.get("game_mode") == "normal":
+            self.config["game_mode"] = "default"
 
         # Posisi & ukuran window default: di sebelah kanan layar, minimal sesuai ui-size-min.png (438x1075)
         screen_w = self.root.winfo_screenwidth()
@@ -484,7 +486,9 @@ class SambungKataApp:
         self.btn_add_word.bind("<Button-3>", lambda e: self.open_dictionary_browser_window())
 
         # Mode Permainan: NORMAL vs SANTAI vs BRUTAL (Model compact, 1-klik cycle, klik-kanan menu)
-        cur_mode_val = self.config.get("game_mode", "santai" if self.config.get("mode_santai", False) else "normal")
+        cur_mode_val = self.config.get("game_mode", "santai" if self.config.get("mode_santai", False) else "default")
+        if cur_mode_val == "normal":
+            cur_mode_val = "default"
         self.game_mode_var = tk.StringVar(value=cur_mode_val)
         self.mode_santai_var = tk.BooleanVar(value=(cur_mode_val == "santai"))
         self.btn_game_mode = tk.Button(
@@ -672,7 +676,9 @@ class SambungKataApp:
 
         # 5. Daftar Rekomendasi Jawaban (Memenuhi sisa seluruh window)
         is_santai_init = self.config.get("mode_santai", False)
-        cur_mode_init = self.config.get("game_mode", "santai" if is_santai_init else "normal")
+        cur_mode_init = self.config.get("game_mode", "santai" if is_santai_init else "default")
+        if cur_mode_init == "normal":
+            cur_mode_init = "default"
         if cur_mode_init == "brutal":
             recom_title = " Rekomendasi Kata (🔥 BRUTAL) "
             recom_fg = "#f38ba8"
@@ -680,7 +686,7 @@ class SambungKataApp:
             recom_title = " Rekomendasi Kata (tanpa X, Q, F) "
             recom_fg = "#a6e3a1"
         else:
-            recom_title = " Rekomendasi Kata (NORMAL) "
+            recom_title = " Rekomendasi Kata (DEFAULT) "
             recom_fg = "#f38ba8"
         # Resize grip di sudut kanan bawah & tepi bawah window
         self.grip_bar = tk.Frame(self.root, bg="#11111b", height=16, cursor="size_ns")
@@ -833,12 +839,14 @@ class SambungKataApp:
         menu.add_command(label="🏷️ Kelola Kategori Custom", command=self.open_custom_categories_window)
         menu.add_command(label="🔥 Pengaturan Mode Brutal", command=self.open_brutal_settings_window)
 
-        # Submenu Mode Permainan (Normal, Santai, Brutal)
-        cur_gm = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
+        # Submenu Mode Permainan (Default, Santai, Brutal)
+        cur_gm = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "default")
+        if cur_gm == "normal":
+            cur_gm = "default"
         game_mode_menu = tk.Menu(menu, tearoff=0, bg="#181825", fg="#cdd6f4", activebackground="#313244", activeforeground="#f5e0dc", selectcolor="#a6e3a1")
         game_mode_menu.add_command(
-            label=f"{'✓ ' if cur_gm == 'normal' else '   '}⚔️ Mode Normal",
-            command=lambda: self.set_game_mode("normal")
+            label=f"{'✓ ' if cur_gm in ('default', 'normal') else '   '}⚔️ Mode Default",
+            command=lambda: self.set_game_mode("default")
         )
         game_mode_menu.add_command(
             label=f"{'✓ ' if cur_gm == 'santai' else '   '}🌿 Mode Santai (Tanpa X, Q, F)",
@@ -982,7 +990,7 @@ class SambungKataApp:
         btn = getattr(self, "btn_game_mode", getattr(self, "btn_mode_santai", None))
         if not btn or not btn.winfo_exists():
             return
-        cur_mode = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
+        cur_mode = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "default")
         if cur_mode == "santai":
             btn.config(
                 text="SANTAI",
@@ -1011,13 +1019,15 @@ class SambungKataApp:
     def _show_game_mode_menu(self, event=None):
         """Menampilkan menu pilihan mode permainan saat tombol mode diklik kanan"""
         menu = tk.Menu(self.root, tearoff=0, bg="#181825", fg="#cdd6f4", activebackground="#313244", activeforeground="#f5e0dc", selectcolor="#a6e3a1")
-        cur_gm = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
+        cur_gm = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "default")
+        if cur_gm == "normal":
+            cur_gm = "default"
         
-        prefix_n = "✓ " if cur_gm == "normal" else "   "
+        prefix_d = "✓ " if cur_gm in ("default", "normal") else "   "
         prefix_s = "✓ " if cur_gm == "santai" else "   "
         prefix_b = "✓ " if cur_gm == "brutal" else "   "
         
-        menu.add_command(label=f"{prefix_n}⚔️ Mode Normal", command=lambda: self.set_game_mode("normal"))
+        menu.add_command(label=f"{prefix_d}⚔️ Mode Default", command=lambda: self.set_game_mode("default"))
         menu.add_command(label=f"{prefix_s}🌿 Mode Santai (Tanpa X, Q, F)", command=lambda: self.set_game_mode("santai"))
         menu.add_command(label=f"{prefix_b}🔥 Mode Brutal", command=lambda: self.set_game_mode("brutal"))
         menu.add_separator()
@@ -1061,14 +1071,14 @@ class SambungKataApp:
         self._set_tier0_sort_mode(new_mode)
 
     def cycle_game_mode(self):
-        """Beralih mode permainan berurutan: NORMAL -> SANTAI -> BRUTAL -> NORMAL"""
-        cur = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
-        if cur == "normal":
+        """Beralih mode permainan berurutan: DEFAULT -> SANTAI -> BRUTAL -> DEFAULT"""
+        cur = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "default")
+        if cur in ("default", "normal"):
             self.set_game_mode("santai")
         elif cur == "santai":
             self.set_game_mode("brutal")
         else:
-            self.set_game_mode("normal")
+            self.set_game_mode("default")
 
     def toggle_mode_santai(self):
         """Kompatibilitas lama toggle mode"""
@@ -1080,20 +1090,27 @@ class SambungKataApp:
 
     def set_game_mode(self, new_mode, show_toast=True):
         """
-        Mengatur mode permainan (normal, santai, atau brutal) dan menyelaraskan status tag kustom.
-        - Normal: Mengembalikan tag profil normal yang disimpan.
+        Mengatur mode permainan (default, santai, atau brutal) dan menyelaraskan status tag kustom.
+        - Default: Mengembalikan tag profil default yang disimpan.
         - Santai: Menonaktifkan tag berhuruf X, Q, F dan memfilter kata dengan X/Q/F.
         - Brutal: Mengaktifkan tag kustom yang dikonfigurasi untuk Mode Brutal (AMSI, KSO, RHU, TL, BD, dll).
         """
-        cur_mode = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
-        if new_mode == cur_mode:
+        if new_mode == "normal":
+            new_mode = "default"
+        cur_mode = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "default")
+        if cur_mode == "normal":
+            cur_mode = "default"
+            self.config["game_mode"] = "default"
+        if new_mode == cur_mode and self.config.get("game_mode") == new_mode:
             return
 
         categories = self.config.get("custom_trap_endings", [])
 
         # 1. Simpan state tag dari mode yang ditinggalkan
-        if cur_mode == "normal":
-            self.config["saved_normal_tags"] = [c.get("suffix", "").upper() for c in categories if c.get("enabled", True)]
+        if cur_mode in ("default", "normal"):
+            saved_tags = [c.get("suffix", "").upper() for c in categories if c.get("enabled", True)]
+            self.config["saved_default_tags"] = saved_tags
+            self.config["saved_normal_tags"] = saved_tags
         elif cur_mode == "brutal":
             self.config["brutal_mode_tags"] = [c.get("suffix", "").upper() for c in categories if c.get("enabled", True)]
 
@@ -1118,12 +1135,12 @@ class SambungKataApp:
                 self.show_toast(f"🔥 Mode Brutal aktif ({active_cnt} tag brutal dinyalakan)")
 
         elif new_mode == "santai":
-            # Jika sebelumnya dari brutal, pulihkan dulu tag normal sebelum menerapkan santai
+            # Jika sebelumnya dari brutal, pulihkan dulu tag default sebelum menerapkan santai
             if cur_mode == "brutal":
-                saved_normal = set(self.config.get("saved_normal_tags", []))
-                if saved_normal:
+                saved_default = set(self.config.get("saved_default_tags", self.config.get("saved_normal_tags", [])))
+                if saved_default:
                     for cat in categories:
-                        cat["enabled"] = (cat.get("suffix", "").upper() in saved_normal)
+                        cat["enabled"] = (cat.get("suffix", "").upper() in saved_default)
 
             # Matikan tag yang mengandung X, Q, F
             auto_disabled = set()
@@ -1150,7 +1167,7 @@ class SambungKataApp:
                 else:
                     self.show_toast("🌿 Mode Santai aktif (tanpa X, Q, F)")
 
-        else:  # "normal"
+        else:  # "default"
             if cur_mode == "santai":
                 auto_disabled = set(self.config.get("santai_auto_disabled_tags", []))
                 for cat in categories:
@@ -1158,21 +1175,21 @@ class SambungKataApp:
                         cat["enabled"] = True
                 self.config["santai_auto_disabled_tags"] = []
             elif cur_mode == "brutal":
-                saved_normal = set(self.config.get("saved_normal_tags", []))
-                if saved_normal:
+                saved_default = set(self.config.get("saved_default_tags", self.config.get("saved_normal_tags", [])))
+                if saved_default:
                     for cat in categories:
-                        cat["enabled"] = (cat.get("suffix", "").upper() in saved_normal)
+                        cat["enabled"] = (cat.get("suffix", "").upper() in saved_default)
 
-            self.config["game_mode"] = "normal"
+            self.config["game_mode"] = "default"
             self.config["mode_santai"] = False
             self.mode_santai_var.set(False)
             if hasattr(self, "game_mode_var"):
-                self.game_mode_var.set("normal")
+                self.game_mode_var.set("default")
 
             if hasattr(self, "recom_frame") and self.recom_frame.winfo_exists():
-                self.recom_frame.config(text=" Rekomendasi Kata (NORMAL) ", fg="#f38ba8")
+                self.recom_frame.config(text=" Rekomendasi Kata (DEFAULT) ", fg="#f38ba8")
             if show_toast:
-                self.show_toast("⚔️ Mode Normal aktif (Jebakan X/Z/Q/F aktif)")
+                self.show_toast("⚔️ Mode Default aktif (Jebakan X/Z/Q/F aktif)")
 
         self.config["custom_trap_endings"] = categories
         save_config(self.config)
@@ -2410,7 +2427,7 @@ class SambungKataApp:
         if not prefix_clean:
             return
 
-        cur_mode = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
+        cur_mode = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "default")
         is_santai = (cur_mode == "santai")
         is_brutal = (cur_mode == "brutal")
         # Muat 50 kata rekomendasi terbaik (Prioritas Tier 0 -> Tier 1 (X) -> Tier 2 (Sulit) -> Tier 3)
@@ -3518,7 +3535,9 @@ class SambungKataApp:
         status_frame = tk.Frame(self.brutal_win, bg="#1e1e2e", padx=14, pady=6)
         status_frame.pack(fill=tk.X, pady=(0, 4))
 
-        cur_gm = self.config.get("game_mode", "normal")
+        cur_gm = self.config.get("game_mode", "default")
+        if cur_gm == "normal":
+            cur_gm = "default"
         lbl_status_txt = "🔥 Mode Brutal Saat Ini: AKTIF" if cur_gm == "brutal" else f"⚪ Mode Saat Ini: {cur_gm.upper()}"
         lbl_status_col = "#f38ba8" if cur_gm == "brutal" else "#89dceb"
 
@@ -3792,8 +3811,8 @@ class SambungKataApp:
         def _on_toggle_current_mode():
             c_mode = self.config.get("game_mode", "normal")
             if c_mode == "brutal":
-                self.set_game_mode("normal")
-                lbl_mode_cur.config(text="⚪ Mode Saat Ini: NORMAL", fg="#89dceb")
+                self.set_game_mode("default")
+                lbl_mode_cur.config(text="⚪ Mode Saat Ini: DEFAULT", fg="#89dceb")
                 btn_toggle_mode.config(text="🔥 Aktifkan Mode Brutal Sekarang", bg="#f38ba8", fg="#11111b")
             else:
                 self.set_game_mode("brutal")
@@ -4516,7 +4535,7 @@ class SambungKataApp:
 
             categories[idx]["enabled"] = bool(new_val)
 
-            cur_mode = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
+            cur_mode = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "default")
             if cur_mode == "brutal":
                 brutal_tags = set(self.config.get("brutal_mode_tags", []))
                 if new_val:
