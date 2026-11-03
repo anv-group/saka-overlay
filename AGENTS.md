@@ -163,13 +163,23 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
    - Jendela **`🚫 Blocklist`** di GUI memungkinkan pemain melihat semua kata terblokir, mencari kata tertentu, menghapus kata dari blocklist, menambah kata secara manual, serta membuka file `blacklist.txt` di Notepad.
    - Saat dibuka, fokus kursor otomatis berada di kolom input kata. Menekan `Enter` seketika memblokir kata tersebut dan menutup popup (*Enter-to-close*).
    - Menjaga integritas file utama `kamus_lengkap.txt` tanpa menghapus data aslinya.
-5. **Penambahan Kata Manual (`add_word`)**:
+5. **Sistem Whitelist Kata (`whitelist.txt`)**:
+   - Menyimpan daftar kata yang **terbukti 100% valid dan dapat diterima** oleh server game Roblox.
+   - Disimpan dalam file teks datar `whitelist.txt` (satu kata per baris, case-insensitive).
+   - **Prinsip Isolasi Kamus:** Kata yang di-whitelist **TIDAK DITULIS** ke file kamus (`kamus_lengkap.txt`, `kamus_contek.txt`, `kamus_kbbi.txt`), melainkan hanya hidup di `whitelist.txt`.
+   - **Prioritas Teratas di Kategorinya:** Di dalam fungsi pencarian solver (`cari_jawaban`), kata yang terdaftar di whitelist otomatis diposisikan di urutan **paling atas** di dalam tier/kategorinya masing-masing (`is_whitelisted = 0` mendahului kata non-whitelist `1`):
+     - Di kategori `💥 JEBAKAN X`: kata whitelist berakhiran X berada di posisi #1 sebelum kata non-whitelist berakhiran X.
+     - Di kategori `🏷️ Kategori Kustom (Tier 0)`: kata whitelist kustom berada di puncak.
+     - Di kategori `⚡ JEBAKAN SULIT` & `🛡️ NORMAL`: selalu menempati urutan teratas.
+   - **Sinkronisasi Otomatis:** Menambahkan kata ke whitelist seketika membuang kata tersebut dari `blacklist.txt` jika sebelumnya terblokir.
+   - Tersedia tombol bintang (`☆`/`⭐`) langsung di setiap kartu rekomendasi GUI dan jendela manajemen whitelist tersendiri via `⚙️ Settings ➔ ⭐ Buka Whitelist Kata`.
+6. **Penambahan Kata Manual (`add_word`)**:
    - Pemain dapat menambahkan kata baru via tombol `➕ Kamus` di GUI.
    - Saat dibuka, fokus kursor otomatis berada di kolom input kata. Menekan `Enter` seketika memvalidasi, menyimpan ke kamus, dan menutup popup (*Enter-to-close*).
    - Kata divalidasi (alfabet murni, min 2 huruf, wajib punya vokal `AIUEO`).
    - Disimpan secara persisten ke `kamus_lengkap.txt` dan diindeks langsung ke memori solver ($O(1)$) tanpa perlu restart aplikasi.
    - Jika kata sebelumnya berada di `blacklist.txt`, status blacklist otomatis dibatalkan/dipulihkan.
-6. **Pemilihan Sumber Kamus (KBBI vs Contek Sambung Kata)**:
+7. **Pemilihan Sumber Kamus (KBBI vs Contek Sambung Kata)**:
    - Pemain dapat memilih sumber kamus yang digunakan melalui checkbox di GUI:
      - **`KBBI` (`kamus_kbbi.txt`):** 112,822 kosakata baku bahasa Indonesia murni.
      - **`Contek Sambung Kata` (`kamus_contek.txt`):** 108,123 kosakata dari basis data `contek-sambungkata.web.id` + jebakan kata Roblox.

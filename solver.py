@@ -8,6 +8,7 @@ class SambungKataSolver:
         self,
         dictionary_path="kamus_lengkap.txt",
         blacklist_path="blacklist.txt",
+        whitelist_path="whitelist.txt",
         kbbi_path="kamus_kbbi.txt",
         contek_path="kamus_contek.txt",
         use_kbbi=True,
@@ -16,6 +17,7 @@ class SambungKataSolver:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         self.dictionary_path = os.path.join(base_dir, dictionary_path) if not os.path.isabs(dictionary_path) else dictionary_path
         self.blacklist_path = os.path.join(base_dir, blacklist_path) if not os.path.isabs(blacklist_path) else blacklist_path
+        self.whitelist_path = os.path.join(base_dir, whitelist_path) if not os.path.isabs(whitelist_path) else whitelist_path
         self.kbbi_path = os.path.join(base_dir, kbbi_path) if not os.path.isabs(kbbi_path) else kbbi_path
         self.contek_path = os.path.join(base_dir, contek_path) if not os.path.isabs(contek_path) else contek_path
         
@@ -28,10 +30,12 @@ class SambungKataSolver:
         self.word_set = set()
         self.words = []
         self.blacklisted_words = set()
+        self.whitelisted_words = set()
         self.words_by_initial = {}
         self.custom_endings = []
 
         self.load_blacklist()
+        self.load_whitelist()
         self.load_dictionary()
 
     def load_blacklist(self):
@@ -81,6 +85,91 @@ class SambungKataSolver:
     def get_blacklisted_words(self):
         """Mengembalikan daftar kata yang di-blacklist terurut abjad"""
         return sorted(list(self.blacklisted_words))
+
+    def load_whitelist(self):
+        """Memuat daftar kata terverifikasi dari whitelist.txt"""
+        self.whitelisted_words = set()
+        if os.path.exists(self.whitelist_path):
+            try:
+                with open(self.whitelist_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        w = line.strip().lower()
+                        if w and not w.startswith("#") and w.isalpha() and len(w) >= 2:
+                            self.whitelisted_words.add(w)
+                print(f"[*] Whitelist dimuat: {len(self.whitelisted_words)} kata terverifikasi.")
+            except Exception as e:
+                print(f"[!] Error membaca whitelist: {e}")
+
+    def whitelist_word(self, word):
+        """
+        Memasukkan kata ke whitelist dan menyimpannya ke whitelist.txt:
+        - Jika kata ada di blacklist, otomatis dihapus dari blacklist.
+        - Kata langsung aktif di memori pencarian solver O(1) tanpa perlu menambah file kamus.
+        - Menjadi prioritas teratas di kategorinya saat dicari.
+        """
+        w = word.strip().lower()
+        if not w or not w.isalpha() or len(w) < 2:
+            return False
+
+        # Jika ada di blacklist, pulihkan
+        if w in self.blacklisted_words:
+            self.unblacklist_word(w)
+
+        if w in self.whitelisted_words:
+            return True
+
+        self.whitelisted_words.add(w)
+        try:
+            folder = os.path.dirname(self.whitelist_path)
+            if folder and not os.path.exists(folder):
+                os.makedirs(folder, exist_ok=True)
+            with open(self.whitelist_path, "a", encoding="utf-8") as f:
+                f.write(f"{w}\n")
+        except Exception as e:
+            print(f"[!] Gagal menulis ke whitelist.txt: {e}")
+            return False
+
+        # Pastikan kata juga langsung hidup di memori aktif solver
+        if w not in self.word_set:
+            self.word_set.add(w)
+            self.words.append(w)
+            self.words.sort()
+            init1 = w[0]
+            if init1 not in self.words_by_initial:
+                self.words_by_initial[init1] = []
+            self.words_by_initial[init1].append(w)
+            self.words_by_initial[init1].sort()
+
+        return True
+
+    def unwhitelist_word(self, word):
+        """Menghapus kata dari whitelist"""
+        w = word.strip().lower()
+        if w in self.whitelisted_words:
+            self.whitelisted_words.remove(w)
+        try:
+            folder = os.path.dirname(self.whitelist_path)
+            if folder and not os.path.exists(folder):
+                os.makedirs(folder, exist_ok=True)
+            with open(self.whitelist_path, "w", encoding="utf-8") as f:
+                f.write("# Daftar kata yang di-whitelist (Terbukti valid di game Roblox & Prioritas Utama di kategorinya)\n")
+                for ww in sorted(self.whitelisted_words):
+                    f.write(f"{ww}\n")
+            # Jika kata tidak ada di kamus asal (bukan bagian kbbi/contek/custom), rebuild memori aktif
+            if w not in self.kbbi_set and w not in self.contek_set and w not in self.custom_set:
+                self._rebuild_active_words()
+            return True
+        except Exception as e:
+            print(f"[!] Gagal memperbarui whitelist.txt: {e}")
+            return False
+
+    def is_whitelisted(self, word):
+        """Mengecek apakah kata ada di whitelist"""
+        return word.strip().lower() in self.whitelisted_words
+
+    def get_whitelisted_words(self):
+        """Mengembalikan daftar kata whitelist terurut abjad"""
+        return sorted(list(self.whitelisted_words))
 
     def _read_word_file(self, fpath):
         """Membaca file kata dan menyaring kata yang valid (alpha, min 2 huruf, punya vokal)"""
@@ -132,8 +221,9 @@ class SambungKataSolver:
         if self.use_contek:
             active.update(self.contek_set)
         
-        # Kata custom selalu aktif
+        # Kata custom dan kata whitelist selalu aktif
         active.update(self.custom_set)
+        active.update(self.whitelisted_words)
 
         # Keamanan: Jika kedua sumber dimatikan oleh user, aktifkan setidaknya satu
         if not active:
@@ -365,8 +455,9 @@ class SambungKataSolver:
                 else:
                     kata_biasa.append(w)
 
-        # Urutkan berdasarkan panjang yang nyaman diketik (panjang 4-7 huruf paling prioritas)
+        # Urutkan berdasarkan whitelist (prioritas utama di tiap kategori) dan panjang yang nyaman diketik
         def sort_key(w):
+            is_wl = 0 if w in self.whitelisted_words else 1
             l = len(w)
             if 4 <= l <= 7:
                 prio = 0
@@ -376,7 +467,7 @@ class SambungKataSolver:
                 prio = 2
             else:
                 prio = 3
-            return (prio, l)
+            return (is_wl, prio, l)
 
         jebakan_custom.sort(key=lambda item: sort_key(item[0]))
         jebakan_x.sort(key=sort_key)
@@ -393,20 +484,36 @@ class SambungKataSolver:
                 "suffix": sfx,
                 "badge_name": rule.get("name") or f"AKHIRAN {sfx}",
                 "color": rule.get("color", "#cba6f7"),
-                "deskripsi": f"Akhiran {sfx} (Super Jebakan)"
+                "deskripsi": f"Akhiran {sfx} (Super Jebakan)",
+                "is_whitelisted": (w in self.whitelisted_words)
             })
 
         # TIER 1: Jebakan X
         for w in jebakan_x:
-            hasil.append({"kata": w, "tipe": "JEBAKAN_X", "deskripsi": "Akhiran X (Mematikan)"})
+            hasil.append({
+                "kata": w,
+                "tipe": "JEBAKAN_X",
+                "deskripsi": "Akhiran X (Mematikan)",
+                "is_whitelisted": (w in self.whitelisted_words)
+            })
 
         # TIER 2: Jebakan Sulit
         for w in jebakan_sulit:
-            hasil.append({"kata": w, "tipe": "JEBAKAN_SULIT", "deskripsi": f"Akhiran {w[-1].upper()}"})
+            hasil.append({
+                "kata": w,
+                "tipe": "JEBAKAN_SULIT",
+                "deskripsi": f"Akhiran {w[-1].upper()}",
+                "is_whitelisted": (w in self.whitelisted_words)
+            })
 
         # TIER 3: Kata Biasa
         for w in kata_biasa:
             desc = "Kata Santai" if mode_santai else "Kata Normal"
-            hasil.append({"kata": w, "tipe": "BIASA", "deskripsi": desc})
+            hasil.append({
+                "kata": w,
+                "tipe": "BIASA",
+                "deskripsi": desc,
+                "is_whitelisted": (w in self.whitelisted_words)
+            })
 
         return hasil[:limit]

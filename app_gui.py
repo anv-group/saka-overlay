@@ -548,6 +548,7 @@ class SambungKataApp:
         menu.add_separator()
 
         # Kelompok 2: Fitur Kamus, Koreksi & Kategori
+        menu.add_command(label="⭐ Buka Whitelist Kata", command=self.open_whitelist_window)
         menu.add_command(label="🚫 Buka Blocklist Kata", command=self.open_blacklist_window)
         menu.add_command(label="📝 Pendataan Koreksi Sampel", command=self.open_koreksi_window)
         menu.add_command(label="🏷️ Kelola Kategori Custom", command=self.open_custom_categories_window)
@@ -2047,6 +2048,22 @@ class SambungKataApp:
         )
         btn_del.pack(side=tk.RIGHT, padx=(2, 0))
 
+        btn_star = tk.Button(
+            card,
+            text="☆",
+            font=("Segoe UI", 8),
+            bg="#1e1e2e",
+            fg="#6c7086",
+            activebackground="#45475a",
+            activeforeground="#f9e2af",
+            relief=tk.FLAT,
+            bd=0,
+            padx=2,
+            pady=0,
+            cursor="hand2"
+        )
+        btn_star.pack(side=tk.RIGHT, padx=(2, 1))
+
         lbl_badge = tk.Label(
             card,
             text="",
@@ -2065,11 +2082,14 @@ class SambungKataApp:
         lbl_kata.bind("<Leave>", self._unbind_mousewheel)
         lbl_badge.bind("<Enter>", self._bind_mousewheel)
         lbl_badge.bind("<Leave>", self._unbind_mousewheel)
+        btn_star.bind("<Enter>", self._bind_mousewheel)
+        btn_star.bind("<Leave>", self._unbind_mousewheel)
 
         slot = {
             "frame": card,
             "lbl_kata": lbl_kata,
             "btn_del": btn_del,
+            "btn_star": btn_star,
             "lbl_badge": lbl_badge
         }
         self.word_card_pool.append(slot)
@@ -2112,7 +2132,27 @@ class SambungKataApp:
         card = slot["frame"]
         lbl_kata = slot["lbl_kata"]
         btn_del = slot["btn_del"]
+        btn_star = slot.get("btn_star")
         lbl_badge = slot["lbl_badge"]
+
+        is_wl = item.get("is_whitelisted", False) or self.solver.is_whitelisted(kata)
+        if is_wl:
+            badge_text = "⭐ " + badge_text
+            if btn_star:
+                btn_star.config(
+                    text="⭐",
+                    fg="#f9e2af",
+                    bg=card_bg,
+                    command=lambda k=kata: self.on_toggle_whitelist(k, False)
+                )
+        else:
+            if btn_star:
+                btn_star.config(
+                    text="☆",
+                    fg="#6c7086",
+                    bg=card_bg,
+                    command=lambda k=kata: self.on_toggle_whitelist(k, True)
+                )
 
         card.config(bg=card_bg)
         lbl_kata.config(text=kata_upper, bg=card_bg)
@@ -2125,6 +2165,25 @@ class SambungKataApp:
         lbl_badge.bind("<Button-1>", handler)
 
         card.pack(fill=tk.X, padx=3, pady=2)
+
+    def on_toggle_whitelist(self, kata, enable=True):
+        """Memasukkan atau menghapus kata dari whitelist (Terbukti valid & Prioritas Utama)"""
+        if enable:
+            self.solver.whitelist_word(kata)
+            if hasattr(self, "last_detected_word") and self.last_detected_word:
+                self.update_results(self.last_detected_word)
+            self._wl_refresh_list()
+            self._bl_refresh_list()
+            self.show_toast(
+                f"⭐ '{kata.upper()}' masuk whitelist (Prioritas Utama)",
+                undo_callback=lambda: self.on_toggle_whitelist(kata, False)
+            )
+        else:
+            self.solver.unwhitelist_word(kata)
+            if hasattr(self, "last_detected_word") and self.last_detected_word:
+                self.update_results(self.last_detected_word)
+            self._wl_refresh_list()
+            self.show_toast(f"Dihapus dari whitelist: '{kata.upper()}'")
 
     def on_blacklist_word(self, kata):
         """Memasukkan kata ke blacklist dan merefresh rekomendasi"""
@@ -2426,6 +2485,287 @@ class SambungKataApp:
         if hasattr(self, "last_detected_word") and self.last_detected_word:
             self.update_results(self.last_detected_word)
         self.show_toast("🔄 Blocklist dimuat ulang dari disk")
+
+    def open_whitelist_window(self):
+        """Membuka dialog popup untuk memeriksa dan mengelola daftar kata di whitelist (Terverifikasi & Prioritas)"""
+        if hasattr(self, "whitelist_win") and self.whitelist_win and self.whitelist_win.winfo_exists():
+            self.whitelist_win.lift()
+            self.whitelist_win.focus_force()
+            if hasattr(self, "entry_wl_add") and self.entry_wl_add.winfo_exists():
+                self.entry_wl_add.focus_set()
+                self.entry_wl_add.select_range(0, tk.END)
+            return
+
+        self.whitelist_win = tk.Toplevel(self.root)
+        self.whitelist_win.title("⭐ Kelola Whitelist Kata (Terverifikasi)")
+        self.whitelist_win.geometry("400x520")
+        self.whitelist_win.minsize(360, 440)
+        self.whitelist_win.attributes("-topmost", True)
+        self.whitelist_win.configure(bg="#1e1e2e")
+        self.whitelist_win.bind("<Escape>", lambda e: self.whitelist_win.destroy())
+
+        try:
+            x = self.root.winfo_x() + 25
+            y = self.root.winfo_y() + 25
+            self.whitelist_win.geometry(f"400x520+{x}+{y}")
+        except Exception:
+            pass
+
+        # Header Frame
+        hdr = tk.Frame(self.whitelist_win, bg="#181825", padx=12, pady=10)
+        hdr.pack(fill=tk.X)
+
+        title_lbl = tk.Label(
+            hdr,
+            text="⭐ Daftar Whitelist Kata",
+            font=("Segoe UI", 12, "bold"),
+            fg="#f9e2af",
+            bg="#181825"
+        )
+        title_lbl.pack(side=tk.LEFT)
+
+        self.lbl_wl_count = tk.Label(
+            hdr,
+            text="0 kata",
+            font=("Segoe UI", 10, "bold"),
+            fg="#a6adc8",
+            bg="#181825"
+        )
+        self.lbl_wl_count.pack(side=tk.RIGHT)
+
+        sub_lbl = tk.Label(
+            self.whitelist_win,
+            text="Kata di bawah terbukti valid di Roblox dan menjadi prioritas utama di kategorinya.",
+            font=("Segoe UI", 8),
+            fg="#6c7086",
+            bg="#1e1e2e",
+            padx=12,
+            pady=4
+        )
+        sub_lbl.pack(anchor=tk.W)
+
+        # Bar Tambah Kata Baru
+        add_frame = tk.Frame(self.whitelist_win, bg="#1e1e2e", padx=12, pady=4)
+        add_frame.pack(fill=tk.X)
+
+        lbl_tambah = tk.Label(
+            add_frame,
+            text="Tambah Kata:",
+            font=("Segoe UI", 9, "bold"),
+            fg="#cdd6f4",
+            bg="#1e1e2e"
+        )
+        lbl_tambah.pack(side=tk.LEFT, padx=(0, 4))
+
+        self.entry_wl_add = tk.Entry(
+            add_frame,
+            font=("Segoe UI", 9),
+            bg="#313244",
+            fg="#cdd6f4",
+            insertbackground="#cdd6f4",
+            relief=tk.FLAT
+        )
+        self.entry_wl_add.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+
+        btn_add = tk.Button(
+            add_frame,
+            text="➕ Whitelist",
+            font=("Segoe UI", 9, "bold"),
+            bg="#f9e2af",
+            fg="#11111b",
+            activebackground="#f5e0dc",
+            relief=tk.FLAT,
+            padx=8,
+            pady=2,
+            command=self._wl_add_word
+        )
+        btn_add.pack(side=tk.RIGHT)
+        self.entry_wl_add.bind("<Return>", lambda e: self._wl_add_word())
+
+        # Search / Filter Bar
+        search_frame = tk.Frame(self.whitelist_win, bg="#1e1e2e", padx=12, pady=4)
+        search_frame.pack(fill=tk.X)
+
+        lbl_filter = tk.Label(
+            search_frame,
+            text="🔍 Filter:",
+            font=("Segoe UI", 9),
+            fg="#a6adc8",
+            bg="#1e1e2e"
+        )
+        lbl_filter.pack(side=tk.LEFT, padx=(0, 4))
+
+        self.entry_wl_filter = tk.Entry(
+            search_frame,
+            font=("Segoe UI", 9),
+            bg="#313244",
+            fg="#cdd6f4",
+            insertbackground="#cdd6f4",
+            relief=tk.FLAT
+        )
+        self.entry_wl_filter.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+        self.entry_wl_filter.bind("<KeyRelease>", lambda e: self._wl_refresh_list())
+
+        # Listbox Frame dengan Scrollbar
+        list_frame = tk.Frame(self.whitelist_win, bg="#1e1e2e", padx=12, pady=4)
+        list_frame.pack(fill=tk.BOTH, expand=True)
+
+        wl_scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
+        self.wl_listbox = tk.Listbox(
+            list_frame,
+            font=("Segoe UI", 10),
+            bg="#181825",
+            fg="#cdd6f4",
+            selectbackground="#f9e2af",
+            selectforeground="#11111b",
+            activestyle="none",
+            relief=tk.FLAT,
+            highlightthickness=0,
+            yscrollcommand=wl_scroll.set,
+            selectmode=tk.EXTENDED
+        )
+        wl_scroll.config(command=self.wl_listbox.yview)
+
+        self.wl_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        wl_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.wl_listbox.bind("<Double-Button-1>", lambda e: self._wl_remove_selected())
+
+        # Bottom Action Bar
+        act_frame = tk.Frame(self.whitelist_win, bg="#181825", padx=12, pady=8)
+        act_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        btn_remove = tk.Button(
+            act_frame,
+            text="🗑️ Hapus dari Whitelist",
+            font=("Segoe UI", 9, "bold"),
+            bg="#f38ba8",
+            fg="#11111b",
+            activebackground="#eba0ac",
+            relief=tk.FLAT,
+            padx=10,
+            pady=3,
+            command=self._wl_remove_selected
+        )
+        btn_remove.pack(side=tk.LEFT, padx=2)
+
+        btn_open_file = tk.Button(
+            act_frame,
+            text="📂 Buka File (.txt)",
+            font=("Segoe UI", 9),
+            bg="#89b4fa",
+            fg="#11111b",
+            activebackground="#b4befe",
+            relief=tk.FLAT,
+            padx=8,
+            pady=3,
+            command=self._wl_open_txt
+        )
+        btn_open_file.pack(side=tk.LEFT, padx=4)
+
+        btn_reload = tk.Button(
+            act_frame,
+            text="🔄 Muat Ulang",
+            font=("Segoe UI", 9),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=8,
+            pady=3,
+            command=self._wl_reload
+        )
+        btn_reload.pack(side=tk.RIGHT, padx=2)
+
+        self._wl_refresh_list()
+
+        # Pre-fill jika di manual entry ada kata yang diketik
+        if hasattr(self, "entry_manual"):
+            manual_text = self.entry_manual.get().strip().upper()
+            if manual_text:
+                self.entry_wl_add.insert(0, manual_text)
+
+        # Langsung fokus ke input teks tambah kata
+        self.entry_wl_add.focus_set()
+        self.entry_wl_add.select_range(0, tk.END)
+
+    def _wl_refresh_list(self):
+        """Memperbarui isi Listbox di jendela Whitelist"""
+        if not hasattr(self, "wl_listbox") or not self.wl_listbox.winfo_exists():
+            return
+
+        filter_query = self.entry_wl_filter.get().strip().lower() if hasattr(self, "entry_wl_filter") else ""
+        all_words = self.solver.get_whitelisted_words()
+
+        self.wl_listbox.delete(0, tk.END)
+        count = 0
+        for w in all_words:
+            if not filter_query or filter_query in w:
+                self.wl_listbox.insert(tk.END, w.upper())
+                count += 1
+
+        total = len(all_words)
+        if hasattr(self, "lbl_wl_count"):
+            if filter_query:
+                self.lbl_wl_count.config(text=f"{count}/{total} kata")
+            else:
+                self.lbl_wl_count.config(text=f"{total} kata")
+
+    def _wl_add_word(self):
+        """Menambahkan kata baru ke whitelist via dialog dan langsung menutup popup"""
+        if not hasattr(self, "entry_wl_add"):
+            return
+        raw = self.entry_wl_add.get().strip().lower()
+        word = "".join([c for c in raw if c.isalpha()])
+        if not word or len(word) < 2:
+            self.show_toast("⚠️ Kata minimal 2 huruf alfabet")
+            return
+
+        self.solver.whitelist_word(word)
+        self.entry_wl_add.delete(0, tk.END)
+        self._wl_refresh_list()
+
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+        self.show_toast(f"⭐ '{word.upper()}' masuk whitelist (Prioritas)")
+
+        if hasattr(self, "whitelist_win") and self.whitelist_win and self.whitelist_win.winfo_exists():
+            self.whitelist_win.destroy()
+
+    def _wl_remove_selected(self):
+        """Menghapus kata-kata yang dipilih dari whitelist"""
+        if not hasattr(self, "wl_listbox"):
+            return
+        selected_indices = self.wl_listbox.curselection()
+        if not selected_indices:
+            self.show_toast("Pilih kata yang ingin dihapus terlebih dahulu")
+            return
+
+        selected_words = [self.wl_listbox.get(i).lower() for i in selected_indices]
+        for w in selected_words:
+            self.solver.unwhitelist_word(w)
+
+        self._wl_refresh_list()
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+
+        removed_str = ", ".join([w.upper() for w in selected_words])
+        self.show_toast(f"Dihapus dari whitelist: {removed_str}")
+
+    def _wl_open_txt(self):
+        """Membuka file whitelist.txt dengan text editor default sistem"""
+        wl_path = os.path.abspath(self.solver.whitelist_path)
+        try:
+            os.startfile(wl_path)
+        except Exception as e:
+            self.show_toast(f"Gagal membuka file: {e}")
+
+    def _wl_reload(self):
+        """Memuat ulang whitelist dari file disk"""
+        self.solver.load_whitelist()
+        self._wl_refresh_list()
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+        self.show_toast("🔄 Whitelist dimuat ulang dari disk")
 
     def open_custom_categories_window(self):
         """Membuka dialog popup untuk mengelola kategori & akhiran kustom (Custom Traps)"""

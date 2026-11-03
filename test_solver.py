@@ -92,6 +92,35 @@ class TestSambungKataSolver(unittest.TestCase):
         self.solver.unblacklist_word(kata_uji)
         self.assertFalse(kata_uji in self.solver.get_blacklisted_words())
 
+    def test_whitelist_mechanism_and_category_priority(self):
+        """Memastikan kata di whitelist menjadi prioritas teratas di kategorinya dan aktif di memori"""
+        kata_x = "sex"
+        # Whitelist kata 'sex'
+        self.solver.whitelist_word(kata_x)
+        self.assertTrue(self.solver.is_whitelisted(kata_x))
+
+        hasil = self.solver.cari_jawaban("S", limit=15)
+        x_items = [x for x in hasil if x["tipe"] == "JEBAKAN_X"]
+        self.assertTrue(len(x_items) > 0)
+        # Kata yang di-whitelist harus berada di urutan teratas pada kategori X
+        self.assertEqual(x_items[0]["kata"].lower(), kata_x)
+        self.assertTrue(x_items[0]["is_whitelisted"])
+
+        # Uji kata baru yang belum ada di kamus
+        kata_baru = "zzwhitelisttest"
+        self.assertFalse(self.solver.has_word(kata_baru))
+        self.solver.whitelist_word(kata_baru)
+        self.assertTrue(self.solver.has_word(kata_baru))
+        
+        hasil_baru = self.solver.cari_jawaban("ZZ", limit=5)
+        self.assertTrue(any(x["kata"] == kata_baru for x in hasil_baru))
+
+        # Bersihkan setelah pengujian
+        self.solver.unwhitelist_word(kata_x)
+        self.solver.unwhitelist_word(kata_baru)
+        self.assertFalse(self.solver.is_whitelisted(kata_x))
+        self.assertFalse(self.solver.has_word(kata_baru))
+
 
 if __name__ == "__main__":
     unittest.main()
