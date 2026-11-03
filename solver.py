@@ -366,7 +366,7 @@ class SambungKataSolver:
             return 0
         return sum(1 for w in self.words if w.endswith(s) and w not in self.blacklisted_words)
 
-    def cari_jawaban(self, awalan_prefix, limit=12, mode_santai=False, custom_endings=None, sort_mode=None):
+    def cari_jawaban(self, awalan_prefix, limit=100, mode_santai=False, custom_endings=None, sort_mode=None):
         """
         Mencari kata yang DIAWALI oleh `awalan_prefix`:
         Contoh:
@@ -376,10 +376,11 @@ class SambungKataSolver:
         - Jika prefix 'IX'  -> mencari kata berawalan 'ix' (ixora, ixodes, dll)
         
         Prioritas Jawaban (Mode Normal):
-        0. Kata berakhiran Kategori Custom / Custom Traps (🔥 Super Jebakan, misal NS, NGK)
-        1. Kata berakhiran 'X' (💥 Jebakan Mematikan)
-        2. Kata berakhiran huruf sulit 'Z', 'Q', 'V', 'J', 'W', 'F' (⚡ Jebakan Sulit)
-        3. Kata normal/seadanya (🛡️ Bertahan)
+        0. Kata berakhiran 'X' (💥 Jebakan Mematikan - senjata pamungkas nomor satu di Roblox)
+           dan Kata berakhiran Kategori Custom / Custom Traps (🔥 Super Jebakan, misal NS, NGK)
+           (Kata X tidak akan pernah tertimpa oleh puluhan custom traps)
+        1. Kata berakhiran huruf sulit 'Z', 'Q', 'V', 'J', 'W', 'F' (⚡ Jebakan Sulit)
+        2. Kata normal/seadanya (🛡️ Bertahan)
 
         Prioritas Jawaban (Mode Santai - tanpa X, Q, F):
         0. Kata berakhiran Kategori Custom yang tidak mengandung X, Q, F
@@ -549,10 +550,19 @@ class SambungKataSolver:
         kata_biasa.sort(key=sort_key)
 
         hasil = []
-        # TIER 0: Custom Traps (Prioritas Super)
+        
+        # Buat representasi objek untuk masing-masing tier
+        list_x = [{
+            "kata": w,
+            "tipe": "JEBAKAN_X",
+            "deskripsi": "Akhiran X (Mematikan)",
+            "is_whitelisted": (w in self.whitelisted_words)
+        } for w in jebakan_x]
+
+        list_custom = []
         for w, rule in jebakan_custom:
             sfx = rule["suffix"].upper()
-            hasil.append({
+            list_custom.append({
                 "kata": w,
                 "tipe": "CUSTOM_TRAP",
                 "suffix": sfx,
@@ -562,33 +572,39 @@ class SambungKataSolver:
                 "is_whitelisted": (w in self.whitelisted_words)
             })
 
-        # TIER 1: Jebakan X
-        for w in jebakan_x:
-            hasil.append({
-                "kata": w,
-                "tipe": "JEBAKAN_X",
-                "deskripsi": "Akhiran X (Mematikan)",
-                "is_whitelisted": (w in self.whitelisted_words)
-            })
+        list_sulit = [{
+            "kata": w,
+            "tipe": "JEBAKAN_SULIT",
+            "deskripsi": f"Akhiran {w[-1].upper()}",
+            "is_whitelisted": (w in self.whitelisted_words)
+        } for w in jebakan_sulit]
 
-        # TIER 2: Jebakan Sulit
-        for w in jebakan_sulit:
-            hasil.append({
-                "kata": w,
-                "tipe": "JEBAKAN_SULIT",
-                "deskripsi": f"Akhiran {w[-1].upper()}",
-                "is_whitelisted": (w in self.whitelisted_words)
-            })
-
-        # TIER 3: Kata Biasa
+        list_biasa = []
         for w in kata_biasa:
             desc = "Kata Santai" if mode_santai else "Kata Normal"
-            hasil.append({
+            list_biasa.append({
                 "kata": w,
                 "tipe": "BIASA",
                 "deskripsi": desc,
                 "is_whitelisted": (w in self.whitelisted_words)
             })
+
+        # Anti-Starvation Jebakan X:
+        # Kata berakhiran X (seperti SEX, BOX, DETOX, COMPLEX) adalah senjata paling mematikan di Roblox Sambung Kata.
+        # Karena jumlah kata X sangat langka (~120 kata di seluruh kamus), jangan biarkan puluhan kata
+        # custom endings menenggelamkan kata X ke bawah sehingga tidak terlihat oleh pemain.
+        if effective_sort_mode == "tag_order" and list_custom:
+            # Pada mode tag_order, tampilkan hingga 3 kata dari tag teratas terlebih dahulu, lalu jebakan X, lalu sisa custom
+            hasil.extend(list_custom[:3])
+            hasil.extend(list_x)
+            hasil.extend(list_custom[3:])
+        else:
+            # Pada mode default: Prioritaskan Jebakan X di puncak, disusul seluruh kata Custom Traps
+            hasil.extend(list_x)
+            hasil.extend(list_custom)
+
+        hasil.extend(list_sulit)
+        hasil.extend(list_biasa)
 
         return hasil[:limit]
 

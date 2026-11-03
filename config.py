@@ -12,7 +12,6 @@ DEFAULT_CONFIG = {
         "height": 120
     },
     "scan_interval_sec": 0.08,
-    "auto_copy_top_word": False,
     "mode_santai": False,  # True jika main di Mode Santai (tanpa X, Q, F)
     "report_hotkey": "F2",  # Hotkey screenshot instan deteksi salah
     "ocr_engine": "winocr",  # "winocr" atau "tesseract"

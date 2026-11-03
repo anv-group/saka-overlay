@@ -337,7 +337,7 @@ class SambungKataApp:
 
         self.btn_add_word = tk.Button(
             top_bar,
-            text="➕ Kamus",
+            text="➕ Kata",
             font=("Segoe UI", 9, "bold"),
             bg="#89b4fa",
             fg="#11111b",
@@ -622,7 +622,6 @@ class SambungKataApp:
         )
 
         # Objek pendukung & konfigurasi kompatibilitas
-        self.auto_copy_var = tk.BooleanVar(value=self.config.get("auto_copy_top_word", False))
         self.use_kbbi_var = tk.BooleanVar(value=self.config.get("use_kbbi", True))
         self.use_contek_var = tk.BooleanVar(value=self.config.get("use_contek", True))
         self.gameplay_indexing_var = tk.BooleanVar(value=self.config.get("gameplay_indexing_enabled", True))
@@ -712,14 +711,6 @@ class SambungKataApp:
         menu.add_command(label="📋 Log Gameplay", command=self.open_gameplay_history_window)
         menu.add_separator()
 
-        autocopy_status = "✅ AKTIF" if self.auto_copy_var.get() else "⚪ NONAKTIF"
-        menu.add_checkbutton(
-            label=f"📋 Auto-copy sisa kata  [{autocopy_status}]",
-            variable=self.auto_copy_var,
-            command=self.on_toggle_autocopy,
-            selectcolor="#a6e3a1"
-        )
-
         # Submenu Pilihan Kecepatan Scan (Pilih langsung sekali klik tanpa ganti-ganti mode)
         speed_menu = tk.Menu(
             menu,
@@ -788,15 +779,6 @@ class SambungKataApp:
             self.search_var.set("")
         if hasattr(self, "entry_manual") and self.entry_manual.winfo_exists():
             self.entry_manual.focus_set()
-
-    def on_toggle_autocopy(self):
-        val = self.auto_copy_var.get()
-        self.config["auto_copy_top_word"] = val
-        save_config(self.config)
-        if val:
-            self.show_toast("📋 Auto-copy sisa kata AKTIF (Tinggal Ctrl+V di Roblox)")
-        else:
-            self.show_toast("Auto-copy sisa kata dinonaktifkan")
 
     def _update_window_title(self):
         """Memperbarui judul window: Sambung Kata Overlay (<branch jika bukan main> <commit>) [<kecepatan scan>]"""
@@ -2177,8 +2159,8 @@ class SambungKataApp:
             return
 
         is_santai = self.mode_santai_var.get()
-        # Muat lebih banyak kata sekaligus (limit=30 kata)
-        results = self.solver.cari_jawaban(prefix_clean, limit=30, mode_santai=is_santai, sort_mode=self.config.get("tier0_sort_mode", "default"))
+        # Muat lebih banyak kata sekaligus (limit=100 kata)
+        results = self.solver.cari_jawaban(prefix_clean, limit=100, mode_santai=is_santai, sort_mode=self.config.get("tier0_sort_mode", "default"))
 
         if not results:
             for slot in self.word_card_pool:
@@ -2189,14 +2171,6 @@ class SambungKataApp:
             return
 
         self.lbl_empty_results.pack_forget()
-
-        # Auto copy sisa kata pertama jika fitur aktif
-        if self.auto_copy_var.get() and results:
-            top_word = results[0]["kata"]
-            top_upper = top_word.upper()
-            sisa_top = top_upper[len(prefix_clean):] if top_upper.startswith(prefix_clean) else top_upper
-            self.copy_to_clipboard(sisa_top, full_word=top_word, show_toast_flag=False)
-            self.show_toast(f"Otomatis tersalin sisa kata: '{sisa_top}' (dari '{top_upper}')")
 
         # Tampilkan kata menggunakan widget pool berkinerja tinggi (tanpa create/destroy berulang)
         prefix_upper = prefix_clean.upper()

@@ -6,7 +6,6 @@
         "height": 81
     },
     "scan_interval_sec": 0.04,
-    "auto_copy_top_word": false,
     "mode_santai": false,
     "report_hotkey": "F2",
     "ocr_engine": "winocr",
@@ -26,6 +25,7 @@
     "auto_blacklist_invalid": true,
     "auto_learn_valid": true,
     "tier0_sort_mode": "default",
+    "dev_mode": true,
     "custom_trap_endings": [
         {
             "suffix": "NS",
@@ -130,6 +130,6 @@
             "color": "#89dceb"
         }
     ],
-    "window_geometry": "477x1074+1422+57",
-    "dev_mode": false
+    "window_geometry": "550x1074+1345+55",
+    "santai_auto_disabled_tags": []
 }

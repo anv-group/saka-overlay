@@ -32,7 +32,7 @@ sambung-kata/
 ├── solver.py            # Mesin pencari kata berawalan prefix dengan sistem tier prioritas
 ├── region_selector.py   # DPI-aware transparent overlay untuk seleksi ROI di monitor 1920x1200
 ├── config.py            # Utilitas load/save konfigurasi JSON
-├── config.json          # Menyimpan area ROI layar, interval scan, dan opsi auto-copy (tracked base)
+├── config.json          # Menyimpan area ROI layar, interval scan, dan preferensi pengguna (tracked base)
 ├── config.local.json    # Override konfigurasi lokal pengguna (untracked / gitignored, kebal git update)
 ├── blacklist.txt        # Daftar kata yang di-blacklist (kata valid KBBI namun ditolak oleh server Roblox)
 ├── kamus_lengkap.txt    # 147,870+ kata (Hasil Hybrid Merge: KBBI v6 + contek-sambungkata.web.id + istilah Roblox + jebakan X/Z)

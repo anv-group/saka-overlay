@@ -4,7 +4,7 @@
 
 Asisten cerdas pendamping bermain game **Roblox Sambung Kata** ([Mainkan di Roblox](https://www.roblox.com/games/130342654546662/Sambung-Kata)).
 
-Aplikasi ini secara otomatis mendeteksi kotak awalan huruf giliran Anda di layar secara *real-time*, memilihkan kata serangan terbaik dari kamus **147.880+ kata** (KBBI v6 + Database Contek Game Roblox), dan dapat langsung menyalinnya ke clipboard sehingga Anda tinggal menekan `Ctrl + V` lalu `Enter` di dalam game!
+Aplikasi ini secara otomatis mendeteksi kotak awalan huruf giliran Anda di layar secara *real-time*, memilihkan kata serangan terbaik dari kamus **147.880+ kata** (KBBI v6 + Database Contek Game Roblox), lengkap dengan petunjuk sisa huruf yang perlu Anda ketik sebelum waktu habis!
 
 ---
 
