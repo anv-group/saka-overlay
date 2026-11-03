@@ -409,7 +409,7 @@ class SambungKataApp:
 
         # 5. Daftar Rekomendasi Jawaban (Memenuhi sisa seluruh window)
         is_santai_init = self.config.get("mode_santai", False)
-        recom_title = " Rekomendasi Kata (SANTAI) " if is_santai_init else " Rekomendasi Kata (NORMAL) "
+        recom_title = " Rekomendasi Kata (tanpa X, Q, F) " if is_santai_init else " Rekomendasi Kata (NORMAL) "
         recom_fg = "#a6e3a1" if is_santai_init else "#f38ba8"
         # Resize grip di sudut kanan bawah & tepi bawah window
         self.grip_bar = tk.Frame(self.root, bg="#11111b", height=16, cursor="size_ns")
@@ -777,7 +777,7 @@ class SambungKataApp:
             else:
                 self.show_toast("🌿 Mode Santai aktif (tanpa X, Q, F)")
             if hasattr(self, "recom_frame") and self.recom_frame.winfo_exists():
-                self.recom_frame.config(text=" Rekomendasi Kata (SANTAI) ", fg="#a6e3a1")
+                self.recom_frame.config(text=" Rekomendasi Kata (tanpa X, Q, F) ", fg="#a6e3a1")
         else:
             if changed_tags:
                 tag_str = ", ".join(f"[{t}]" for t in changed_tags)
