@@ -2576,7 +2576,7 @@ class SambungKataApp:
         btn_close.pack(side=tk.RIGHT)
 
     def _render_custom_category_quick_bar(self):
-        """Merender tombol toggle horizontal untuk tiap kategori custom di atas Rekomendasi Kata"""
+        """Merender tombol toggle untuk tiap kategori custom (Compact, tanpa simbol centang/silang & Auto-Wrap multi-baris)"""
         if not hasattr(self, "custom_cats_bar") or not self.custom_cats_bar.winfo_exists():
             return
 
@@ -2585,27 +2585,31 @@ class SambungKataApp:
 
         categories = self.config.get("custom_trap_endings", [])
 
+        # Container baris pertama
+        current_row = tk.Frame(self.custom_cats_bar, bg="#1e1e2e")
+        current_row.pack(fill=tk.X, pady=(0, 2))
+
         # Icon tag 🏷️ sebagai tombol untuk membuka jendela Kelola Kategori Custom
         btn_tag_icon = tk.Button(
-            self.custom_cats_bar,
+            current_row,
             text="🏷️",
-            font=("Segoe UI", 10),
+            font=("Segoe UI", 9),
             bg="#1e1e2e",
             fg="#cdd6f4",
             activebackground="#313244",
             activeforeground="#f5e0dc",
             relief=tk.FLAT,
             bd=0,
-            padx=3,
-            pady=1,
+            padx=2,
+            pady=0,
             cursor="hand2",
             command=self.open_custom_categories_window
         )
-        btn_tag_icon.pack(side=tk.LEFT, padx=(0, 4))
+        btn_tag_icon.pack(side=tk.LEFT, padx=(0, 3))
 
         if not categories:
             lbl_none = tk.Label(
-                self.custom_cats_bar,
+                current_row,
                 text="(Belum ada kategori)",
                 font=("Segoe UI", 8, "italic"),
                 fg="#6c7086",
@@ -2614,24 +2618,44 @@ class SambungKataApp:
             lbl_none.pack(side=tk.LEFT, padx=(0, 4))
             return
 
+        # Dapatkan lebar yang tersedia untuk wrapping
+        avail_w = self.custom_cats_bar.winfo_width()
+        if avail_w < 150:
+            try:
+                avail_w = self.root.winfo_width() - 30
+            except Exception:
+                avail_w = 440
+        if avail_w < 200:
+            avail_w = 440
+
+        cur_row_w = 32  # Lebar awal terpakai oleh icon tag + margin
+
         for idx, cat in enumerate(categories):
             sfx = cat.get("suffix", "").upper()
             enabled = cat.get("enabled", True)
             col = cat.get("color", "#cba6f7")
 
+            btn_text = sfx
             if enabled:
-                btn_text = f"✓ {sfx}"
                 btn_bg = col
                 btn_fg = "#11111b"
                 btn_abg = "#f5e0dc"
             else:
-                btn_text = f"✕ {sfx}"
                 btn_bg = "#313244"
                 btn_fg = "#6c7086"
                 btn_abg = "#45475a"
 
+            # Perkiraan lebar tombol: padding horizontal (10) + font chars (~8px per char) + margin (4)
+            approx_btn_w = max(24, len(sfx) * 8 + 14) + 4
+
+            # Jika baris saat ini sudah terisi dan tombol berikutnya melebihi batas lebar, buat baris baru
+            if cur_row_w + approx_btn_w > avail_w and cur_row_w > 35:
+                current_row = tk.Frame(self.custom_cats_bar, bg="#1e1e2e")
+                current_row.pack(fill=tk.X, pady=(0, 2))
+                cur_row_w = 0
+
             btn = tk.Button(
-                self.custom_cats_bar,
+                current_row,
                 text=btn_text,
                 font=("Segoe UI", 8, "bold"),
                 bg=btn_bg,
@@ -2639,12 +2663,14 @@ class SambungKataApp:
                 activebackground=btn_abg,
                 activeforeground="#11111b" if enabled else "#cdd6f4",
                 relief=tk.FLAT,
-                padx=8,
-                pady=2,
+                bd=0,
+                padx=5,
+                pady=1,
                 cursor="hand2",
                 command=lambda i=idx, cur=enabled: self._on_toggle_custom_category(i, not cur)
             )
-            btn.pack(side=tk.LEFT, padx=3)
+            btn.pack(side=tk.LEFT, padx=2)
+            cur_row_w += approx_btn_w
 
     def _render_custom_category_items(self):
         """Merender baris daftar kategori akhiran kustom di canvas"""
