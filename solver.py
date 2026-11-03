@@ -526,7 +526,7 @@ class SambungKataSolver:
                     prio = 2
                 else:
                     prio = 3
-                return (is_wl, tag_prio, prio, l)
+                return (tag_prio, is_wl, prio, l)
             jebakan_custom.sort(key=sort_key_custom)
         else:
             # Mode Default: Urutkan berdasarkan Whitelist -> Panjang 4-7, 3, 8, >8 -> Urutan Abjad Kamus (Stable Sort)

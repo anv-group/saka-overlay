@@ -152,9 +152,45 @@
             "name": "GH",
             "enabled": true,
             "color": "#94e2d5"
+        },
+        {
+            "suffix": "DY",
+            "name": "DY",
+            "enabled": true,
+            "color": "#cba6f7"
+        },
+        {
+            "suffix": "DYA",
+            "name": "DYA",
+            "enabled": true,
+            "color": "#f5c2e7"
+        },
+        {
+            "suffix": "EZ",
+            "name": "EZ",
+            "enabled": true,
+            "color": "#89dceb"
+        },
+        {
+            "suffix": "AMSI",
+            "name": "Akhiran AMSI",
+            "enabled": true,
+            "color": "#f9e2af"
+        },
+        {
+            "suffix": "KSO",
+            "name": "Akhiran KSO",
+            "enabled": true,
+            "color": "#a6e3a1"
+        },
+        {
+            "suffix": "RHU",
+            "name": "Akhiran RHU",
+            "enabled": true,
+            "color": "#fab387"
         }
     ],
     "auto_copy_top_word": false,
-    "window_geometry": "534x1074+1361+59",
+    "window_geometry": "443x1074+1467+60",
     "santai_auto_disabled_tags": []
 }

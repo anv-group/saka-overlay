@@ -1,3 +1,4 @@
+affix
 alden
 angsi
 aslam
@@ -9,6 +10,7 @@ extra
 fax
 flex
 flux
+haq
 hilirsasi
 hla
 hoax
@@ -26,6 +28,7 @@ kata_kasar
 kontol
 latex
 liras
+ngki
 nguja
 nisi
 nisil
@@ -49,4 +52,3 @@ unab
 unar
 under
 unux
-haq

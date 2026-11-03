@@ -87,8 +87,10 @@ flowchart TD
 ### B. Jalur 1 & 2 Huruf: Template Matching + Disambiguasi Struktur
 Digunakan untuk 1 atau 2 huruf karena WinOCR/Tesseract sering mengabaikan huruf tunggal:
 1. **Huruf `I`**: Di font Roblox, `I` adalah garis vertikal tunggal tipis. Jika lebar komponen $\le 12\text{ px}$, **pasti `I`**.
-2. **Huruf `D` vs `O` vs `U`**:
-   - `D`: 4 kolom kiri memiliki densitas pekat vertikal (`left_mean > 190`) DAN bagian atas tengah tertutup horizontal (`top_center > 120`).
+2. **Huruf `B` vs `D` vs `E` vs `O` vs `U`**:
+   - `B`, `D`, dan `E`: 4 kolom kiri memiliki tiang pekat lurus vertikal (`left_mean > 190`), bagian atas horizontal tertutup (`top_center > 120`), dan palang bawah horizontal tertutup (`bot_center > 100`). Palang bawah ini juga membedakannya dari `F` (`bot_center < 60`).
+   - Pembeda `E`: Sisi kanan bawah terbuka horizontal (`r_low < 80`), berbeda dari `B` dan `D` yang melengkung tertutup rapat (`r_low > 140`).
+   - Pembeda `B` vs `D`: `B` memiliki palang horizontal di tengah yang membagi dua lubang (`center_hole > 120`), sedangkan `D` adalah satu rongga besar berlubang di tengah (`center_hole < 60`).
    - `U`: Bagian atas tengahnya berongga/terbuka (`top_center < 80`).
 3. **Huruf `G` vs `C` vs `O`**:
    - `G` dan `C` sama-sama terbuka di kuadran kanan atas (`ur_mean < 110`), sedangkan `O` tertutup.

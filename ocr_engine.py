@@ -173,14 +173,26 @@ class OCREngine:
         alternatives = [ch for ch, s in sorted_scores[1:4] if s > 0.52 and ch != best_ch]
 
         # ----------------- Aturan Disambiguasi Fitur Struktur -----------------
-        # 1. Pembeda D vs O vs U:
-        # Huruf D memiliki garis vertikal tebal lurus di 4 kolom kiri DAN bagian atas tengah tertutup
-        if best_ch in ["O", "D"] or "D" in alternatives:
+        # 1. Pembeda B vs D vs E vs O vs U:
+        # Huruf B, D, dan E sama-sama memiliki garis vertikal tebal lurus di 4 kolom kiri serta bagian atas DAN bawah tertutup
+        if best_ch in ["O", "D", "B", "E"] or any(k in alternatives for k in ["D", "B", "E"]):
+            h, w = crop.shape
             left_mean = crop[:, :4].mean()
-            top_center = crop[:6, int(crop.shape[1]*0.3):int(crop.shape[1]*0.7)].mean()
-            if left_mean > 190 and top_center > 120:
-                best_ch = "D"
-                best_score = max(best_score, 0.92)
+            top_center = crop[:6, int(w*0.3):int(w*0.7)].mean()
+            bot_center = crop[-6:, int(w*0.3):int(w*0.7)].mean()
+            # F tidak memiliki palang bawah horizontal (bot_center < 60)
+            if left_mean > 190 and top_center > 120 and bot_center > 100:
+                center_hole = crop[int(h*0.42):int(h*0.58), int(w*0.30):int(w*0.70)].mean()
+                r_low = crop[int(h*0.65):int(h*0.85), int(w*0.75):].mean()
+                if r_low < 80:
+                    best_ch = "E"
+                    best_score = max(best_score, 0.95)
+                elif center_hole > 120:
+                    best_ch = "B"
+                    best_score = max(best_score, 0.95)
+                else:
+                    best_ch = "D"
+                    best_score = max(best_score, 0.94)
 
         # Jika sebelumnya salah terprediksi D tapi bagian atasnya terbuka (seperti U)
         if best_ch == "D":
