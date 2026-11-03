@@ -78,6 +78,15 @@ class TestSambungKataSolver(unittest.TestCase):
             self.assertNotIn("X", k)
             self.assertNotIn("Q", k)
 
+        # Pastikan custom endings dengan huruf terlarang (X, Q, F seperti IF) otomatis diabaikan di Mode Santai
+        custom_rules = [
+            {"suffix": "IF", "name": "Akhiran IF", "enabled": True, "color": "#89dceb"},
+            {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"}
+        ]
+        hasil_custom = self.solver.cari_jawaban("A", limit=20, mode_santai=True, custom_endings=custom_rules)
+        if_traps = [x for x in hasil_custom if x.get("suffix") == "IF"]
+        self.assertEqual(len(if_traps), 0)
+
     def test_blacklist_mechanism(self):
         """Memastikan kata yang diblacklist tidak muncul dan dapat dipulihkan"""
         kata_uji = "buku"

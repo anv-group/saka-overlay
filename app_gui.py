@@ -731,15 +731,59 @@ class SambungKataApp:
     def on_toggle_mode_santai(self):
         is_santai = self.mode_santai_var.get()
         self.config["mode_santai"] = is_santai
-        save_config(self.config)
-        self._update_mode_santai_button()
+
+        categories = self.config.get("custom_trap_endings", [])
+        changed_tags = []
 
         if is_santai:
-            self.show_toast("Mode Santai aktif (tanpa X, Q, F)")
+            # Mode Santai Aktif:
+            # Saring custom tag yang mengandung X, Q, atau F.
+            # Jika sebelumnya aktif (enabled=True), matikan dan catat ke santai_auto_disabled_tags.
+            # Jika dari awal sudah mati (enabled=False), biarkan mati dan JANGAN dicatat.
+            auto_disabled = set(self.config.get("santai_auto_disabled_tags", []))
+            for cat in categories:
+                sfx = cat.get("suffix", "").upper()
+                if any(ch in sfx.lower() for ch in ("x", "q", "f")):
+                    if cat.get("enabled", True):
+                        cat["enabled"] = False
+                        auto_disabled.add(sfx)
+                        changed_tags.append(sfx)
+            self.config["santai_auto_disabled_tags"] = list(auto_disabled)
+        else:
+            # Mode Normal Aktif:
+            # Kembalikan HANYA tag yang sebelumnya otomatis dimatikan oleh Mode Santai.
+            # Tag yang memang sudah mati dari awal akan tetap mati.
+            auto_disabled = set(self.config.get("santai_auto_disabled_tags", []))
+            for cat in categories:
+                sfx = cat.get("suffix", "").upper()
+                if sfx in auto_disabled:
+                    cat["enabled"] = True
+                    changed_tags.append(sfx)
+            # Bersihkan catatan auto-disabled
+            self.config["santai_auto_disabled_tags"] = []
+
+        self.config["custom_trap_endings"] = categories
+        save_config(self.config)
+        self.solver.set_custom_endings(categories)
+
+        self._update_mode_santai_button()
+        self._render_custom_category_items()
+        self._render_custom_category_quick_bar()
+
+        if is_santai:
+            if changed_tags:
+                tag_str = ", ".join(f"[{t}]" for t in changed_tags)
+                self.show_toast(f"🌿 Mode Santai aktif (tanpa X, Q, F) - Tag {tag_str} dinonaktifkan")
+            else:
+                self.show_toast("🌿 Mode Santai aktif (tanpa X, Q, F)")
             if hasattr(self, "recom_frame") and self.recom_frame.winfo_exists():
                 self.recom_frame.config(text=" Rekomendasi Kata (SANTAI) ", fg="#a6e3a1")
         else:
-            self.show_toast("Mode Normal aktif (Jebakan X/Z/Q/F aktif)")
+            if changed_tags:
+                tag_str = ", ".join(f"[{t}]" for t in changed_tags)
+                self.show_toast(f"⚔️ Mode Normal aktif - Tag {tag_str} diaktifkan kembali")
+            else:
+                self.show_toast("⚔️ Mode Normal aktif (Jebakan X/Z/Q/F aktif)")
             if hasattr(self, "recom_frame") and self.recom_frame.winfo_exists():
                 self.recom_frame.config(text=" Rekomendasi Kata (NORMAL) ", fg="#f38ba8")
 
@@ -3287,11 +3331,16 @@ class SambungKataApp:
             )
             lbl_name.pack(anchor="w")
 
+            is_forbidden_santai = (self.mode_santai_var.get() and any(ch in sfx.lower() for ch in ("x", "q", "f")))
+            cnt_desc = f"{cnt} kata tersedia di kamus"
+            if is_forbidden_santai:
+                cnt_desc += " • ⚠️ Dilarang di Mode Santai (X/Q/F)"
+
             lbl_cnt = tk.Label(
                 info_frame,
-                text=f"{cnt} kata tersedia di kamus",
+                text=cnt_desc,
                 font=("Segoe UI", 8),
-                fg="#a6adc8" if enabled else "#585b70",
+                fg="#fab387" if is_forbidden_santai else ("#a6adc8" if enabled else "#585b70"),
                 bg="#1e1e2e",
                 anchor="w"
             )
@@ -3622,7 +3671,23 @@ class SambungKataApp:
         """Toggle aktif/nonaktif kategori akhiran"""
         categories = self.config.get("custom_trap_endings", [])
         if 0 <= idx < len(categories):
+            sfx = categories[idx].get("suffix", "").upper()
+
+            # Jika sedang di Mode Santai dan pengguna mencoba mengaktifkan tag yang dilarang (mengandung X, Q, F)
+            if self.mode_santai_var.get() and new_val and any(ch in sfx.lower() for ch in ("x", "q", "f")):
+                self.show_toast(f"⚠️ Tag [{sfx}] dilarang di Mode Santai (mengandung X, Q, atau F)!")
+                self._render_custom_category_items()
+                self._render_custom_category_quick_bar()
+                return
+
             categories[idx]["enabled"] = bool(new_val)
+
+            # Jika pengguna sengaja menonaktifkan tag saat di Mode Santai, hapus dari daftar auto-restore
+            auto_disabled = set(self.config.get("santai_auto_disabled_tags", []))
+            if not new_val and sfx in auto_disabled:
+                auto_disabled.remove(sfx)
+                self.config["santai_auto_disabled_tags"] = list(auto_disabled)
+
             self.config["custom_trap_endings"] = categories
             save_config(self.config)
             self.solver.set_custom_endings(categories)

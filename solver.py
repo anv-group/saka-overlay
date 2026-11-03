@@ -420,9 +420,14 @@ class SambungKataSolver:
                     r["tag_index"] = idx
                     r["suffix"] = r.get("suffix", "").lower()
                     if r["suffix"]:
+                        # Di Mode Santai: Abaikan custom tag yang mengandung huruf X, Q, atau F
+                        if mode_santai and any(ch in r["suffix"] for ch in ("x", "q", "f")):
+                            continue
                         active_custom.append(r)
                 elif isinstance(c, str) and c.strip():
                     s = c.strip().lower()
+                    if mode_santai and any(ch in s for ch in ("x", "q", "f")):
+                        continue
                     active_custom.append({
                         "suffix": s,
                         "name": f"Akhiran {s.upper()}",

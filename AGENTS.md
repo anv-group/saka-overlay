@@ -155,12 +155,15 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
      - Pengguna/developer dapat mengaktifkannya via `⚙️ Settings ➔ 🛠️ Mode Development` atau shortcut `Ctrl+Shift+D`.
      - Pengaturan `dev_mode` disimpan ke `config.local.json` (terdaftar di `.gitignore`).
      - **Kebal Pembaruan Git:** Karena `config.local.json` tidak dilacak oleh Git, saat pengguna melakukan `git pull` atau auto-update repository, mode development dan status tombol restart tetap aktif tanpa ter-reset ke default GitHub.
-     - **Tier 1 (💥 JEBAKAN X):** Kata yang berakhiran `X` (contoh: `SEX`, `COMPLEX`, `PARADOX`, `DETOX`, `BOX`, `FAX`, `BODREX`).
-     - **Tier 2 (⚡ JEBAKAN SULIT):** Kata yang berakhiran konsonan sulit: `Z`, `Q`, `V`, `J`, `W`, `F`.
-     - **Tier 3 (🛡️ NORMAL):** Kata standar KBBI, diurutkan dari yang terpendek agar cepat diketik.
    - **🌿 Mode Santai (`mode_santai=True`):**
      - Dikhususkan untuk room Roblox Mode Santai yang melarang huruf `X`, `Q`, dan `F`.
      - Seluruh kata yang berakhiran `X, Q, F` atau mengandung huruf `X` / `Q` disaring ketat dan dibuang.
+     - **Auto-Filter & Pemulihan Custom Tag:**
+       - Ketika Mode Santai diaktifkan, tag kustom yang mengandung huruf `X`, `Q`, atau `F` (contoh: akhiran `IF`, `Q`, `EX`) otomatis dinonaktifkan (`enabled=False`), dan tag yang sebelumnya aktif dicatat ke `santai_auto_disabled_tags` di konfigurasi.
+       - Tag yang dari awal memang sudah nonaktif sebelum masuk ke Mode Santai akan tetap nonaktif dan tidak dimasukkan ke daftar pemulihan.
+       - Ketika beralih kembali dari Mode Santai ke Mode Normal, HANYA tag yang sebelumnya tercatat otomatis dimatikan yang dipulihkan kembali (`enabled=True`). Tag yang dari awal mati tetap nonaktif.
+       - Jika pengguna mencoba mengaktifkan tag terlarang secara manual saat Mode Santai aktif, sistem menolak aktivasi dengan toast peringatan dan menandai item di jendela kelola tag dengan teks peach `• ⚠️ Dilarang di Mode Santai (X/Q/F)`.
+       - Backend solver (`cari_jawaban`) juga memfilter custom endings berhuruf `X, Q, F` secara independen saat `mode_santai=True`.
      - Prioritas dialihkan ke konsonan sulit yang masih diizinkan: `Z`, `V`, `J`, `W`, disusul kata santai (*comfortable casual words*) dengan badge `🌿 SANTAI`.
 2. **Validasi Vokal**:
    - Setiap kata wajib memiliki minimal 1 huruf vokal (`A, I, U, E, O`) untuk menyaring singkatan atau akronim aneh yang tidak diterima oleh kamus game Roblox.

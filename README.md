@@ -136,6 +136,8 @@ flowchart TD
    Kosakata baku bahasa Indonesia yang pendek (3–6 huruf) agar sangat cepat dan aman diketik secara manual saat waktu giliran menipis.
 5. **🌿 Mode Santai:**  
    Pilihan khusus saat bermain di room Roblox Mode Santai (melarang huruf X, Q, dan F). Bot secara otomatis menyaring seluruh kata yang mengandung atau berakhiran `X, Q, F`, lalu mengalihkan serangan ke `Z, V, J, W`.
+   - **Auto-Filter Custom Tag:** Seluruh tag kustom yang mengandung huruf `X`, `Q`, atau `F` (contoh: akhiran `IF`, `Q`, `EX`) otomatis dinonaktifkan seketika saat mode santai aktif.
+   - **Smart Recovery:** Saat beralih kembali ke Mode Normal, hanya tag yang tadinya aktif yang dihidupkan kembali. Tag yang dari awal memang sudah nonaktif akan tetap mati secara cerdas.
 
 ### 🔄 Logika Pengurutan di Dalam Tier (Panjang Kata & Abjad)
 Mengapa kata dengan akhiran berbeda bisa tampil berselang-seling (contoh saat mengetik `S` muncul `SAMP [MP]`, `SANS [NS]`, `SENS [NS]`, `SIMP [MP]`, `SINGK [NGK]`)?
