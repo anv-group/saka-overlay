@@ -2589,23 +2589,24 @@ class SambungKataApp:
         current_row = tk.Frame(self.custom_cats_bar, bg="#1e1e2e")
         current_row.pack(fill=tk.X, pady=(0, 2))
 
-        # Icon tag 🏷️ sebagai tombol untuk membuka jendela Kelola Kategori Custom
+        # Icon tag 🏷️ sebagai tombol untuk membuka jendela Kelola Kategori Custom (Ramping horizontal)
         btn_tag_icon = tk.Button(
             current_row,
             text="🏷️",
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 8),
             bg="#1e1e2e",
             fg="#cdd6f4",
             activebackground="#313244",
             activeforeground="#f5e0dc",
             relief=tk.FLAT,
             bd=0,
-            padx=2,
+            padx=1,
             pady=0,
+            highlightthickness=0,
             cursor="hand2",
             command=self.open_custom_categories_window
         )
-        btn_tag_icon.pack(side=tk.LEFT, padx=(0, 3))
+        btn_tag_icon.pack(side=tk.LEFT, padx=(0, 2))
 
         if not categories:
             lbl_none = tk.Label(
@@ -2628,7 +2629,7 @@ class SambungKataApp:
         if avail_w < 200:
             avail_w = 440
 
-        cur_row_w = 32  # Lebar awal terpakai oleh icon tag + margin
+        cur_row_w = 26  # Lebar awal terpakai oleh icon tag + margin
 
         for idx, cat in enumerate(categories):
             sfx = cat.get("suffix", "").upper()
