@@ -42,3 +42,7 @@ deteksi-gameplay/recordings/*
 !deteksi-gameplay/recordings/.gitkeep
 deteksi-gameplay/unclassified/*
 !deteksi-gameplay/unclassified/.gitkeep
+
+# Local user configuration overrides (kebal git pull / update)
+config.local.json
+*.local.json

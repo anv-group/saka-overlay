@@ -32,7 +32,8 @@ sambung-kata/
 ├── solver.py            # Mesin pencari kata berawalan prefix dengan sistem tier prioritas
 ├── region_selector.py   # DPI-aware transparent overlay untuk seleksi ROI di monitor 1920x1200
 ├── config.py            # Utilitas load/save konfigurasi JSON
-├── config.json          # Menyimpan area ROI layar, interval scan, dan opsi auto-copy
+├── config.json          # Menyimpan area ROI layar, interval scan, dan opsi auto-copy (tracked base)
+├── config.local.json    # Override konfigurasi lokal pengguna (untracked / gitignored, kebal git update)
 ├── blacklist.txt        # Daftar kata yang di-blacklist (kata valid KBBI namun ditolak oleh server Roblox)
 ├── kamus_lengkap.txt    # 147,870+ kata (Hasil Hybrid Merge: KBBI v6 + contek-sambungkata.web.id + istilah Roblox + jebakan X/Z)
 ├── kamus_kbbi.txt       # 112,822 kata murni Kamus Besar Bahasa Indonesia (KBBI VI)
@@ -138,8 +139,22 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
 
 ## ⚡ 5. Logika Solver & Kamus (`solver.py`)
 
-1. **Struktur Prioritas Kata**:
+1. **Struktur Prioritas Kata & Mode Sortir Tier 0**:
    - **Mode Standar / Normal / Brutal**:
+     - **Tier 0 (🔥 CUSTOM TRAPS):** Kata berakhiran kustom (misal `NS`, `NGK`, `MP`). Mendukung 2 mode pengurutan:
+       - **Mode Default (`default`):** Panjang ideal (4–7 huruf pertama, 3 huruf, 8 huruf, >8 huruf) dipadukan dengan *stable sort* urutan abjad kamus (A–Z) lintas tag. Menghasilkan kata yang paling cepat dan nyaman diketik.
+       - **Mode Urutan Tag (`tag_order`):** Mengelompokkan kata secara ketat berdasarkan urutan tag di daftar kustom pengguna (tag teratas muncul lebih dulu seluruhnya sebelum tag berikutnya, misal semua kata `NS` sebelum `MP`). Berguna ketika pemain ingin memprioritaskan jebakan tersulit.
+     - **Tier 1 (💥 JEBAKAN X):** Kata yang berakhiran `X` (contoh: `SEX`, `COMPLEX`, `PARADOX`, `DETOX`, `BOX`, `FAX`, `BODREX`).
+     - **Tier 2 (⚡ JEBAKAN SULIT):** Kata yang berakhiran konsonan sulit: `Z`, `Q`, `V`, `J`, `W`, `F`.
+     - **Tier 3 (🛡️ NORMAL):** Kata standar KBBI, diurutkan dari yang terpendek agar cepat diketik.
+   - **Manajemen Tag Kustom (Edit & Sortir):**
+     - Tag kustom dapat diubah urutannya via tombol panah `▲`/`▼` atau diurutkan otomatis (`🔤 A-Z`, `📊 Terbanyak`).
+     - Setiap tag dapat diedit huruf akhiran, label nama, serta warna badge (Catppuccin swatches / Color Picker).
+   - **Mode Development & Tombol Restart (`config.local.json`):**
+     - Tombol `⚡ Restart` di header disembunyikan secara default (`dev_mode: false`).
+     - Pengguna/developer dapat mengaktifkannya via `⚙️ Settings ➔ 🛠️ Mode Development` atau shortcut `Ctrl+Shift+D`.
+     - Pengaturan `dev_mode` disimpan ke `config.local.json` (terdaftar di `.gitignore`).
+     - **Kebal Pembaruan Git:** Karena `config.local.json` tidak dilacak oleh Git, saat pengguna melakukan `git pull` atau auto-update repository, mode development dan status tombol restart tetap aktif tanpa ter-reset ke default GitHub.
      - **Tier 1 (💥 JEBAKAN X):** Kata yang berakhiran `X` (contoh: `SEX`, `COMPLEX`, `PARADOX`, `DETOX`, `BOX`, `FAX`, `BODREX`).
      - **Tier 2 (⚡ JEBAKAN SULIT):** Kata yang berakhiran konsonan sulit: `Z`, `Q`, `V`, `J`, `W`, `F`.
      - **Tier 3 (🛡️ NORMAL):** Kata standar KBBI, diurutkan dari yang terpendek agar cepat diketik.

@@ -2,6 +2,7 @@ import os
 import json
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+LOCAL_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.local.json")
 
 DEFAULT_CONFIG = {
     "screen_area": {
@@ -30,6 +31,8 @@ DEFAULT_CONFIG = {
     },
     "auto_blacklist_invalid": True,  # Otomatis blacklist kata yang ditolak game Roblox
     "auto_learn_valid": True,  # Otomatis simpan kata valid yang belum ada di kamus
+    "tier0_sort_mode": "default",  # "default" (Panjang 4-7 & Abjad) atau "tag_order" (Sesuai Urutan Tag Kustom)
+    "dev_mode": False,  # Mode Pengembang (Menampilkan tombol ⚡ Restart & fitur debug). Default OFF di git.
     "custom_trap_endings": [  # Kategori custom akhiran jebakan super (prioritas di atas X)
         {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"},
         {"suffix": "NGK", "name": "Akhiran NGK", "enabled": True, "color": "#f5c2e7"}
@@ -37,21 +40,61 @@ DEFAULT_CONFIG = {
 }
 
 def load_config():
+    """
+    Memuat konfigurasi aplikasi dengan sistem multi-layer:
+    1. Nilai bawaan sistem (DEFAULT_CONFIG)
+    2. File bersama (config.json)
+    3. File override lokal pengguna (config.local.json) - Kebal git pull / update GitHub!
+    """
+    config = DEFAULT_CONFIG.copy()
+
+    # Layer 1: config.json
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                config = DEFAULT_CONFIG.copy()
                 config.update(data)
-                return config
         except Exception as e:
             print(f"[!] Error loading config: {e}, using default.")
-    return DEFAULT_CONFIG.copy()
+
+    # Layer 2: config.local.json (Local Override - Tidak dilacak oleh git)
+    if os.path.exists(LOCAL_CONFIG_FILE):
+        try:
+            with open(LOCAL_CONFIG_FILE, "r", encoding="utf-8") as f:
+                local_data = json.load(f)
+                config.update(local_data)
+        except Exception as e:
+            print(f"[!] Error loading local config override: {e}")
+
+    return config
 
 def save_config(cfg):
+    """
+    Menyimpan konfigurasi:
+    1. Menyimpan ke config.json (file konfigurasi umum)
+    2. Menyimpan pengaturan lokal spesifik pengguna ke config.local.json (kebal git update/pull)
+    """
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=4)
+
+        # Simpan preferensi lokal (kebal git pull / update GitHub)
+        local_keys = ["dev_mode"]
+        local_cfg = {}
+        if os.path.exists(LOCAL_CONFIG_FILE):
+            try:
+                with open(LOCAL_CONFIG_FILE, "r", encoding="utf-8") as f:
+                    local_cfg = json.load(f)
+            except Exception:
+                local_cfg = {}
+
+        for k in local_keys:
+            if k in cfg:
+                local_cfg[k] = cfg[k]
+
+        with open(LOCAL_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(local_cfg, f, indent=4)
+
         return True
     except Exception as e:
         print(f"[!] Gagal menyimpan config: {e}")

@@ -25,6 +25,7 @@
     },
     "auto_blacklist_invalid": true,
     "auto_learn_valid": true,
+    "tier0_sort_mode": "default",
     "custom_trap_endings": [
         {
             "suffix": "NS",
@@ -129,5 +130,6 @@
             "color": "#89dceb"
         }
     ],
-    "window_geometry": "477x1074+1426+55"
+    "window_geometry": "477x1074+1422+57",
+    "dev_mode": false
 }

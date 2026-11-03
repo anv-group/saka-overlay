@@ -100,7 +100,8 @@ Jendela aplikasi didesain khusus dengan konsep **Ultra-Compact Overlay** yang me
 | **`⚙️` (Settings)** | Dropdown menu untuk konfigurasi: `🎯 Set Area Deteksi`, `👁️ Test Area Deteksi`, `⭐ Buka Whitelist Kata`, `🚫 Blocklist Kata`, `🏷️ Kategori Kustom`, `📋 Log Gameplay`, `⚡ Kecepatan Scan`, dan `🔄 Cek Update Git`. |
 | **`⚡ Kecepatan Scan`** | Submenu radio button 1-klik untuk memilih kecepatan: **`🔥 40ms (Ultra Instan)`**, **`⚡ 80ms (Kilat Turbo)`**, **`🚀 150ms (Cepat)`**, atau **`🐢 300ms (Santai)`**. |
 | **Search Bar Real-Time** | Input manual awalan huruf. Hasil rekomendasi langsung terfilter saat Anda mengetik tanpa perlu klik tombol cari. Input ini otomatis meng-overwrite OCR. Terdapat tombol **`❌`** di ujung kanan untuk membersihkan teks seketika. |
-| **`🏷️` Quick Toggle Bar** | Deretan tombol tag kategori akhiran kustom (misal: `[NS]`, `[NGK]`) tepat di atas rekomendasi kata. Klik tombol tag untuk mengaktifkan/menonaktifkan prioritas jebakan kustom seketika. |
+| **`🏷️` Quick Toggle Bar** | Deretan tombol tag kategori akhiran kustom (misal: `[NS]`, `[NGK]`) tepat di atas rekomendasi kata. Klik icon `🏷️` untuk membuka jendela Kelola Tag (edit akhiran, nama, warna, dan atur urutan prioritas). |
+| **`⚡ Restart` (Dev Mode)** | Tombol restart instan di header (disembunyikan secara default, dapat diaktifkan lewat `⚙️ Settings ➔ 🛠️ Mode Development` atau shortcut `Ctrl+Shift+D`). Kebal git update via `config.local.json`. |
 | **Rekomendasi Kata (Scrollable)** | Menampilkan kartu kata terurut berdasarkan tier jebakan. Dilengkapi *smooth mousewheel scroll* (scroll roda mouse di mana saja di area kartu) dan *widget pooling* (render super kilat 0.5ms). |
 | **`⭐` / `☆` di Kartu Kata** | Menandai kata sebagai **Whitelist** (terbukti valid). Kata langsung mendapat prioritas #1 di kategorinya tanpa mencemari kamus utama. |
 | **`❌` di Kartu Kata** | Memasukkan kata yang ditolak server Roblox ke dalam `blacklist.txt` seketika (dapat dibatalkan dengan tombol `↩️ Batalkan`). |
@@ -157,10 +158,11 @@ Di dalam setiap tier (terutama pada **Tier 0: Custom Traps**), sistem mengurutka
    - `SOMP` (4 huruf, akhiran `MP`) — abjad **SO**
    - Kemudian beralih ke kelompok 5 huruf: `SAINS` (`NS`), `SINGK` (`NGK`), `SIUPP` (`PP`), `SPONS` (`NS`), dst.
 
-> [!NOTE]
-> Sistem saat ini mencampurkan seluruh akhiran kustom yang aktif ke dalam Tier 0 dan mengurutkannya berdasarkan rumus:  
-> **Panjang Kata (4–7 huruf) ➔ Urutan Abjad Kata (A–Z)**  
-> Rekomendasi belum dikelompokkan secara terpisah per-jenis badge akhiran.
+> [!TIP]
+> **Pilihan Mode Sortir Tier 0:**
+> 1. **Default (Panjang & Abjad):** Memprioritaskan kata panjang 4–7 huruf (nyaman & cepat diketik), urutan abjad asli kamus dipertahankan lintas tag.
+> 2. **Sesuai Urutan Tag Kustom:** Seluruh kata dari tag urutan teratas (misal tag jebakan tersulit buatan Anda) dimunculkan terlebih dahulu sebelum beralih ke tag berikutnya.
+> Pengaturan ini dapat dipilih langsung di jendela `🏷️ Kelola Kategori Custom` atau via menu `⚙️ Settings ➔ 📊 Mode Sortir Tier 0`.
 
 ---
 

@@ -121,6 +121,39 @@ class TestSambungKataSolver(unittest.TestCase):
         self.assertFalse(self.solver.is_whitelisted(kata_x))
         self.assertFalse(self.solver.has_word(kata_baru))
 
+    def test_tier0_sort_modes_default_and_tag_order(self):
+        """Memastikan mode sortir Tier 0 (default: panjang & abjad vs tag_order: urutan tag kustom) bekerja akurat"""
+        custom_rules = [
+            {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"},
+            {"suffix": "MP", "name": "Akhiran MP", "enabled": True, "color": "#89dceb"}
+        ]
+
+        # 1. Mode Default: Mengutamakan panjang 4-7 dan urutan abjad antar tag
+        res_def = self.solver.cari_jawaban("S", limit=30, custom_endings=custom_rules, sort_mode="default")
+        custom_def = [f"{x['kata']}[{x['suffix']}]" for x in res_def if x["tipe"] == "CUSTOM_TRAP"]
+        # 'samp[MP]' (4 huruf) harus mendahului 'sains[NS]' (5 huruf)
+        self.assertIn("samp[MP]", custom_def)
+        self.assertIn("sains[NS]", custom_def)
+        self.assertLess(custom_def.index("samp[MP]"), custom_def.index("sains[NS]"))
+
+        # 2. Mode Tag Order: Tag 0 (NS) harus muncul SEMUA sebelum Tag 1 (MP)
+        res_tag = self.solver.cari_jawaban("S", limit=100, custom_endings=custom_rules, sort_mode="tag_order")
+        custom_tag = [f"{x['kata']}[{x['suffix']}]" for x in res_tag if x["tipe"] == "CUSTOM_TRAP"]
+        first_mp = next(i for i, w in enumerate(custom_tag) if "[MP]" in w)
+        last_ns = max(i for i, w in enumerate(custom_tag) if "[NS]" in w)
+        self.assertGreater(first_mp, last_ns)
+
+        # 3. Mode Tag Order Dibalik: Tag 0 (MP) harus muncul SEMUA sebelum Tag 1 (NS)
+        custom_rules_rev = [
+            {"suffix": "MP", "name": "Akhiran MP", "enabled": True, "color": "#89dceb"},
+            {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"}
+        ]
+        res_rev = self.solver.cari_jawaban("S", limit=100, custom_endings=custom_rules_rev, sort_mode="tag_order")
+        custom_rev = [f"{x['kata']}[{x['suffix']}]" for x in res_rev if x["tipe"] == "CUSTOM_TRAP"]
+        first_ns = next(i for i, w in enumerate(custom_rev) if "[NS]" in w)
+        last_mp = max(i for i, w in enumerate(custom_rev) if "[MP]" in w)
+        self.assertGreater(first_ns, last_mp)
+
 
 if __name__ == "__main__":
     unittest.main()

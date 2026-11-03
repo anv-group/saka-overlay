@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, colorchooser
 from PIL import Image, ImageTk
 import threading
 import time
@@ -89,6 +89,7 @@ class SambungKataApp:
             use_contek=use_contek
         )
         self.solver.set_custom_endings(self.config.get("custom_trap_endings", []))
+        self.solver.set_tier0_sort_mode(self.config.get("tier0_sort_mode", "default"))
         self.ocr = OCREngine(self.config)
         self.updater = GitUpdater()
         self.gameplay_indexer = GameplayIndexer(
@@ -247,7 +248,10 @@ class SambungKataApp:
             cursor="hand2",
             command=self._restart_app_cleanly
         )
-        self.btn_restart.pack(side=tk.LEFT, padx=3)
+        # Mode Development: Tombol Restart disembunyikan by default kecuali dev_mode aktif
+        self.dev_mode_var = tk.BooleanVar(value=self.config.get("dev_mode", False))
+        if self.dev_mode_var.get():
+            self.btn_restart.pack(side=tk.LEFT, padx=3)
 
         # Mode Toggle Button: NORMAL vs SANTAI (Model tag compact tanpa emoji)
         self.mode_santai_var = tk.BooleanVar(value=self.config.get("mode_santai", False))
@@ -517,6 +521,9 @@ class SambungKataApp:
         self.root.bind(f"<{self.report_hotkey}>", lambda e: self.on_report_kurang_tepat())
         self.gameplay_calib_hotkey = "F3"
         self.root.bind(f"<{self.gameplay_calib_hotkey}>", lambda e: self.on_capture_gameplay_kalibrasi())
+        # Shortcut Ctrl+Shift+D untuk toggle mode development (Restart)
+        self.root.bind("<Control-Shift-D>", lambda e: self._toggle_dev_mode_shortcut())
+        self.root.bind("<Control-Shift-d>", lambda e: self._toggle_dev_mode_shortcut())
 
         # Global Hotkey menggunakan keyboard library
         try:
@@ -552,6 +559,19 @@ class SambungKataApp:
         menu.add_command(label="🚫 Buka Blocklist Kata", command=self.open_blacklist_window)
         menu.add_command(label="📝 Pendataan Koreksi Sampel", command=self.open_koreksi_window)
         menu.add_command(label="🏷️ Kelola Kategori Custom", command=self.open_custom_categories_window)
+
+        # Submenu Mode Sortir Tier 0 (Custom Traps)
+        cur_t0 = self.config.get("tier0_sort_mode", "default")
+        tier0_menu = tk.Menu(menu, tearoff=0, bg="#181825", fg="#cdd6f4", activebackground="#313244", activeforeground="#f5e0dc", selectcolor="#a6e3a1")
+        tier0_menu.add_command(
+            label=f"{'✓ ' if cur_t0 == 'default' else '   '}Default (Panjang 4-7 & Abjad A-Z)",
+            command=lambda: self._set_tier0_sort_mode("default")
+        )
+        tier0_menu.add_command(
+            label=f"{'✓ ' if cur_t0 == 'tag_order' else '   '}Sesuai Urutan Tag Kustom",
+            command=lambda: self._set_tier0_sort_mode("tag_order")
+        )
+        menu.add_cascade(label=f"📊 Mode Sortir Tier 0: {'Default' if cur_t0 == 'default' else 'Urutan Tag'}", menu=tier0_menu)
         menu.add_separator()
 
         # Kelompok 3: Area Gameplay & Kalibrasi
@@ -590,6 +610,13 @@ class SambungKataApp:
             )
         menu.add_cascade(label="⚡ Kecepatan Scan", menu=speed_menu)
 
+        dev_status = "✅ AKTIF" if self.dev_mode_var.get() else "⚪ NONAKTIF"
+        menu.add_checkbutton(
+            label=f"🛠️ Mode Development (Restart) [{dev_status}]",
+            variable=self.dev_mode_var,
+            command=self.on_toggle_dev_mode,
+            selectcolor="#a6e3a1"
+        )
         menu.add_command(label="🔄 Cek Update Git...", command=lambda: self.check_for_updates(manual=True))
 
         try:
@@ -1973,7 +2000,7 @@ class SambungKataApp:
 
         is_santai = self.mode_santai_var.get()
         # Muat lebih banyak kata sekaligus (limit=30 kata)
-        results = self.solver.cari_jawaban(prefix_clean, limit=30, mode_santai=is_santai)
+        results = self.solver.cari_jawaban(prefix_clean, limit=30, mode_santai=is_santai, sort_mode=self.config.get("tier0_sort_mode", "default"))
 
         if not results:
             for slot in self.word_card_pool:
@@ -2767,6 +2794,22 @@ class SambungKataApp:
             self.update_results(self.last_detected_word)
         self.show_toast("🔄 Whitelist dimuat ulang dari disk")
 
+    def _set_tier0_sort_mode(self, mode):
+        """Mengatur mode sortir rekomendasi kata untuk Tier 0 (Custom Traps)"""
+        if mode not in ("default", "tag_order"):
+            return
+        self.config["tier0_sort_mode"] = mode
+        save_config(self.config)
+        self.solver.set_tier0_sort_mode(mode)
+        if hasattr(self, "var_tier0_mode") and self.var_tier0_mode:
+            self.var_tier0_mode.set(mode)
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+        if mode == "default":
+            self.show_toast("📊 Mode Tier 0: Default (Panjang 4-7 & Abjad A-Z)")
+        else:
+            self.show_toast("🏷️ Mode Tier 0: Sesuai Urutan Tag Kustom")
+
     def open_custom_categories_window(self):
         """Membuka dialog popup untuk mengelola kategori & akhiran kustom (Custom Traps)"""
         if hasattr(self, "custom_cats_win") and self.custom_cats_win and self.custom_cats_win.winfo_exists():
@@ -2779,8 +2822,8 @@ class SambungKataApp:
 
         self.custom_cats_win = tk.Toplevel(self.root)
         self.custom_cats_win.title("🏷️ Kategori & Akhiran Kustom (Custom Traps)")
-        self.custom_cats_win.geometry("460x580")
-        self.custom_cats_win.minsize(420, 500)
+        self.custom_cats_win.geometry("500x660")
+        self.custom_cats_win.minsize(460, 520)
         self.custom_cats_win.attributes("-topmost", True)
         self.custom_cats_win.configure(bg="#1e1e2e")
         self.custom_cats_win.bind("<Escape>", lambda e: self.custom_cats_win.destroy())
@@ -2806,9 +2849,53 @@ class SambungKataApp:
             bg="#1e1e2e",
             justify=tk.LEFT,
             padx=14,
-            pady=6
+            pady=4
         )
         subtitle_lbl.pack(fill=tk.X)
+
+        # Mode Sortir Tier 0 Control Frame
+        sort_box = tk.LabelFrame(
+            self.custom_cats_win,
+            text=" 📊 Mode Urutan Rekomendasi Kata (Tier 0) ",
+            font=("Segoe UI", 9, "bold"),
+            fg="#89dceb",
+            bg="#181825",
+            padx=10,
+            pady=6
+        )
+        sort_box.pack(fill=tk.X, padx=14, pady=(2, 6))
+
+        self.var_tier0_mode = tk.StringVar(value=self.config.get("tier0_sort_mode", "default"))
+
+        rb_def = tk.Radiobutton(
+            sort_box,
+            text="Default (Panjang 4-7 & Abjad A-Z) — Cepat & Nyaman Diketik",
+            variable=self.var_tier0_mode,
+            value="default",
+            font=("Segoe UI", 9),
+            fg="#cdd6f4",
+            bg="#181825",
+            activebackground="#181825",
+            activeforeground="#f5e0dc",
+            selectcolor="#313244",
+            command=lambda: self._set_tier0_sort_mode("default")
+        )
+        rb_def.pack(anchor="w", pady=1)
+
+        rb_tag = tk.Radiobutton(
+            sort_box,
+            text="Sesuai Urutan Tag Kustom — Prioritaskan Tag Teratas (Jebakan Sulit)",
+            variable=self.var_tier0_mode,
+            value="tag_order",
+            font=("Segoe UI", 9),
+            fg="#cdd6f4",
+            bg="#181825",
+            activebackground="#181825",
+            activeforeground="#f5e0dc",
+            selectcolor="#313244",
+            command=lambda: self._set_tier0_sort_mode("tag_order")
+        )
+        rb_tag.pack(anchor="w", pady=1)
 
         # Form Tambah Akhiran Baru
         add_box = tk.LabelFrame(
@@ -2820,7 +2907,7 @@ class SambungKataApp:
             padx=10,
             pady=8
         )
-        add_box.pack(fill=tk.X, padx=14, pady=6)
+        add_box.pack(fill=tk.X, padx=14, pady=(0, 6))
 
         row1 = tk.Frame(add_box, bg="#181825")
         row1.pack(fill=tk.X, pady=2)
@@ -2853,17 +2940,58 @@ class SambungKataApp:
         )
         btn_add.pack(fill=tk.X, pady=(6, 2))
 
-        # List Area Container
-        lbl_list_title = tk.Label(
-            self.custom_cats_win,
+        # List Area Toolbar (Header + Quick Sort)
+        list_toolbar = tk.Frame(self.custom_cats_win, bg="#1e1e2e", padx=14)
+        list_toolbar.pack(fill=tk.X, pady=(4, 2))
+
+        self.lbl_cat_list_title = tk.Label(
+            list_toolbar,
             text="Daftar Kategori Akhiran:",
             font=("Segoe UI", 9, "bold"),
             fg="#cdd6f4",
             bg="#1e1e2e",
-            padx=14,
             anchor="w"
         )
-        lbl_list_title.pack(fill=tk.X, pady=(6, 2))
+        self.lbl_cat_list_title.pack(side=tk.LEFT)
+
+        btn_sort_cnt = tk.Button(
+            list_toolbar,
+            text="📊 Terbanyak",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=1,
+            cursor="hand2",
+            command=self._on_sort_custom_categories_count
+        )
+        btn_sort_cnt.pack(side=tk.RIGHT, padx=(3, 0))
+
+        btn_sort_az = tk.Button(
+            list_toolbar,
+            text="🔤 A-Z",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=1,
+            cursor="hand2",
+            command=self._on_sort_custom_categories_az
+        )
+        btn_sort_az.pack(side=tk.RIGHT, padx=3)
+
+        lbl_sort_txt = tk.Label(
+            list_toolbar,
+            text="Urutkan:",
+            font=("Segoe UI", 8),
+            fg="#6c7086",
+            bg="#1e1e2e"
+        )
+        lbl_sort_txt.pack(side=tk.RIGHT)
 
         # Scrollable list container
         list_container = tk.Frame(self.custom_cats_win, bg="#181825")
@@ -2874,7 +3002,7 @@ class SambungKataApp:
         self.custom_cats_inner = tk.Frame(canvas, bg="#181825")
 
         self.custom_cats_inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=self.custom_cats_inner, anchor="nw", width=410)
+        canvas.create_window((0, 0), window=self.custom_cats_inner, anchor="nw", width=450)
         canvas.configure(yscrollcommand=scrollbar.set)
 
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -2986,10 +3114,8 @@ class SambungKataApp:
                 btn_fg = "#6c7086"
                 btn_abg = "#45475a"
 
-            # Perkiraan lebar tombol: padding horizontal (10) + font chars (~8px per char) + margin (4)
             approx_btn_w = max(24, len(sfx) * 8 + 14) + 4
 
-            # Jika baris saat ini sudah terisi dan tombol berikutnya melebihi batas lebar, buat baris baru
             if cur_row_w + approx_btn_w > avail_w and cur_row_w > 35:
                 current_row = tk.Frame(self.custom_cats_bar, bg="#1e1e2e")
                 current_row.pack(fill=tk.X, pady=(0, 2))
@@ -3014,7 +3140,7 @@ class SambungKataApp:
             cur_row_w += approx_btn_w
 
     def _render_custom_category_items(self):
-        """Merender baris daftar kategori akhiran kustom di canvas"""
+        """Merender baris daftar kategori akhiran kustom di canvas (dengan tombol naik/turun, edit & hapus)"""
         if not hasattr(self, "custom_cats_inner") or not self.custom_cats_inner.winfo_exists():
             return
 
@@ -3022,6 +3148,9 @@ class SambungKataApp:
             w.destroy()
 
         categories = self.config.get("custom_trap_endings", [])
+        if hasattr(self, "lbl_cat_list_title") and self.lbl_cat_list_title.winfo_exists():
+            self.lbl_cat_list_title.config(text=f"Daftar Kategori Akhiran ({len(categories)} tag):")
+
         if not categories:
             empty_lbl = tk.Label(
                 self.custom_cats_inner,
@@ -3034,6 +3163,7 @@ class SambungKataApp:
             empty_lbl.pack(fill=tk.X)
             return
 
+        total_cats = len(categories)
         for idx, cat in enumerate(categories):
             sfx = cat.get("suffix", "").upper()
             name = cat.get("name") or f"Akhiran {sfx}"
@@ -3041,8 +3171,8 @@ class SambungKataApp:
             color = cat.get("color", "#cba6f7")
             cnt = self.solver.count_words_by_suffix(sfx) if hasattr(self.solver, "count_words_by_suffix") else 0
 
-            row = tk.Frame(self.custom_cats_inner, bg="#1e1e2e", padx=8, pady=6)
-            row.pack(fill=tk.X, padx=4, pady=3)
+            row = tk.Frame(self.custom_cats_inner, bg="#1e1e2e", padx=6, pady=4)
+            row.pack(fill=tk.X, padx=4, pady=2)
 
             # Checkbox toggle
             var = tk.BooleanVar(value=enabled)
@@ -3056,7 +3186,45 @@ class SambungKataApp:
             )
             cb.pack(side=tk.LEFT)
 
-            # Badge Suffix
+            # Tombol Naik / Turun Urutan
+            move_frame = tk.Frame(row, bg="#1e1e2e")
+            move_frame.pack(side=tk.LEFT, padx=(0, 4))
+
+            btn_up = tk.Button(
+                move_frame,
+                text="▲",
+                font=("Segoe UI", 7, "bold"),
+                bg="#313244" if idx > 0 else "#252636",
+                fg="#cdd6f4" if idx > 0 else "#585b70",
+                activebackground="#45475a",
+                relief=tk.FLAT,
+                bd=0,
+                padx=4,
+                pady=0,
+                cursor="hand2" if idx > 0 else "arrow",
+                state=tk.NORMAL if idx > 0 else tk.DISABLED,
+                command=lambda i=idx: self._on_move_custom_category(i, -1)
+            )
+            btn_up.pack(side=tk.TOP, pady=(0, 1))
+
+            btn_down = tk.Button(
+                move_frame,
+                text="▼",
+                font=("Segoe UI", 7, "bold"),
+                bg="#313244" if idx < total_cats - 1 else "#252636",
+                fg="#cdd6f4" if idx < total_cats - 1 else "#585b70",
+                activebackground="#45475a",
+                relief=tk.FLAT,
+                bd=0,
+                padx=4,
+                pady=0,
+                cursor="hand2" if idx < total_cats - 1 else "arrow",
+                state=tk.NORMAL if idx < total_cats - 1 else tk.DISABLED,
+                command=lambda i=idx: self._on_move_custom_category(i, 1)
+            )
+            btn_down.pack(side=tk.BOTTOM)
+
+            # Badge Suffix (Bisa diklik untuk edit)
             badge = tk.Label(
                 row,
                 text=sfx,
@@ -3064,9 +3232,11 @@ class SambungKataApp:
                 bg=color,
                 fg="#11111b",
                 padx=6,
-                pady=1
+                pady=1,
+                cursor="hand2"
             )
-            badge.pack(side=tk.LEFT, padx=(2, 8))
+            badge.pack(side=tk.LEFT, padx=(2, 6))
+            badge.bind("<Button-1>", lambda e, i=idx: self.open_edit_custom_category_dialog(i))
 
             # Nama dan Info Kata
             info_frame = tk.Frame(row, bg="#1e1e2e")
@@ -3092,9 +3262,25 @@ class SambungKataApp:
             )
             lbl_cnt.pack(anchor="w")
 
-            # Tombol Hapus
+            # Actions: Edit dan Hapus
+            act_frame = tk.Frame(row, bg="#1e1e2e")
+            act_frame.pack(side=tk.RIGHT)
+
+            btn_edit = tk.Button(
+                act_frame,
+                text="✏️",
+                font=("Segoe UI", 9),
+                bg="#1e1e2e",
+                fg="#89dceb",
+                activebackground="#313244",
+                relief=tk.FLAT,
+                cursor="hand2",
+                command=lambda i=idx: self.open_edit_custom_category_dialog(i)
+            )
+            btn_edit.pack(side=tk.LEFT, padx=1)
+
             btn_del = tk.Button(
-                row,
+                act_frame,
                 text="🗑️",
                 font=("Segoe UI", 9),
                 bg="#1e1e2e",
@@ -3104,7 +3290,246 @@ class SambungKataApp:
                 cursor="hand2",
                 command=lambda i=idx: self._on_delete_custom_category(i)
             )
-            btn_del.pack(side=tk.RIGHT)
+            btn_del.pack(side=tk.LEFT, padx=1)
+
+    def _on_move_custom_category(self, idx, direction):
+        """Memindahkan posisi kategori ke atas (-1) atau ke bawah (+1)"""
+        categories = self.config.get("custom_trap_endings", [])
+        new_idx = idx + direction
+        if 0 <= idx < len(categories) and 0 <= new_idx < len(categories):
+            categories[idx], categories[new_idx] = categories[new_idx], categories[idx]
+            self.config["custom_trap_endings"] = categories
+            save_config(self.config)
+            self.solver.set_custom_endings(categories)
+            self._render_custom_category_items()
+            self._render_custom_category_quick_bar()
+            if hasattr(self, "last_detected_word") and self.last_detected_word:
+                self.update_results(self.last_detected_word)
+            sfx = categories[new_idx].get("suffix", "")
+            self.show_toast(f"Tag '{sfx}' dipindahkan ke urutan #{new_idx + 1}")
+
+    def _on_sort_custom_categories_az(self):
+        """Mengurutkan kategori kustom secara abjad A-Z"""
+        categories = self.config.get("custom_trap_endings", [])
+        if not categories:
+            return
+        categories.sort(key=lambda c: c.get("suffix", "").upper())
+        self.config["custom_trap_endings"] = categories
+        save_config(self.config)
+        self.solver.set_custom_endings(categories)
+        self._render_custom_category_items()
+        self._render_custom_category_quick_bar()
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+        self.show_toast("🔤 Kategori akhiran diurutkan A-Z")
+
+    def _on_sort_custom_categories_count(self):
+        """Mengurutkan kategori kustom berdasarkan jumlah kata di kamus terbanyak"""
+        categories = self.config.get("custom_trap_endings", [])
+        if not categories:
+            return
+        categories.sort(key=lambda c: self.solver.count_words_by_suffix(c.get("suffix", "")), reverse=True)
+        self.config["custom_trap_endings"] = categories
+        save_config(self.config)
+        self.solver.set_custom_endings(categories)
+        self._render_custom_category_items()
+        self._render_custom_category_quick_bar()
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+        self.show_toast("📊 Kategori akhiran diurutkan berdasarkan kata terbanyak")
+
+    def open_edit_custom_category_dialog(self, idx):
+        """Membuka dialog popup modal untuk mengedit akhiran, nama, dan warna kategori"""
+        categories = self.config.get("custom_trap_endings", [])
+        if not (0 <= idx < len(categories)):
+            return
+
+        cat = categories[idx]
+        cur_sfx = cat.get("suffix", "").upper()
+        cur_name = cat.get("name") or f"Akhiran {cur_sfx}"
+        cur_color = cat.get("color", "#cba6f7")
+
+        edit_win = tk.Toplevel(self.custom_cats_win if hasattr(self, "custom_cats_win") and self.custom_cats_win.winfo_exists() else self.root)
+        edit_win.title(f"✏️ Edit Tag: {cur_sfx}")
+        edit_win.geometry("420x460")
+        edit_win.resizable(False, False)
+        edit_win.attributes("-topmost", True)
+        edit_win.configure(bg="#1e1e2e")
+        edit_win.grab_set()
+
+        # Header
+        hdr = tk.Frame(edit_win, bg="#181825", padx=14, pady=10)
+        hdr.pack(fill=tk.X)
+
+        tk.Label(
+            hdr,
+            text=f"✏️ Edit Kategori Akhiran [{cur_sfx}]",
+            font=("Segoe UI", 11, "bold"),
+            fg="#cba6f7",
+            bg="#181825"
+        ).pack(side=tk.LEFT)
+
+        body = tk.Frame(edit_win, bg="#1e1e2e", padx=16, pady=12)
+        body.pack(fill=tk.BOTH, expand=True)
+
+        # Field 1: Akhiran (Suffix)
+        tk.Label(body, text="Akhiran (Huruf):", font=("Segoe UI", 9, "bold"), fg="#cdd6f4", bg="#1e1e2e", anchor="w").pack(fill=tk.X, pady=(2, 2))
+        entry_sfx = tk.Entry(body, font=("Segoe UI", 10, "bold"), bg="#313244", fg="#f5e0dc", insertbackground="white")
+        entry_sfx.insert(0, cur_sfx)
+        entry_sfx.pack(fill=tk.X, pady=(0, 8))
+
+        # Field 2: Nama Kategori (Label)
+        tk.Label(body, text="Nama Kategori:", font=("Segoe UI", 9, "bold"), fg="#cdd6f4", bg="#1e1e2e", anchor="w").pack(fill=tk.X, pady=(2, 2))
+        entry_name = tk.Entry(body, font=("Segoe UI", 9), bg="#313244", fg="#cdd6f4", insertbackground="white")
+        entry_name.insert(0, cur_name)
+        entry_name.pack(fill=tk.X, pady=(0, 8))
+
+        # Field 3: Warna Badge & Live Preview
+        tk.Label(body, text="Warna Badge & Tampilan:", font=("Segoe UI", 9, "bold"), fg="#cdd6f4", bg="#1e1e2e", anchor="w").pack(fill=tk.X, pady=(2, 4))
+
+        preview_frame = tk.Frame(body, bg="#181825", padx=10, pady=8)
+        preview_frame.pack(fill=tk.X, pady=(0, 8))
+
+        tk.Label(preview_frame, text="Preview Tag:", font=("Segoe UI", 8), fg="#a6adc8", bg="#181825").pack(side=tk.LEFT, padx=(0, 10))
+
+        lbl_preview = tk.Label(
+            preview_frame,
+            text=cur_sfx,
+            font=("Segoe UI", 9, "bold"),
+            bg=cur_color,
+            fg="#11111b",
+            padx=10,
+            pady=2
+        )
+        lbl_preview.pack(side=tk.LEFT)
+
+        selected_color = [cur_color]
+
+        def update_preview(*args):
+            s = entry_sfx.get().strip().upper() or "TAG"
+            lbl_preview.config(text=s, bg=selected_color[0])
+
+        entry_sfx.bind("<KeyRelease>", update_preview)
+
+        # Swatches Palette
+        tk.Label(body, text="Pilih Warna Cepat:", font=("Segoe UI", 8), fg="#a6adc8", bg="#1e1e2e", anchor="w").pack(fill=tk.X, pady=(2, 2))
+        swatches_frame = tk.Frame(body, bg="#1e1e2e")
+        swatches_frame.pack(fill=tk.X, pady=(0, 6))
+
+        palette = [
+            "#cba6f7", "#f5c2e7", "#89dceb", "#f9e2af", "#a6e3a1",
+            "#fab387", "#94e2d5", "#f38ba8", "#eba0ac", "#b4befe",
+            "#74c7ec", "#eed49f"
+        ]
+
+        def pick_swatch(col):
+            selected_color[0] = col
+            update_preview()
+
+        for c_hex in palette:
+            b_swatch = tk.Button(
+                swatches_frame,
+                bg=c_hex,
+                activebackground=c_hex,
+                relief=tk.FLAT,
+                bd=0,
+                width=2,
+                height=1,
+                cursor="hand2",
+                command=lambda ch=c_hex: pick_swatch(ch)
+            )
+            b_swatch.pack(side=tk.LEFT, padx=2, pady=2)
+
+        def pick_custom_color():
+            res = colorchooser.askcolor(initialcolor=selected_color[0], parent=edit_win, title="Pilih Warna Kustom")
+            if res and res[1]:
+                selected_color[0] = res[1]
+                update_preview()
+
+        btn_pick_color = tk.Button(
+            body,
+            text="🎨 Pilih Warna Lain (Color Picker)...",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=3,
+            cursor="hand2",
+            command=pick_custom_color
+        )
+        btn_pick_color.pack(anchor="w", pady=(0, 10))
+
+        # Action Buttons (Simpan & Batal)
+        btn_box = tk.Frame(body, bg="#1e1e2e")
+        btn_box.pack(fill=tk.X, pady=(10, 0))
+
+        def on_save_edit():
+            raw_sfx = entry_sfx.get().strip().upper()
+            clean_sfx = "".join(c for c in raw_sfx if c.isalpha())
+            if not clean_sfx:
+                self.show_toast("Akhiran harus berupa huruf alfabet!")
+                return
+
+            raw_name = entry_name.get().strip()
+            final_name = raw_name if raw_name else f"Akhiran {clean_sfx}"
+
+            # Cek duplikat dengan kategori lain
+            for i, c in enumerate(categories):
+                if i != idx and c.get("suffix", "").upper() == clean_sfx:
+                    self.show_toast(f"Kategori akhiran '{clean_sfx}' sudah digunakan!")
+                    return
+
+            categories[idx]["suffix"] = clean_sfx
+            categories[idx]["name"] = final_name
+            categories[idx]["color"] = selected_color[0]
+
+            self.config["custom_trap_endings"] = categories
+            save_config(self.config)
+            self.solver.set_custom_endings(categories)
+
+            self._render_custom_category_items()
+            self._render_custom_category_quick_bar()
+            if hasattr(self, "last_detected_word") and self.last_detected_word:
+                self.update_results(self.last_detected_word)
+
+            edit_win.destroy()
+            self.show_toast(f"✅ Tag '{final_name}' ({clean_sfx}) berhasil diperbarui!")
+
+        btn_save = tk.Button(
+            btn_box,
+            text="💾 Simpan Perubahan",
+            font=("Segoe UI", 9, "bold"),
+            bg="#a6e3a1",
+            fg="#11111b",
+            activebackground="#94e2d5",
+            relief=tk.FLAT,
+            padx=12,
+            pady=4,
+            cursor="hand2",
+            command=on_save_edit
+        )
+        btn_save.pack(side=tk.LEFT, padx=(0, 6))
+
+        btn_cancel = tk.Button(
+            btn_box,
+            text="Batal",
+            font=("Segoe UI", 9),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=12,
+            pady=4,
+            cursor="hand2",
+            command=edit_win.destroy
+        )
+        btn_cancel.pack(side=tk.LEFT)
+
+        edit_win.bind("<Return>", lambda e: on_save_edit())
+        edit_win.bind("<Escape>", lambda e: edit_win.destroy())
+        entry_sfx.focus_set()
 
     def _on_add_custom_category(self):
         """Menambahkan kategori akhiran baru dari input"""
@@ -4574,6 +4999,27 @@ class SambungKataApp:
             anchor=tk.W
         )
         msg_lbl.pack(fill=tk.X, pady=(4, 0))
+
+    def on_toggle_dev_mode(self):
+        """Toggle mode pengembangan: menampilkan/menyembunyikan tombol ⚡ Restart"""
+        new_val = self.dev_mode_var.get()
+        self.config["dev_mode"] = new_val
+        save_config(self.config)
+        if new_val:
+            # Tampilkan tombol restart tepat sebelum tombol mode santai
+            if hasattr(self, "btn_mode_santai") and self.btn_mode_santai.winfo_exists():
+                self.btn_restart.pack(side=tk.LEFT, padx=3, before=self.btn_mode_santai)
+            else:
+                self.btn_restart.pack(side=tk.LEFT, padx=3)
+            self.show_toast("🛠️ Mode Development DIAKTIFKAN (Tombol ⚡ Restart muncul)")
+        else:
+            self.btn_restart.pack_forget()
+            self.show_toast("🛠️ Mode Development DINONAKTIFKAN (Tombol ⚡ Restart disembunyikan)")
+
+    def _toggle_dev_mode_shortcut(self):
+        """Toggle cepat mode development via keyboard Ctrl+Shift+D"""
+        self.dev_mode_var.set(not self.dev_mode_var.get())
+        self.on_toggle_dev_mode()
 
     def _restart_app_cleanly(self):
         """Menutup aplikasi secara bersih lalu memulai ulang"""

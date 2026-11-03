@@ -33,6 +33,7 @@ class SambungKataSolver:
         self.whitelisted_words = set()
         self.words_by_initial = {}
         self.custom_endings = []
+        self.tier0_sort_mode = "default"  # "default" atau "tag_order"
 
         self.load_blacklist()
         self.load_whitelist()
@@ -347,6 +348,17 @@ class SambungKataSolver:
                         "color": item.get("color", "#cba6f7")
                     })
 
+    def set_tier0_sort_mode(self, mode):
+        """
+        Mengatur mode pengurutan kata pada Tier 0 (Custom Traps):
+        - 'default': Mengurutkan berdasarkan panjang ideal (4-7, 3, 8, >8) lalu urutan abjad kamus.
+        - 'tag_order': Mengurutkan berdasarkan urutan daftar tag kustom (tag teratas lebih dulu).
+        """
+        if mode in ("default", "tag_order"):
+            self.tier0_sort_mode = mode
+            return True
+        return False
+
     def count_words_by_suffix(self, suffix):
         """Menghitung berapa banyak kata di kamus aktif yang berakhiran suffix tertentu"""
         s = suffix.strip().lower()
@@ -354,7 +366,7 @@ class SambungKataSolver:
             return 0
         return sum(1 for w in self.words if w.endswith(s) and w not in self.blacklisted_words)
 
-    def cari_jawaban(self, awalan_prefix, limit=12, mode_santai=False, custom_endings=None):
+    def cari_jawaban(self, awalan_prefix, limit=12, mode_santai=False, custom_endings=None, sort_mode=None):
         """
         Mencari kata yang DIAWALI oleh `awalan_prefix`:
         Contoh:
@@ -395,11 +407,37 @@ class SambungKataSolver:
         if not candidates:
             return []
 
+        # Mode sortir Tier 0 (default atau tag_order)
+        effective_sort_mode = sort_mode if sort_mode is not None else getattr(self, "tier0_sort_mode", "default")
+
         # Aturan akhiran kustom yang aktif
         custom_rules = custom_endings if custom_endings is not None else self.custom_endings
-        active_custom = [c for c in custom_rules if c.get("enabled", True)]
-        # Sort suffix terpanjang lebih dahulu
-        active_custom.sort(key=lambda c: len(c.get("suffix", "")), reverse=True)
+        active_custom = []
+        if custom_rules:
+            for idx, c in enumerate(custom_rules):
+                if isinstance(c, dict) and c.get("enabled", True):
+                    r = dict(c)
+                    r["tag_index"] = idx
+                    r["suffix"] = r.get("suffix", "").lower()
+                    if r["suffix"]:
+                        active_custom.append(r)
+                elif isinstance(c, str) and c.strip():
+                    s = c.strip().lower()
+                    active_custom.append({
+                        "suffix": s,
+                        "name": f"Akhiran {s.upper()}",
+                        "enabled": True,
+                        "color": "#cba6f7",
+                        "tag_index": idx
+                    })
+
+        # Urutan pencocokan aturan custom
+        if effective_sort_mode == "default":
+            # Pada mode default, utamakan suffix terpanjang (misal NGK sebelum GK)
+            match_rules = sorted(active_custom, key=lambda c: len(c.get("suffix", "")), reverse=True)
+        else:
+            # Pada mode tag_order, utamakan tag dengan posisi teratas (tag_index lebih kecil)
+            match_rules = sorted(active_custom, key=lambda c: (c.get("tag_index", 0), -len(c.get("suffix", ""))))
 
         vowels = set("aiueo")
         jebakan_custom = []
@@ -419,7 +457,7 @@ class SambungKataSolver:
                 
                 # Cek akhiran custom
                 matched_rule = None
-                for rule in active_custom:
+                for rule in match_rules:
                     sfx = rule.get("suffix", "").lower()
                     if sfx and w.endswith(sfx):
                         matched_rule = rule
@@ -440,7 +478,7 @@ class SambungKataSolver:
 
                 # Cek akhiran custom (Prioritas Super / Paling Atas)
                 matched_rule = None
-                for rule in active_custom:
+                for rule in match_rules:
                     sfx = rule.get("suffix", "").lower()
                     if sfx and w.endswith(sfx):
                         matched_rule = rule
@@ -455,7 +493,7 @@ class SambungKataSolver:
                 else:
                     kata_biasa.append(w)
 
-        # Urutkan berdasarkan whitelist (prioritas utama di tiap kategori) dan panjang yang nyaman diketik
+        # Urutkan kata per tier
         def sort_key(w):
             is_wl = 0 if w in self.whitelisted_words else 1
             l = len(w)
@@ -469,7 +507,38 @@ class SambungKataSolver:
                 prio = 3
             return (is_wl, prio, l)
 
-        jebakan_custom.sort(key=lambda item: sort_key(item[0]))
+        if effective_sort_mode == "tag_order":
+            def sort_key_custom(item):
+                w, rule = item
+                is_wl = 0 if w in self.whitelisted_words else 1
+                tag_prio = rule.get("tag_index", 0)
+                l = len(w)
+                if 4 <= l <= 7:
+                    prio = 0
+                elif l == 3:
+                    prio = 1
+                elif l == 8:
+                    prio = 2
+                else:
+                    prio = 3
+                return (is_wl, tag_prio, prio, l)
+            jebakan_custom.sort(key=sort_key_custom)
+        else:
+            # Mode Default: Urutkan berdasarkan Whitelist -> Panjang 4-7, 3, 8, >8 -> Urutan Abjad Kamus (Stable Sort)
+            def sort_key_custom(item):
+                w, rule = item
+                is_wl = 0 if w in self.whitelisted_words else 1
+                l = len(w)
+                if 4 <= l <= 7:
+                    prio = 0
+                elif l == 3:
+                    prio = 1
+                elif l == 8:
+                    prio = 2
+                else:
+                    prio = 3
+                return (is_wl, prio, l)
+            jebakan_custom.sort(key=sort_key_custom)
         jebakan_x.sort(key=sort_key)
         jebakan_sulit.sort(key=sort_key)
         kata_biasa.sort(key=sort_key)
