@@ -5260,11 +5260,45 @@ class SambungKataApp:
         list_frame = tk.Frame(self.dict_win, bg="#1e1e2e", padx=14, pady=4)
         list_frame.pack(fill=tk.BOTH, expand=True)
 
+        # Style Treeview bertema Dark Catppuccin dengan dukungan background warna baris
+        style = ttk.Style(self.dict_win)
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+
+        style.configure(
+            "Dict.Treeview",
+            background="#1e1e2e",
+            foreground="#cdd6f4",
+            fieldbackground="#1e1e2e",
+            borderwidth=0,
+            font=("Segoe UI", 9)
+        )
+        style.configure(
+            "Dict.Treeview.Heading",
+            background="#313244",
+            foreground="#cdd6f4",
+            relief="flat",
+            font=("Segoe UI", 9, "bold")
+        )
+        style.map(
+            "Dict.Treeview.Heading",
+            background=[("active", "#45475a")],
+            foreground=[("active", "#f5e0dc")]
+        )
+        style.map(
+            "Dict.Treeview",
+            background=[("selected", "#45475a")],
+            foreground=[("selected", "#ffffff")]
+        )
+
         self.dict_tree_scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
         self.dict_tree = ttk.Treeview(
             list_frame,
             columns=("no", "word", "len", "tags", "source"),
             show="headings",
+            style="Dict.Treeview",
             yscrollcommand=self._on_dict_tree_scroll,
             selectmode="extended"
         )
@@ -5283,17 +5317,11 @@ class SambungKataApp:
         self.dict_tree.column("tags", width=125, anchor="center")
         self.dict_tree.column("source", width=135, anchor="center")
 
-        # Konfigurasi warna teks (foreground) untuk masing-masing tag/kategori
-        self.dict_tree.tag_configure("sfx_X", foreground="#f38ba8")
-        self.dict_tree.tag_configure("sfx_WL", foreground="#f9e2af")
-        self.dict_tree.tag_configure("sfx_BL", foreground="#f38ba8")
-        self.dict_tree.tag_configure("sfx_Normal", foreground="#cdd6f4")
-        for ch in ("Z", "Q", "V", "J", "W", "F"):
-            self.dict_tree.tag_configure(f"sfx_{ch}", foreground="#fab387")
-        for cat in self.config.get("custom_trap_endings", []):
-            sfx = cat.get("suffix", "").upper()
-            col = cat.get("color", "#cba6f7")
-            self.dict_tree.tag_configure(f"sfx_{sfx}", foreground=col)
+        # Konfigurasi pewarnaan baris: FONT TETAP PUTIH/TERANG BERSIH (#cdd6f4), warna HANYA pada background baris status
+        self.dict_tree.tag_configure("status_whitelist", background="#2a3824", foreground="#cdd6f4")
+        self.dict_tree.tag_configure("status_blocklist", background="#3d2028", foreground="#cdd6f4")
+        self.dict_tree.tag_configure("row_even", background="#1e1e2e", foreground="#cdd6f4")
+        self.dict_tree.tag_configure("row_odd", background="#181825", foreground="#cdd6f4")
 
         self.dict_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.dict_tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
@@ -5593,7 +5621,15 @@ class SambungKataApp:
             return
 
         chunk = self._dict_all_results[start:end]
-        for r in chunk:
+        for idx_row, r in enumerate(chunk, start=start):
+            # Warna HANYA diterapkan pada background status (bukan font agar tetap bersih dan jelas dibaca)
+            if r.get("is_blacklisted"):
+                row_tag = "status_blocklist"
+            elif r.get("is_whitelisted"):
+                row_tag = "status_whitelist"
+            else:
+                row_tag = "row_even" if idx_row % 2 == 0 else "row_odd"
+
             self.dict_tree.insert(
                 "",
                 "end",
@@ -5604,7 +5640,7 @@ class SambungKataApp:
                     r.get("tag", ""),
                     r.get("status", "")
                 ),
-                tags=(r.get("tag_id", "sfx_Normal"),)
+                tags=(row_tag,)
             )
         self._dict_loaded_count = end
         self._dict_update_stats_label()
