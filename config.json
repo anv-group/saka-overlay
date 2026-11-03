@@ -25,7 +25,7 @@
     "auto_blacklist_invalid": true,
     "auto_learn_valid": true,
     "tier0_sort_mode": "default",
-    "dev_mode": false,
+    "dev_mode": true,
     "custom_trap_endings": [
         {
             "suffix": "X",
@@ -84,13 +84,13 @@
         {
             "suffix": "OI",
             "name": "Akhiran OI",
-            "enabled": true,
+            "enabled": false,
             "color": "#f5c2e7"
         },
         {
             "suffix": "EI",
             "name": "Akhiran EI",
-            "enabled": true,
+            "enabled": false,
             "color": "#89dceb"
         },
         {
@@ -132,10 +132,29 @@
         {
             "suffix": "IF",
             "name": "Akhiran IF",
-            "enabled": true,
+            "enabled": false,
             "color": "#89dceb"
+        },
+        {
+            "suffix": "UF",
+            "name": "UF",
+            "enabled": true,
+            "color": "#a6e3a1"
+        },
+        {
+            "suffix": "LEX",
+            "name": "LEX",
+            "enabled": true,
+            "color": "#fab387"
+        },
+        {
+            "suffix": "GH",
+            "name": "GH",
+            "enabled": true,
+            "color": "#94e2d5"
         }
     ],
-    "window_geometry": "534x1074+1396+59",
+    "auto_copy_top_word": false,
+    "window_geometry": "534x1074+1361+59",
     "santai_auto_disabled_tags": []
 }

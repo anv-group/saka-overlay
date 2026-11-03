@@ -4,6 +4,7 @@ aslam
 exam
 exekutif
 exim
+exit
 extra
 fax
 flex
@@ -48,3 +49,4 @@ unab
 unar
 under
 unux
+haq

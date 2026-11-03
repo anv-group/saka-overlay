@@ -502,6 +502,18 @@ class SambungKataApp:
         # 3. Baris Horizontal Quick Toggle Kategori Custom
         self.custom_cats_bar = tk.Frame(self.root, bg="#1e1e2e")
         self.custom_cats_bar.pack(fill=tk.X, padx=8, pady=(1, 2))
+
+        # Dynamic Auto-Reflow saat ukuran window berubah agar tag tidak pernah off-screen
+        self._cats_bar_last_w = 0
+        self._cats_bar_timer = None
+        def _on_cats_bar_resize(event):
+            if abs(event.width - self._cats_bar_last_w) > 6:
+                self._cats_bar_last_w = event.width
+                if self._cats_bar_timer:
+                    self.root.after_cancel(self._cats_bar_timer)
+                self._cats_bar_timer = self.root.after(30, self._render_custom_category_quick_bar)
+
+        self.custom_cats_bar.bind("<Configure>", _on_cats_bar_resize)
         self._render_custom_category_quick_bar()
 
         # 4. Toast Frame & Warning Keyakinan Rendah
@@ -3141,7 +3153,7 @@ class SambungKataApp:
         pad_bottom.pack(fill=tk.X)
 
     def _render_custom_category_quick_bar(self):
-        """Merender tombol toggle untuk tiap kategori custom (Compact, tanpa simbol centang/silang & Auto-Wrap multi-baris)"""
+        """Merender tombol toggle untuk tiap kategori custom (Compact, tanpa simbol centang/silang & Auto-Wrap multi-baris presisi)"""
         if not hasattr(self, "custom_cats_bar") or not self.custom_cats_bar.winfo_exists():
             return
 
@@ -3184,15 +3196,21 @@ class SambungKataApp:
             lbl_none.pack(side=tk.LEFT, padx=(0, 4))
             return
 
-        # Dapatkan lebar yang tersedia untuk wrapping
+        # Dapatkan lebar aktual yang tersedia untuk wrapping secara presisi
         avail_w = self.custom_cats_bar.winfo_width()
         if avail_w < 150:
             try:
-                avail_w = self.root.winfo_width() - 30
+                avail_w = self.root.winfo_width() - 20
             except Exception:
-                avail_w = 440
-        if avail_w < 200:
-            avail_w = 440
+                avail_w = 420
+        if avail_w < 150:
+            avail_w = 420
+
+        # Berikan safety margin 14px agar tombol di ujung kanan tidak pernah terpotong/off-screen
+        max_row_w = avail_w - 14
+
+        import tkinter.font as tkfont
+        tag_font = tkfont.Font(family="Segoe UI", size=8, weight="bold")
 
         cur_row_w = 26  # Lebar awal terpakai oleh icon tag + margin
 
@@ -3211,9 +3229,10 @@ class SambungKataApp:
                 btn_fg = "#6c7086"
                 btn_abg = "#45475a"
 
-            approx_btn_w = max(24, len(sfx) * 8 + 14) + 4
+            # Hitung lebar fisik tombol secara presisi: text + internal padding (padx=5*2) + border/margin Windows (10px) + pack padx=2*2 (4px)
+            btn_w = tag_font.measure(sfx) + 20
 
-            if cur_row_w + approx_btn_w > avail_w and cur_row_w > 35:
+            if cur_row_w + btn_w > max_row_w and cur_row_w > 30:
                 current_row = tk.Frame(self.custom_cats_bar, bg="#1e1e2e")
                 current_row.pack(fill=tk.X, pady=(0, 2))
                 cur_row_w = 0
@@ -3221,7 +3240,7 @@ class SambungKataApp:
             btn = tk.Button(
                 current_row,
                 text=btn_text,
-                font=("Segoe UI", 8, "bold"),
+                font=tag_font,
                 bg=btn_bg,
                 fg=btn_fg,
                 activebackground=btn_abg,
@@ -3234,7 +3253,7 @@ class SambungKataApp:
                 command=lambda i=idx, cur=enabled: self._on_toggle_custom_category(i, not cur)
             )
             btn.pack(side=tk.LEFT, padx=2)
-            cur_row_w += approx_btn_w
+            cur_row_w += btn_w
 
     def _render_custom_category_items(self):
         """Merender baris daftar kategori akhiran kustom di canvas (dengan tombol naik/turun, edit & hapus)"""
