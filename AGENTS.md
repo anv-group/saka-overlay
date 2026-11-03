@@ -171,7 +171,13 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
        - Tag kustom yang mengandung `X, Q, F` otomatis dimatikan dan dipulihkan saat kembali ke Mode Normal.
      - **🔥 Mode Brutal (`game_mode="brutal"`):**
        - Dikhususkan untuk room kompetitif/brutal Roblox dengan akhiran mematikan seperti `AMSI` (akamsi, syamsi), `KSO` (bakso, dakso, ekso), `RHU` (borhu, erhu), `TL` (axolotl, ritl), `BD` (apbd, ibd), dll.
-       - **Jendela Pengaturan Mode Brutal (`🔥 Pengaturan Mode Brutal`):** Pengguna dapat memilih tag kustom mana saja yang otomatis dinyalakan saat Mode Brutal aktif via checklist, tombol cepat `⚡ Pilih Semua`, `🔄 Reset Default (AMSI, KSO, RHU, TL, BD)`, `❌ Hapus Semua`, serta form pendaftaran akhiran baru.
+        - **Jendela Pengaturan Mode Brutal (`🔥 Pengaturan Mode Brutal`):**
+          - Pengguna dapat memilih tag kustom mana saja yang otomatis dinyalakan saat Mode Brutal aktif via checklist, tombol cepat `⚡ Pilih Semua`, `🔄 Reset Default (AMSI, KSO, RHU, TL, BD)`, `❌ Hapus Semua`, serta form pendaftaran akhiran baru.
+          - **Interaksi Se-baris (Click Anywhere):** Mengklik di bagian mana saja pada satu baris (frame baris, badge akhiran, nama tag, jumlah kata, maupun pill status) langsung me-toggle status tag seketika tanpa harus menekan kotak centang kecil secara presisi.
+          - **Visual Kontras Tinggi:**
+            - **Aktif (BRUTAL):** Latar belakang baris berubah menjadi merah marun pekat (`#381d28`) dengan bingkai highlight merah (`#f38ba8`), teks nama putih tebal (`#f5e0dc`), checkmark merah terang, dan pill status kanan berubah menyala menjadi `🔥 BRUTAL` (latar merah terang `#f38ba8`, font hitam pekat `#11111b`).
+            - **Nonaktif:** Latar belakang abu-abu gelap standar (`#1e1e2e`) dengan bingkai halus (`#313244`), teks redup (`#6c7086`), dan pill status kanan berwarna abu-abu redup `⚪ NONAKTIF`.
+          - **Perbaikan Scroll Mousewheel Mulus:** Mousewheel terikat secara menyeluruh (`_bind_scroll_recursive` dan routing terisolasi `self.brutal_canvas`) ke seluruh kontainer, canvas, frame inner, scrollbar, dan setiap widget baris, sehingga scrolling roda mouse selalu bekerja mulus tanpa dead spot.
        - **Isolasi Profil Tag Cerdas:** Tag aktif di Mode Normal disimpan ke `saved_normal_tags`. Saat beralih ke Mode Brutal, tag disetel sesuai daftar `brutal_mode_tags`. Men-toggle tag pada quick-bar saat di Mode Brutal otomatis menyinkronkan daftar Brutal, dan saat kembali ke Mode Normal, daftar tag normal pengguna dipulihkan secara utuh tanpa tercampur.
 2. **Validasi Vokal**:
    - Setiap kata wajib memiliki minimal 1 huruf vokal (`A, I, U, E, O`) untuk menyaring singkatan atau akronim aneh yang tidak diterima oleh kamus game Roblox.

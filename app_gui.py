@@ -2466,14 +2466,21 @@ class SambungKataApp:
 
         w_str = str(event.widget)
 
-        # 1. Jika event terjadi di dalam jendela Kategori Kustom
+        # 1. Jika event terjadi di dalam jendela Pengaturan Mode Brutal
+        if hasattr(self, "brutal_canvas") and self.brutal_canvas and self.brutal_canvas.winfo_exists():
+            top_str = str(self.brutal_win) if hasattr(self, "brutal_win") and self.brutal_win and self.brutal_win.winfo_exists() else ""
+            if w_str.startswith(str(self.brutal_canvas)) or (top_str and w_str.startswith(top_str)):
+                self.brutal_canvas.yview_scroll(step, "units")
+                return
+
+        # 2. Jika event terjadi di dalam jendela Kategori Kustom
         if hasattr(self, "custom_cats_canvas") and self.custom_cats_canvas and self.custom_cats_canvas.winfo_exists():
             top_str = str(self.custom_cats_win) if hasattr(self, "custom_cats_win") and self.custom_cats_win and self.custom_cats_win.winfo_exists() else ""
             if w_str.startswith(str(self.custom_cats_canvas)) or (top_str and w_str.startswith(top_str)):
                 self.custom_cats_canvas.yview_scroll(step, "units")
                 return
 
-        # 2. Jika event terjadi di dalam Canvas Rekomendasi Kata (Main Window)
+        # 3. Jika event terjadi di dalam Canvas Rekomendasi Kata (Main Window)
         if hasattr(self, "canvas") and self.canvas and self.canvas.winfo_exists():
             self.canvas.yview_scroll(step, "units")
 
@@ -2483,8 +2490,10 @@ class SambungKataApp:
         self.root.bind_all("<Button-5>", self._on_mousewheel)
 
     def _unbind_mousewheel(self, event=None):
-        # Jangan unbind jika jendela custom categories sedang aktif / terbuka
+        # Jangan unbind jika jendela custom categories atau mode brutal sedang aktif / terbuka
         if hasattr(self, "custom_cats_win") and self.custom_cats_win and self.custom_cats_win.winfo_exists():
+            return
+        if hasattr(self, "brutal_win") and self.brutal_win and self.brutal_win.winfo_exists():
             return
         self.root.unbind_all("<MouseWheel>")
         self.root.unbind_all("<Button-4>")
@@ -3483,13 +3492,16 @@ class SambungKataApp:
             return
 
         def _on_brutal_close():
+            self.brutal_canvas = None
+            self.brutal_inner = None
             if hasattr(self, "brutal_win") and self.brutal_win and self.brutal_win.winfo_exists():
                 self.brutal_win.destroy()
             self._unbind_mousewheel()
 
         self.brutal_win, _ = self._create_clean_toplevel(
-            "🔥 Pengaturan Mode Brutal", 500, 640, min_w=460, min_h=500, on_close=_on_brutal_close
+            "🔥 Pengaturan Mode Brutal", 520, 650, min_w=460, min_h=500, on_close=_on_brutal_close
         )
+        self.brutal_win.bind("<Destroy>", lambda e: (setattr(self, "brutal_canvas", None), setattr(self, "brutal_inner", None)) if e.widget == self.brutal_win else None, add="+")
 
         sub_hdr = tk.Frame(self.brutal_win, bg="#181825", padx=14, pady=8)
         sub_hdr.pack(fill=tk.X)
@@ -3576,20 +3588,189 @@ class SambungKataApp:
         scrollbar = tk.Scrollbar(list_container, orient=tk.VERTICAL, command=canvas.yview)
         inner = tk.Frame(canvas, bg="#181825")
 
-        canvas_win_id = canvas.create_window((0, 0), window=inner, anchor="nw", width=440)
+        self.brutal_canvas = canvas
+        self.brutal_inner = inner
+
+        canvas_win_id = canvas.create_window((0, 0), window=inner, anchor="nw", width=460)
         canvas.configure(yscrollcommand=scrollbar.set)
 
         inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_win_id, width=e.width))
 
+        # Mousewheel scroll handler khusus untuk jendela Brutal
+        def _scroll_brutal(e):
+            if getattr(e, "delta", 0):
+                step = int(-1 * (e.delta / 120))
+            elif getattr(e, "num", None) == 4:
+                step = -1
+            elif getattr(e, "num", None) == 5:
+                step = 1
+            else:
+                return
+            canvas.yview_scroll(step, "units")
+
+        def _bind_scroll_recursive(w):
+            w.bind("<MouseWheel>", _scroll_brutal, add="+")
+            w.bind("<Button-4>", _scroll_brutal, add="+")
+            w.bind("<Button-5>", _scroll_brutal, add="+")
+
+        # Global mousewheel binding
         self._bind_mousewheel()
-        self.brutal_win.bind("<Enter>", lambda e: self._bind_mousewheel())
-        list_container.bind("<Enter>", lambda e: self._bind_mousewheel())
-        canvas.bind("<Enter>", lambda e: self._bind_mousewheel())
-        inner.bind("<Enter>", lambda e: self._bind_mousewheel())
+        _bind_scroll_recursive(self.brutal_win)
+        _bind_scroll_recursive(list_container)
+        _bind_scroll_recursive(canvas)
+        _bind_scroll_recursive(inner)
+        _bind_scroll_recursive(sub_hdr)
+        _bind_scroll_recursive(status_frame)
+        _bind_scroll_recursive(add_frame)
+        _bind_scroll_recursive(tb)
 
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def _create_row_item(cat, idx, cats):
+            sfx = cat.get("suffix", "").upper()
+            name = cat.get("name") or f"Akhiran {sfx}"
+            col = cat.get("color", "#cba6f7")
+            is_checked = (sfx in selected_brutal_tags)
+            cnt = self.solver.count_words_by_suffix(sfx) if hasattr(self.solver, "count_words_by_suffix") else 0
+
+            # Container baris dengan kontras tinggi (merah marun jika aktif, gelap jika tidak)
+            row_bg = "#381d28" if is_checked else "#1e1e2e"
+            row_border = "#f38ba8" if is_checked else "#313244"
+            row = tk.Frame(
+                inner,
+                bg=row_bg,
+                highlightbackground=row_border,
+                highlightcolor=row_border,
+                highlightthickness=1,
+                padx=8,
+                pady=5,
+                cursor="hand2"
+            )
+            row.pack(fill=tk.X, padx=4, pady=2)
+
+            var = tk.BooleanVar(value=is_checked)
+
+            # Checkbox dengan warna seleksi kontras
+            cb = tk.Checkbutton(
+                row,
+                variable=var,
+                bg=row_bg,
+                activebackground=row_bg,
+                selectcolor="#f38ba8" if is_checked else "#313244",
+                cursor="hand2"
+            )
+            cb.pack(side=tk.LEFT, padx=(0, 4))
+
+            # Badge Suffix
+            badge = tk.Label(
+                row,
+                text=sfx,
+                font=("Segoe UI", 9, "bold"),
+                bg=col,
+                fg="#11111b",
+                padx=6,
+                pady=1,
+                cursor="hand2"
+            )
+            badge.pack(side=tk.LEFT, padx=(0, 6))
+
+            # Info Frame (Nama dan Jumlah Kata)
+            info_frame = tk.Frame(row, bg=row_bg, cursor="hand2")
+            info_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+            lbl_name = tk.Label(
+                info_frame,
+                text=name,
+                font=("Segoe UI", 9, "bold" if is_checked else "normal"),
+                fg="#f5e0dc" if is_checked else "#6c7086",
+                bg=row_bg,
+                anchor="w",
+                cursor="hand2"
+            )
+            lbl_name.pack(anchor="w")
+
+            lbl_cnt = tk.Label(
+                info_frame,
+                text=f"{cnt} kata di kamus",
+                font=("Segoe UI", 8),
+                fg="#fab387" if is_checked else "#585b70",
+                bg=row_bg,
+                anchor="w",
+                cursor="hand2"
+            )
+            lbl_cnt.pack(anchor="w")
+
+            # Pill badge status kanan: Kontras tinggi (Pill merah mencolok saat BRUTAL vs Pill abu-abu saat NONAKTIF)
+            lbl_flag = tk.Label(
+                row,
+                text=" 🔥 BRUTAL " if is_checked else " ⚪ NONAKTIF ",
+                font=("Segoe UI", 8, "bold"),
+                bg="#f38ba8" if is_checked else "#313244",
+                fg="#11111b" if is_checked else "#6c7086",
+                padx=8,
+                pady=3,
+                cursor="hand2"
+            )
+            lbl_flag.pack(side=tk.RIGHT, padx=4)
+
+            def _apply_row_visual(active):
+                if active:
+                    r_bg = "#381d28"
+                    row.configure(bg=r_bg, highlightbackground="#f38ba8", highlightcolor="#f38ba8")
+                    cb.configure(bg=r_bg, activebackground=r_bg, selectcolor="#f38ba8")
+                    info_frame.configure(bg=r_bg)
+                    lbl_name.configure(bg=r_bg, fg="#f5e0dc", font=("Segoe UI", 9, "bold"))
+                    lbl_cnt.configure(bg=r_bg, fg="#fab387")
+                    lbl_flag.configure(text=" 🔥 BRUTAL ", bg="#f38ba8", fg="#11111b", font=("Segoe UI", 8, "bold"))
+                else:
+                    r_bg = "#1e1e2e"
+                    row.configure(bg=r_bg, highlightbackground="#313244", highlightcolor="#313244")
+                    cb.configure(bg=r_bg, activebackground=r_bg, selectcolor="#313244")
+                    info_frame.configure(bg=r_bg)
+                    lbl_name.configure(bg=r_bg, fg="#6c7086", font=("Segoe UI", 9, "normal"))
+                    lbl_cnt.configure(bg=r_bg, fg="#585b70")
+                    lbl_flag.configure(text=" ⚪ NONAKTIF ", bg="#313244", fg="#6c7086", font=("Segoe UI", 8, "bold"))
+
+            # Toggle handler saat klik se-baris (di mana saja pada baris)
+            def _toggle_from_row(event=None):
+                is_now = not var.get()
+                var.set(is_now)
+                if is_now:
+                    selected_brutal_tags.add(sfx)
+                else:
+                    selected_brutal_tags.discard(sfx)
+                _apply_row_visual(is_now)
+                lbl_tb_title.config(text=f"Daftar Tag Brutal ({len(selected_brutal_tags)} dari {len(cats)} aktif):")
+
+            # Toggle handler saat klik checkbutton langsung
+            def _toggle_from_cb():
+                is_now = var.get()
+                if is_now:
+                    selected_brutal_tags.add(sfx)
+                else:
+                    selected_brutal_tags.discard(sfx)
+                _apply_row_visual(is_now)
+                lbl_tb_title.config(text=f"Daftar Tag Brutal ({len(selected_brutal_tags)} dari {len(cats)} aktif):")
+
+            cb.configure(command=_toggle_from_cb)
+
+            # Klik di mana saja pada baris (frame, badge, teks, status) langsung toggle!
+            for clickable in (row, badge, info_frame, lbl_name, lbl_cnt, lbl_flag):
+                clickable.bind("<Button-1>", _toggle_from_row)
+
+            # Hover feedback halus
+            def _on_hover(e):
+                row.configure(highlightthickness=1, highlightbackground="#f38ba8" if var.get() else "#585b70")
+            def _on_leave(e):
+                row.configure(highlightthickness=1, highlightbackground="#f38ba8" if var.get() else "#313244")
+            row.bind("<Enter>", _on_hover, add="+")
+            row.bind("<Leave>", _on_leave, add="+")
+
+            # Bind mousewheel ke seluruh komponen baris
+            for w in (row, cb, badge, info_frame, lbl_name, lbl_cnt, lbl_flag):
+                _bind_scroll_recursive(w)
 
         def _render_list():
             for w in inner.winfo_children():
@@ -3603,76 +3784,7 @@ class SambungKataApp:
                 return
 
             for idx, cat in enumerate(cats):
-                sfx = cat.get("suffix", "").upper()
-                name = cat.get("name") or f"Akhiran {sfx}"
-                col = cat.get("color", "#cba6f7")
-                is_checked = (sfx in selected_brutal_tags)
-                cnt = self.solver.count_words_by_suffix(sfx) if hasattr(self.solver, "count_words_by_suffix") else 0
-
-                row = tk.Frame(inner, bg="#1e1e2e", padx=8, pady=4)
-                row.pack(fill=tk.X, padx=4, pady=2)
-
-                var = tk.BooleanVar(value=is_checked)
-
-                def _toggle(s=sfx, v=var):
-                    if v.get():
-                        selected_brutal_tags.add(s)
-                    else:
-                        selected_brutal_tags.discard(s)
-                    lbl_tb_title.config(text=f"Daftar Tag Brutal ({len(selected_brutal_tags)} dari {len(cats)} aktif):")
-
-                cb = tk.Checkbutton(
-                    row,
-                    variable=var,
-                    bg="#1e1e2e",
-                    activebackground="#1e1e2e",
-                    selectcolor="#313244",
-                    command=_toggle
-                )
-                cb.pack(side=tk.LEFT, padx=(0, 4))
-
-                badge = tk.Label(
-                    row,
-                    text=sfx,
-                    font=("Segoe UI", 9, "bold"),
-                    bg=col,
-                    fg="#11111b",
-                    padx=6,
-                    pady=1
-                )
-                badge.pack(side=tk.LEFT, padx=(0, 6))
-
-                info_frame = tk.Frame(row, bg="#1e1e2e")
-                info_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-                lbl_name = tk.Label(
-                    info_frame,
-                    text=name,
-                    font=("Segoe UI", 9, "bold"),
-                    fg="#cdd6f4" if is_checked else "#6c7086",
-                    bg="#1e1e2e",
-                    anchor="w"
-                )
-                lbl_name.pack(anchor="w")
-
-                lbl_cnt = tk.Label(
-                    info_frame,
-                    text=f"{cnt} kata di kamus",
-                    font=("Segoe UI", 8),
-                    fg="#a6adc8" if is_checked else "#585b70",
-                    bg="#1e1e2e",
-                    anchor="w"
-                )
-                lbl_cnt.pack(anchor="w")
-
-                lbl_flag = tk.Label(
-                    row,
-                    text="🔥 BRUTAL" if is_checked else "⚪ NONAKTIF",
-                    font=("Segoe UI", 8, "bold"),
-                    fg="#f38ba8" if is_checked else "#585b70",
-                    bg="#1e1e2e"
-                )
-                lbl_flag.pack(side=tk.RIGHT, padx=4)
+                _create_row_item(cat, idx, cats)
 
             inner.update_idletasks()
             canvas.configure(scrollregion=canvas.bbox("all"))
