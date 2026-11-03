@@ -2032,17 +2032,29 @@ class SambungKataApp:
             self.word_card_pool[idx]["frame"].pack_forget()
 
     def _on_mousewheel(self, event):
-        """Scroll daftar rekomendasi kata menggunakan roda mouse secara mulus"""
-        if not hasattr(self, "canvas") or not self.canvas.winfo_exists():
-            return
+        """Scroll daftar rekomendasi kata atau kategori kustom menggunakan roda mouse secara mulus"""
         if event.delta:
             # Di Windows: event.delta positif = scroll up, negatif = scroll down
             step = int(-1 * (event.delta / 120))
-            self.canvas.yview_scroll(step, "units")
         elif event.num == 4:
-            self.canvas.yview_scroll(-1, "units")
+            step = -1
         elif event.num == 5:
-            self.canvas.yview_scroll(1, "units")
+            step = 1
+        else:
+            return
+
+        w_str = str(event.widget)
+
+        # 1. Jika event terjadi di dalam jendela Kategori Kustom
+        if hasattr(self, "custom_cats_canvas") and self.custom_cats_canvas and self.custom_cats_canvas.winfo_exists():
+            top_str = str(self.custom_cats_win) if hasattr(self, "custom_cats_win") and self.custom_cats_win and self.custom_cats_win.winfo_exists() else ""
+            if w_str.startswith(str(self.custom_cats_canvas)) or (top_str and w_str.startswith(top_str)):
+                self.custom_cats_canvas.yview_scroll(step, "units")
+                return
+
+        # 2. Jika event terjadi di dalam Canvas Rekomendasi Kata (Main Window)
+        if hasattr(self, "canvas") and self.canvas and self.canvas.winfo_exists():
+            self.canvas.yview_scroll(step, "units")
 
     def _bind_mousewheel(self, event=None):
         self.root.bind_all("<MouseWheel>", self._on_mousewheel)
@@ -2050,6 +2062,9 @@ class SambungKataApp:
         self.root.bind_all("<Button-5>", self._on_mousewheel)
 
     def _unbind_mousewheel(self, event=None):
+        # Jangan unbind jika jendela custom categories sedang aktif / terbuka
+        if hasattr(self, "custom_cats_win") and self.custom_cats_win and self.custom_cats_win.winfo_exists():
+            return
         self.root.unbind_all("<MouseWheel>")
         self.root.unbind_all("<Button-4>")
         self.root.unbind_all("<Button-5>")
@@ -2999,11 +3014,31 @@ class SambungKataApp:
 
         canvas = tk.Canvas(list_container, bg="#181825", highlightthickness=0)
         scrollbar = tk.Scrollbar(list_container, orient=tk.VERTICAL, command=canvas.yview)
+        self.custom_cats_canvas = canvas
         self.custom_cats_inner = tk.Frame(canvas, bg="#181825")
 
-        self.custom_cats_inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=self.custom_cats_inner, anchor="nw", width=450)
+        canvas_win_id = canvas.create_window((0, 0), window=self.custom_cats_inner, anchor="nw", width=450)
         canvas.configure(yscrollcommand=scrollbar.set)
+
+        self.custom_cats_inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_win_id, width=e.width))
+
+        # Mousewheel binding langsung untuk jendela Kategori Kustom
+        self._bind_mousewheel()
+        self.custom_cats_win.bind("<Enter>", lambda e: self._bind_mousewheel())
+        list_container.bind("<Enter>", lambda e: self._bind_mousewheel())
+        canvas.bind("<Enter>", lambda e: self._bind_mousewheel())
+        self.custom_cats_inner.bind("<Enter>", lambda e: self._bind_mousewheel())
+
+        # Cleanup saat jendela custom_cats ditutup
+        def _on_custom_cats_close():
+            self.custom_cats_canvas = None
+            if hasattr(self, "custom_cats_win") and self.custom_cats_win and self.custom_cats_win.winfo_exists():
+                self.custom_cats_win.destroy()
+            self._unbind_mousewheel()
+
+        self.custom_cats_win.protocol("WM_DELETE_WINDOW", _on_custom_cats_close)
+        self.custom_cats_win.bind("<Escape>", lambda e: _on_custom_cats_close())
 
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -3291,6 +3326,12 @@ class SambungKataApp:
                 command=lambda i=idx: self._on_delete_custom_category(i)
             )
             btn_del.pack(side=tk.LEFT, padx=1)
+            row.bind("<Enter>", lambda e: self._bind_mousewheel())
+
+        # Update scrollregion seketika agar scrollbar & mousewheel langsung sinkron
+        self.custom_cats_inner.update_idletasks()
+        if hasattr(self, "custom_cats_canvas") and self.custom_cats_canvas and self.custom_cats_canvas.winfo_exists():
+            self.custom_cats_canvas.configure(scrollregion=self.custom_cats_canvas.bbox("all"))
 
     def _on_move_custom_category(self, idx, direction):
         """Memindahkan posisi kategori ke atas (-1) atau ke bawah (+1)"""
