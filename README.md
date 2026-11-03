@@ -135,6 +135,32 @@ flowchart TD
 5. **🌿 Mode Santai:**  
    Pilihan khusus saat bermain di room Roblox Mode Santai (melarang huruf X, Q, dan F). Bot secara otomatis menyaring seluruh kata yang mengandung atau berakhiran `X, Q, F`, lalu mengalihkan serangan ke `Z, V, J, W`.
 
+### 🔄 Logika Pengurutan di Dalam Tier (Panjang Kata & Abjad)
+Mengapa kata dengan akhiran berbeda bisa tampil berselang-seling (contoh saat mengetik `S` muncul `SAMP [MP]`, `SANS [NS]`, `SENS [NS]`, `SIMP [MP]`, `SINGK [NGK]`)?
+
+Di dalam setiap tier (terutama pada **Tier 0: Custom Traps**), sistem mengurutkan rekomendasi kata berdasarkan kombinasi 2 kriteria:
+
+1. **Prioritas Panjang Kata (Cepat & Nyaman Diketik):**
+   - **Panjang 4–7 huruf** (Prioritas tertinggi, panjang ideal yang paling cepat diketik sebelum waktu habis).
+   - **Panjang 3 huruf** (Prioritas kedua).
+   - **Panjang 8 huruf** (Prioritas ketiga).
+   - **Panjang > 8 huruf** (Prioritas terendah).
+
+2. **Urutan Abjad (A–Z) dari Kamus:**
+   Jika beberapa kata memiliki **panjang huruf yang sama** (misal sama-sama 4 huruf), sistem menggunakan *stable sort* yang mempertahankan urutan abjad asli kosakata kamus:
+   - `SAMP` (4 huruf, akhiran `MP`) — abjad **SA**-M
+   - `SANS` (4 huruf, akhiran `NS`) — abjad **SA**-N
+   - `SENS` (4 huruf, akhiran `NS`) — abjad **SE**
+   - `SIMP` (4 huruf, akhiran `MP`) — abjad **SI**-M
+   - `SINS` (4 huruf, akhiran `NS`) — abjad **SI**-N
+   - `SOMP` (4 huruf, akhiran `MP`) — abjad **SO**
+   - Kemudian beralih ke kelompok 5 huruf: `SAINS` (`NS`), `SINGK` (`NGK`), `SIUPP` (`PP`), `SPONS` (`NS`), dst.
+
+> [!NOTE]
+> Sistem saat ini mencampurkan seluruh akhiran kustom yang aktif ke dalam Tier 0 dan mengurutkannya berdasarkan rumus:  
+> **Panjang Kata (4–7 huruf) ➔ Urutan Abjad Kata (A–Z)**  
+> Rekomendasi belum dikelompokkan secara terpisah per-jenis badge akhiran.
+
 ---
 
 ## 📚 Basis Kosakata & Kamus
