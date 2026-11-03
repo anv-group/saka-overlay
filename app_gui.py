@@ -267,6 +267,21 @@ class SambungKataApp:
         )
         self.btn_mode_santai.pack(side=tk.LEFT, padx=(4, 2))
         self.chk_santai = self.btn_mode_santai
+        self._update_mode_santai_button()
+
+        # Mode Sortir Button: DEFAULT vs URUT TAG (Langsung di UI Utama)
+        self.btn_sort_mode = tk.Button(
+            top_bar,
+            text="",
+            font=("Segoe UI", 8, "bold"),
+            relief=tk.FLAT,
+            padx=6,
+            pady=2,
+            cursor="hand2",
+            command=self.toggle_sort_mode
+        )
+        self.btn_sort_mode.pack(side=tk.LEFT, padx=(2, 2))
+        self._update_sort_mode_button()
 
         # Settings Menu (⚙️) di ujung kanan
         self.btn_settings = tk.Button(
@@ -721,6 +736,34 @@ class SambungKataApp:
                 activebackground="#45475a",
                 activeforeground="#cdd6f4"
             )
+
+    def _update_sort_mode_button(self):
+        """Memperbarui teks dan warna tombol toggle Mode Sortir di Top Bar"""
+        if not hasattr(self, "btn_sort_mode") or not self.btn_sort_mode.winfo_exists():
+            return
+        cur_mode = self.config.get("tier0_sort_mode", "default")
+        if cur_mode == "tag_order":
+            self.btn_sort_mode.config(
+                text="🏷️ URUT TAG",
+                bg="#cba6f7",
+                fg="#11111b",
+                activebackground="#b4befe",
+                activeforeground="#11111b"
+            )
+        else:
+            self.btn_sort_mode.config(
+                text="📊 DEFAULT",
+                bg="#313244",
+                fg="#89dceb",
+                activebackground="#45475a",
+                activeforeground="#89dceb"
+            )
+
+    def toggle_sort_mode(self):
+        """Toggle mode sortir tier 0 antara 'default' dan 'tag_order' langsung dari UI utama"""
+        cur = self.config.get("tier0_sort_mode", "default")
+        new_mode = "tag_order" if cur == "default" else "default"
+        self._set_tier0_sort_mode(new_mode)
 
     def toggle_mode_santai(self):
         """Toggle mode permainan antara NORMAL dan SANTAI"""
@@ -2862,7 +2905,11 @@ class SambungKataApp:
         self.solver.set_tier0_sort_mode(mode)
         if hasattr(self, "var_tier0_mode") and self.var_tier0_mode:
             self.var_tier0_mode.set(mode)
-        if hasattr(self, "last_detected_word") and self.last_detected_word:
+        self._update_sort_mode_button()
+        manual_text = "".join([c for c in self.search_var.get().strip().upper() if c.isalpha()]) if hasattr(self, "search_var") else ""
+        if manual_text:
+            self.update_results(manual_text)
+        elif hasattr(self, "last_detected_word") and self.last_detected_word:
             self.update_results(self.last_detected_word)
         if mode == "default":
             self.show_toast("📊 Mode Tier 0: Default (Panjang 4-7 & Abjad A-Z)")

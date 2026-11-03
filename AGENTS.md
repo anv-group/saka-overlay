@@ -144,6 +144,7 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
      - **Tier 0 (🔥 CUSTOM TRAPS):** Kata berakhiran kustom (misal `NS`, `NGK`, `MP`). Mendukung 2 mode pengurutan:
        - **Mode Default (`default`):** Panjang ideal (4–7 huruf pertama, 3 huruf, 8 huruf, >8 huruf) dipadukan dengan *stable sort* urutan abjad kamus (A–Z) lintas tag. Menghasilkan kata yang paling cepat dan nyaman diketik.
        - **Mode Urutan Tag (`tag_order`):** Mengelompokkan kata secara ketat berdasarkan urutan tag di daftar kustom pengguna (tag teratas muncul lebih dulu seluruhnya sebelum tag berikutnya, misal semua kata `NS` sebelum `MP`). Berguna ketika pemain ingin memprioritaskan jebakan tersulit.
+       - **Tombol Cepat di UI Utama (`📊 DEFAULT` / `🏷️ URUT TAG`):** Pemain dapat berpindah mode sortir seketika dalam 1-klik langsung dari header toolbar tanpa harus membuka menu Settings atau jendela Kelola Tag.
      - **Tier 1 (💥 JEBAKAN X):** Kata yang berakhiran `X` (contoh: `SEX`, `COMPLEX`, `PARADOX`, `DETOX`, `BOX`, `FAX`, `BODREX`).
      - **Tier 2 (⚡ JEBAKAN SULIT):** Kata yang berakhiran konsonan sulit: `Z`, `Q`, `V`, `J`, `W`, `F`.
      - **Tier 3 (🛡️ NORMAL):** Kata standar KBBI, diurutkan dari yang terpendek agar cepat diketik.

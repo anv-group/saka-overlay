@@ -97,6 +97,7 @@ Jendela aplikasi didesain khusus dengan konsep **Ultra-Compact Overlay** yang me
 | **`▶️ Mulai` / `⏹️ Stop`** | Menjalankan atau menghentikan pemindaian OCR layar secara instan. |
 | **`🔄` (Restart)** | Merestart aplikasi dalam 1-klik secara bersih untuk mereload kamus, memori, atau konfigurasi. |
 | **`NORMAL` / `SANTAI`** | Tombol tag cepat untuk beralih mode. Saat mode **`SANTAI`** aktif, seluruh kata yang mengandung atau berakhiran **X, Q, dan F** otomatis disaring dan dibuang. |
+| **`📊 DEFAULT` / `🏷️ URUT TAG`** | Tombol 1-klik di header utama untuk mengganti mode sortir rekomendasi Tier 0: **`DEFAULT`** (panjang 4–7 & abjad A–Z agar cepat diketik) atau **`URUT TAG`** (memprioritaskan urutan tag kustom/jebakan tersulit). |
 | **`⚙️` (Settings)** | Dropdown menu untuk konfigurasi: `🎯 Set Area Deteksi`, `👁️ Test Area Deteksi`, `⭐ Buka Whitelist Kata`, `🚫 Blocklist Kata`, `🏷️ Kategori Kustom`, `📋 Log Gameplay`, `⚡ Kecepatan Scan`, dan `🔄 Cek Update Git`. |
 | **`⚡ Kecepatan Scan`** | Submenu radio button 1-klik untuk memilih kecepatan: **`🔥 40ms (Ultra Instan)`**, **`⚡ 80ms (Kilat Turbo)`**, **`🚀 150ms (Cepat)`**, atau **`🐢 300ms (Santai)`**. |
 | **Search Bar Real-Time** | Input manual awalan huruf. Hasil rekomendasi langsung terfilter saat Anda mengetik tanpa perlu klik tombol cari. Input ini otomatis meng-overwrite OCR. Terdapat tombol **`❌`** di ujung kanan untuk membersihkan teks seketika. |
@@ -164,7 +165,7 @@ Di dalam setiap tier (terutama pada **Tier 0: Custom Traps**), sistem mengurutka
 > **Pilihan Mode Sortir Tier 0:**
 > 1. **Default (Panjang & Abjad):** Memprioritaskan kata panjang 4–7 huruf (nyaman & cepat diketik), urutan abjad asli kamus dipertahankan lintas tag.
 > 2. **Sesuai Urutan Tag Kustom:** Seluruh kata dari tag urutan teratas (misal tag jebakan tersulit buatan Anda) dimunculkan terlebih dahulu sebelum beralih ke tag berikutnya.
-> Pengaturan ini dapat dipilih langsung di jendela `🏷️ Kelola Kategori Custom` atau via menu `⚙️ Settings ➔ 📊 Mode Sortir Tier 0`.
+> Pengaturan ini dapat diubah langsung 1-klik via tombol **`📊 DEFAULT` / `🏷️ URUT TAG`** di header UI utama, di jendela `🏷️ Kelola Kategori Custom`, atau via menu `⚙️ Settings ➔ 📊 Mode Sortir Tier 0`.
 
 ---
 
