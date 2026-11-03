@@ -264,6 +264,30 @@ class SambungKataApp:
         )
         self.btn_title_close.pack(side=tk.RIGHT, padx=(0, 4), pady=2)
 
+        # Tombol Restart (Mode Development) diposisikan tepat di samping tombol close di titlebar
+        self.btn_restart = tk.Button(
+            self.custom_title_bar,
+            text="⚡ Restart",
+            font=("Segoe UI", 8, "bold"),
+            bg="#11111b",
+            fg="#fab387",
+            activebackground="#313244",
+            activeforeground="#f9e2af",
+            relief=tk.FLAT,
+            bd=0,
+            padx=8,
+            pady=3,
+            cursor="hand2",
+            command=self._restart_app_cleanly
+        )
+        self.btn_restart.bind("<Enter>", lambda e: self.btn_restart.config(bg="#313244", fg="#f9e2af"))
+        self.btn_restart.bind("<Leave>", lambda e: self.btn_restart.config(bg="#11111b", fg="#fab387"))
+
+        # Mode Development: Tombol Restart disembunyikan by default kecuali dev_mode aktif
+        self.dev_mode_var = tk.BooleanVar(value=self.config.get("dev_mode", False))
+        if self.dev_mode_var.get():
+            self.btn_restart.pack(side=tk.RIGHT, padx=(0, 2), pady=2)
+
         self.lbl_title_bar = tk.Label(
             self.custom_title_bar,
             text="Sambung Kata Overlay",
@@ -350,24 +374,6 @@ class SambungKataApp:
         )
         self.btn_add_word.pack(side=tk.LEFT, padx=3)
         self.btn_add_word.bind("<Button-3>", lambda e: self.open_dictionary_browser_window())
-
-        self.btn_restart = tk.Button(
-            top_bar,
-            text="⚡ Restart",
-            font=("Segoe UI", 9, "bold"),
-            bg="#313244",
-            fg="#fab387",
-            activebackground="#45475a",
-            relief=tk.FLAT,
-            padx=8,
-            pady=3,
-            cursor="hand2",
-            command=self._restart_app_cleanly
-        )
-        # Mode Development: Tombol Restart disembunyikan by default kecuali dev_mode aktif
-        self.dev_mode_var = tk.BooleanVar(value=self.config.get("dev_mode", False))
-        if self.dev_mode_var.get():
-            self.btn_restart.pack(side=tk.LEFT, padx=3)
 
         # Mode Toggle Button: NORMAL vs SANTAI (Model tag compact tanpa emoji)
         self.mode_santai_var = tk.BooleanVar(value=self.config.get("mode_santai", False))
@@ -5054,17 +5060,17 @@ class SambungKataApp:
         msg_lbl.pack(fill=tk.X, pady=(4, 0))
 
     def on_toggle_dev_mode(self):
-        """Toggle mode pengembangan: menampilkan/menyembunyikan tombol ⚡ Restart"""
+        """Toggle mode pengembangan: menampilkan/menyembunyikan tombol ⚡ Restart di titlebar samping close"""
         new_val = self.dev_mode_var.get()
         self.config["dev_mode"] = new_val
         save_config(self.config)
         if new_val:
-            # Tampilkan tombol restart tepat sebelum tombol mode santai
-            if hasattr(self, "btn_mode_santai") and self.btn_mode_santai.winfo_exists():
-                self.btn_restart.pack(side=tk.LEFT, padx=3, before=self.btn_mode_santai)
+            # Tampilkan tombol restart di samping tombol close di titlebar
+            if hasattr(self, "btn_title_close") and self.btn_title_close.winfo_exists():
+                self.btn_restart.pack(side=tk.RIGHT, padx=(0, 2), pady=2, after=self.btn_title_close)
             else:
-                self.btn_restart.pack(side=tk.LEFT, padx=3)
-            self.show_toast("🛠️ Mode Development DIAKTIFKAN (Tombol ⚡ Restart muncul)")
+                self.btn_restart.pack(side=tk.RIGHT, padx=(0, 2), pady=2)
+            self.show_toast("🛠️ Mode Development DIAKTIFKAN (Tombol ⚡ Restart muncul di titlebar)")
         else:
             self.btn_restart.pack_forget()
             self.show_toast("🛠️ Mode Development DINONAKTIFKAN (Tombol ⚡ Restart disembunyikan)")

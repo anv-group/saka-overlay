@@ -11,7 +11,7 @@
     "ocr_engine": "winocr",
     "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
     "updater_mode": "prompt",
-    "updater_branch": "reoptimized",
+    "updater_branch": "dev",
     "auto_check_update_on_startup": true,
     "use_kbbi": false,
     "use_contek": true,
@@ -25,7 +25,7 @@
     "auto_blacklist_invalid": true,
     "auto_learn_valid": true,
     "tier0_sort_mode": "default",
-    "dev_mode": true,
+    "dev_mode": false,
     "custom_trap_endings": [
         {
             "suffix": "X",
@@ -136,7 +136,6 @@
             "color": "#89dceb"
         }
     ],
-    "auto_copy_top_word": false,
-    "window_geometry": "550x1074+1199+82",
+    "window_geometry": "534x1074+1396+59",
     "santai_auto_disabled_tags": []
 }
