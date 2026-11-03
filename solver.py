@@ -600,11 +600,12 @@ class SambungKataSolver:
         selected_tags=None,
         min_len=0,
         max_len=999,
-        limit=2000
+        source_filter="all",
+        limit=None
     ):
         """
-        Mencari kata di seluruh kosakata aktif berdasarkan awalan/akhiran/mengandung
-        dan opsi filter multi-tag (bisa memilih satu atau beberapa tag).
+        Mencari kata di seluruh kosakata aktif berdasarkan awalan/akhiran/mengandung,
+        opsi filter sumber (all, kbbi_only, contek_only, both), dan filter multi-tag.
         Mengembalikan tuple: (results, total_count)
         di mana results adalah list dict dengan detail kata terstruktur.
         """
@@ -619,11 +620,15 @@ class SambungKataSolver:
         check_whitelist = any("WHITELIST" in t for t in tag_set)
         check_blacklist = any("BLOCKLIST" in t or "BLACKLIST" in t for t in tag_set)
 
-        # Optimasi pemilihan kandidat kata awal
-        if q and search_type == "prefix" and q[0] in self.words_by_initial:
-            cand = self.words_by_initial[q[0]]
+        # Gabungkan seluruh basis data kamus (KBBI, Contek, Custom, Whitelist, Blacklist)
+        all_pool = set(self.kbbi_set) | set(self.contek_set) | set(self.custom_set) | set(self.words) | self.whitelisted_words | self.blacklisted_words
+
+        # Optimasi pemilihan kandidat kata awal jika ada awalan
+        if q and search_type == "prefix":
+            ch0 = q[0]
+            cand = [w for w in all_pool if w.startswith(ch0)]
         else:
-            cand = self.words
+            cand = sorted(list(all_pool))
 
         matches = []
         for w in cand:
@@ -631,6 +636,18 @@ class SambungKataSolver:
             if w_len < min_len or w_len > max_len:
                 continue
 
+            # Filter Sumber (Semua, KBBI Saja, Contek Saja, KBBI + Contek)
+            if source_filter == "kbbi_only":
+                if not (w in self.kbbi_set and w not in self.contek_set):
+                    continue
+            elif source_filter == "contek_only":
+                if not (w in self.contek_set and w not in self.kbbi_set):
+                    continue
+            elif source_filter == "both":
+                if not (w in self.kbbi_set and w in self.contek_set):
+                    continue
+
+            # Filter Query Teks
             if q:
                 if search_type == "prefix" and not w.startswith(q):
                     continue
@@ -639,6 +656,7 @@ class SambungKataSolver:
                 elif search_type == "contains" and q not in w:
                     continue
 
+            # Filter Tag
             if tag_set:
                 matched_tag = False
                 if check_whitelist and w in self.whitelisted_words:
@@ -653,7 +671,10 @@ class SambungKataSolver:
             matches.append(w)
 
         total_count = len(matches)
-        trimmed = matches[:limit]
+        if limit is not None and limit > 0:
+            trimmed = matches[:limit]
+        else:
+            trimmed = matches
 
         # Buat lookup custom endings
         custom_lookup = {}
@@ -667,8 +688,9 @@ class SambungKataSolver:
                 custom_lookup[sfx] = f"Akhiran {sfx.upper()}"
 
         results = []
-        for w in trimmed:
+        for idx, w in enumerate(trimmed, 1):
             tag_label = ""
+            tag_id = "sfx_Normal"
             matched_custom = None
             for sfx in custom_lookup:
                 if w.endswith(sfx):
@@ -676,21 +698,27 @@ class SambungKataSolver:
                     break
 
             if matched_custom:
-                tag_label = f"[{matched_custom}]"
+                tag_label = matched_custom
+                tag_id = f"sfx_{matched_custom}"
             elif w.endswith("x"):
-                tag_label = "[💥 X]"
+                tag_label = "💥 X"
+                tag_id = "sfx_X"
             elif any(w.endswith(ch) for ch in ("z", "q", "v", "j", "w", "f")):
-                tag_label = f"[⚡ {w[-1].upper()}]"
+                tag_label = f"⚡ {w[-1].upper()}"
+                tag_id = f"sfx_{w[-1].upper()}"
             else:
-                tag_label = "[🛡️ Normal]"
+                tag_label = "Normal"
+                tag_id = "sfx_Normal"
 
             is_wl = w in self.whitelisted_words
             is_bl = w in self.blacklisted_words
 
             if is_bl:
                 status_src = "🚫 Blocklist"
+                tag_id = "sfx_BL"
             elif is_wl:
                 status_src = "⭐ Whitelist"
+                tag_id = "sfx_WL"
             elif w in self.kbbi_set and w not in self.contek_set:
                 status_src = "KBBI"
             elif w in self.contek_set and w not in self.kbbi_set:
@@ -701,9 +729,11 @@ class SambungKataSolver:
                 status_src = "Kamus"
 
             results.append({
+                "original_index": idx,
                 "word": w.upper(),
                 "length": len(w),
                 "tag": tag_label,
+                "tag_id": tag_id,
                 "status": status_src,
                 "is_whitelisted": is_wl,
                 "is_blacklisted": is_bl

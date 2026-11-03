@@ -199,19 +199,27 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
    - Disimpan secara persisten ke `kamus_lengkap.txt` dan diindeks langsung ke memori solver ($O(1)$) tanpa perlu restart aplikasi.
    - Jika kata sebelumnya berada di `blacklist.txt`, status blacklist otomatis dibatalkan/dipulihkan.
 7. **UI Penjelajah & Eksplorasi Kamus Lengkap (`search_dictionary`)**:
-   - Memungkinkan pemain menelusuri seluruh basis data kosakata aktif (147,000+ kata) secara instan.
+   - Memungkinkan pemain menelusuri seluruh basis data kosakata (147,000+ kata) secara instan dengan integrasi penuh manajemen Whitelist & Blocklist.
    - **Tiga Mode Pencarian Fleksibel:**
      - **Awalan (Prefix):** Menyaring kata yang berawalan teks tertentu (dioptimasi via indeks huruf awal $O(1)$).
      - **Akhiran (Suffix):** Menyaring kata yang berakhiran teks tertentu.
      - **Mengandung (Contains):** Menemukan kata yang memuat teks tertentu di posisi mana pun.
-   - **Filter Multi-Tag Interaktif:**
-     - Pemain dapat memilih satu atau beberapa tag sekaligus (`[NS]`, `[MP]`, `[X]`, `[Z]`, `[⭐ Whitelist]`, `[🚫 Blocklist]`).
-     - Menggunakan visualisasi tag chips auto-wrapping multi-baris yang adaptif terhadap lebar jendela.
-   - **Integrasi Cepat:**
-     - Menampilkan statistik kata yang cocok (`Menampilkan X dari Y kata`).
-     - Dobel-klik pada kata untuk menyalin langsung ke clipboard.
-     - Klik kanan pada baris hasil menyediakan menu cepat untuk menambah ke Whitelist atau Blocklist.
-     - Dapat dibuka via menu `⚙️ Settings ➔ 📖 Cari di Kamus (Eksplorasi)` atau klik kanan tombol `➕ Kamus`.
+   - **Filter Sumber Kosakata:**
+     - Pemain dapat memfilter sumber kosakata: **`🌐 Semua`**, **`📚 KBBI Saja`**, **`🎮 Contek Saja`**, atau **`✨ KBBI + Contek (Irisan keduanya)`**.
+   - **Filter Multi-Tag & Status Tanpa Brackets:**
+     - Label tag ditampilkan bersih tanpa kurung siku (`NS`, `💥 X`, `⚡ Z`, `Normal`, dll.).
+     - Teks baris diwarnai dengan palet Catppuccin yang selaras dengan kartu rekomendasi UI utama (merah untuk X & Blocklist, peach untuk konsonan sulit, kuning untuk Whitelist, mauve/kustom untuk tag custom endings).
+   - **Kolom Tabel Lengkap & Sortir Semua Kolom:**
+     - Kolom tabel: `#`, `Kata`, `Panjang` (teks utuh, bukan singkatan), `Tag / Akhiran`, dan `Sumber`.
+     - Seluruh kolom dapat disortir secara ascending/descending (`▲` / `▼`) hanya dengan mengklik header kolom.
+   - **Infinite Scroll & Autoload Tanpa Batas:**
+     - Sistem me-render batch 500 baris pertama (< 2 ms) tanpa freeze, lalu otomatis memuat batch berikutnya saat di-scroll ke bawah tanpa batasan 1.000 entri.
+     - Tersedia tombol cepat **`⚡ Muat Semua`** jika pengguna ingin langsung me-render seluruh ratusan ribu baris sekaligus.
+   - **Integrasi Penuh Manajemen Whitelist & Blocklist:**
+     - Chip counter real-time: `⭐ WHITELIST (N)` dan `🚫 BLOCKLIST (N)` di panel tag.
+     - Tombol aksi 1-klik di footer: `⭐ Whitelist` dan `🚫 Blocklist` (otomatis toggle tambah/hapus pada seleksi atau teks input cari).
+     - Tombol cepat untuk membuka file teks langsung: `📂 whitelist.txt` dan `📂 blacklist.txt`.
+     - Context menu klik kanan dinamis yang menyesuaikan status kata (Hapus/Tambah Whitelist, Pulihkan/Blokir Blocklist).
 8. **Pemilihan Sumber Kamus (KBBI vs Contek Sambung Kata)**:
    - Pemain dapat memilih sumber kamus yang digunakan melalui checkbox di GUI:
      - **`KBBI` (`kamus_kbbi.txt`):** 112,822 kosakata baku bahasa Indonesia murni.

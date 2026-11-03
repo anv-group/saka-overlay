@@ -5110,8 +5110,9 @@ class SambungKataApp:
 
 
     def open_dictionary_browser_window(self):
-        """Membuka dialog popup UI Eksplorasi Kamus untuk mencari seluruh kosakata aktif,
-        filter awalan/akhiran/mengandung, serta filter multi-tag."""
+        """Membuka dialog popup UI Eksplorasi Kamus dengan manajemen Whitelist & Blocklist terintegrasi,
+        filter sumber (KBBI, Contek, Keduanya), filter awalan/akhiran/mengandung, tag warna, kolom sortir,
+        dan infinite scroll tanpa batasan entry."""
         if hasattr(self, "dict_win") and self.dict_win and self.dict_win.winfo_exists():
             self.dict_win.lift()
             self.dict_win.focus_force()
@@ -5121,19 +5122,41 @@ class SambungKataApp:
             return
 
         self.dict_win, _ = self._create_clean_toplevel(
-            "📖 Eksplorasi & Pencarian Kamus", 640, 720, min_w=540, min_h=580
+            "📖 Eksplorasi Kamus & Whitelist/Blocklist", 680, 740, min_w=560, min_h=600
         )
 
+        # State management pencarian & sortir
+        self._dict_all_results = []
+        self._dict_loaded_count = 0
+        self._dict_batch_size = 500
+        self._dict_sort_col = "no"
+        self._dict_sort_desc = False
+
+        # Sub-Header
         sub_hdr = tk.Frame(self.dict_win, bg="#181825", padx=14, pady=6)
         sub_hdr.pack(fill=tk.X)
 
         tk.Label(
             sub_hdr,
-            text="Cari seluruh kosakata kamus berdasarkan awalan, akhiran, atau filter multi-tag",
+            text="Pencarian kosakata aktif, filter sumber, tag, serta kelola Whitelist & Blocklist",
             font=("Segoe UI", 8),
             fg="#a6adc8",
             bg="#181825"
         ).pack(side=tk.LEFT)
+
+        self.btn_dict_load_all = tk.Button(
+            sub_hdr,
+            text="⚡ Muat Semua",
+            font=("Segoe UI", 8, "bold"),
+            bg="#313244",
+            fg="#f9e2af",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=1,
+            cursor="hand2",
+            command=self._dict_load_all
+        )
 
         self.lbl_dict_stats = tk.Label(
             sub_hdr,
@@ -5144,15 +5167,15 @@ class SambungKataApp:
         )
         self.lbl_dict_stats.pack(side=tk.RIGHT)
 
-        # Control Box (Mode & Search Entry)
+        # Control Box (Mode, Sumber, & Search Entry)
         ctrl_box = tk.Frame(self.dict_win, bg="#1e1e2e", padx=14, pady=2)
         ctrl_box.pack(fill=tk.X)
 
-        # Baris Mode Pencarian (Radio buttons)
+        # Baris 1: Mode Pencarian
         mode_row = tk.Frame(ctrl_box, bg="#1e1e2e")
-        mode_row.pack(fill=tk.X, pady=(0, 4))
+        mode_row.pack(fill=tk.X, pady=(0, 2))
 
-        lbl_mode = tk.Label(mode_row, text="Mode Cari:", font=("Segoe UI", 9, "bold"), fg="#cdd6f4", bg="#1e1e2e")
+        lbl_mode = tk.Label(mode_row, text="Mode Cari:", font=("Segoe UI", 8, "bold"), fg="#cdd6f4", bg="#1e1e2e")
         lbl_mode.pack(side=tk.LEFT, padx=(0, 6))
 
         self.dict_search_mode_var = tk.StringVar(value="prefix")
@@ -5163,7 +5186,7 @@ class SambungKataApp:
                 text=m_lbl,
                 variable=self.dict_search_mode_var,
                 value=m_val,
-                font=("Segoe UI", 9),
+                font=("Segoe UI", 8),
                 fg="#cdd6f4",
                 bg="#1e1e2e",
                 activebackground="#1e1e2e",
@@ -5171,9 +5194,39 @@ class SambungKataApp:
                 selectcolor="#313244",
                 command=self._dict_refresh_search
             )
-            rb.pack(side=tk.LEFT, padx=6)
+            rb.pack(side=tk.LEFT, padx=4)
 
-        # Baris Input Pencarian
+        # Baris 2: Filter Sumber Kamus (Semua, KBBI Saja, Contek Saja, KBBI + Contek)
+        source_row = tk.Frame(ctrl_box, bg="#1e1e2e")
+        source_row.pack(fill=tk.X, pady=(0, 3))
+
+        lbl_src = tk.Label(source_row, text="Sumber:", font=("Segoe UI", 8, "bold"), fg="#cdd6f4", bg="#1e1e2e")
+        lbl_src.pack(side=tk.LEFT, padx=(0, 16))
+
+        self.dict_source_filter_var = tk.StringVar(value="all")
+
+        for s_val, s_lbl in [
+            ("all", "🌐 Semua"),
+            ("kbbi_only", "📚 KBBI Saja"),
+            ("contek_only", "🎮 Contek Saja"),
+            ("both", "✨ KBBI + Contek (Dua-duanya)")
+        ]:
+            rb = tk.Radiobutton(
+                source_row,
+                text=s_lbl,
+                variable=self.dict_source_filter_var,
+                value=s_val,
+                font=("Segoe UI", 8),
+                fg="#cdd6f4",
+                bg="#1e1e2e",
+                activebackground="#1e1e2e",
+                activeforeground="#f5e0dc",
+                selectcolor="#313244",
+                command=self._dict_refresh_search
+            )
+            rb.pack(side=tk.LEFT, padx=4)
+
+        # Baris 3: Input Pencarian
         search_box = tk.Frame(ctrl_box, bg="#313244", padx=6, pady=2)
         search_box.pack(fill=tk.X, pady=(2, 4))
 
@@ -5210,20 +5263,20 @@ class SambungKataApp:
         self.dict_search_var.trace_add("write", lambda *args: self._dict_refresh_search())
         self.entry_dict_search.bind("<Return>", lambda e: self._dict_refresh_search())
 
-        # Tag Multi-Select Filter Box
+        # Baris 4: Tag Multi-Select Filter Box
         self.dict_selected_tags = set()
         self.dict_tag_buttons = {}
 
         tag_box = tk.LabelFrame(
             ctrl_box,
-            text=" 🏷️ Filter Tag (Bisa pilih satu atau beberapa tag sekaligus) ",
+            text=" 🏷️ Filter Tag & Status (Klik untuk memilih/menggabungkan filter) ",
             font=("Segoe UI", 8, "bold"),
             fg="#cba6f7",
             bg="#181825",
             padx=8,
-            pady=6
+            pady=4
         )
-        tag_box.pack(fill=tk.X, pady=(4, 2))
+        tag_box.pack(fill=tk.X, pady=(2, 2))
 
         self.dict_tag_container = tk.Frame(tag_box, bg="#181825")
         self.dict_tag_container.pack(fill=tk.X)
@@ -5233,103 +5286,143 @@ class SambungKataApp:
         list_frame = tk.Frame(self.dict_win, bg="#1e1e2e", padx=14, pady=4)
         list_frame.pack(fill=tk.BOTH, expand=True)
 
-        tree_scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
+        self.dict_tree_scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
         self.dict_tree = ttk.Treeview(
             list_frame,
             columns=("no", "word", "len", "tags", "source"),
             show="headings",
-            yscrollcommand=tree_scroll.set,
+            yscrollcommand=self._on_dict_tree_scroll,
             selectmode="extended"
         )
-        tree_scroll.config(command=self.dict_tree.yview)
+        self.dict_tree_scroll.config(command=self.dict_tree.yview)
 
-        self.dict_tree.heading("no", text="#")
-        self.dict_tree.heading("word", text="Kata")
-        self.dict_tree.heading("len", text="Pjg")
-        self.dict_tree.heading("tags", text="Tag / Akhiran")
-        self.dict_tree.heading("source", text="Status / Sumber")
+        # Header kolom dengan fitur sortir saat diklik
+        self.dict_tree.heading("no", text="#", command=lambda: self._dict_sort_by("no"))
+        self.dict_tree.heading("word", text="Kata", command=lambda: self._dict_sort_by("word"))
+        self.dict_tree.heading("len", text="Panjang", command=lambda: self._dict_sort_by("len"))
+        self.dict_tree.heading("tags", text="Tag / Akhiran", command=lambda: self._dict_sort_by("tags"))
+        self.dict_tree.heading("source", text="Sumber", command=lambda: self._dict_sort_by("source"))
 
         self.dict_tree.column("no", width=45, anchor="center")
-        self.dict_tree.column("word", width=180, anchor="w")
-        self.dict_tree.column("len", width=55, anchor="center")
-        self.dict_tree.column("tags", width=130, anchor="center")
-        self.dict_tree.column("source", width=130, anchor="center")
+        self.dict_tree.column("word", width=175, anchor="w")
+        self.dict_tree.column("len", width=70, anchor="center")
+        self.dict_tree.column("tags", width=125, anchor="center")
+        self.dict_tree.column("source", width=135, anchor="center")
+
+        # Konfigurasi warna teks (foreground) untuk masing-masing tag/kategori
+        self.dict_tree.tag_configure("sfx_X", foreground="#f38ba8")
+        self.dict_tree.tag_configure("sfx_WL", foreground="#f9e2af")
+        self.dict_tree.tag_configure("sfx_BL", foreground="#f38ba8")
+        self.dict_tree.tag_configure("sfx_Normal", foreground="#cdd6f4")
+        for ch in ("Z", "Q", "V", "J", "W", "F"):
+            self.dict_tree.tag_configure(f"sfx_{ch}", foreground="#fab387")
+        for cat in self.config.get("custom_trap_endings", []):
+            sfx = cat.get("suffix", "").upper()
+            col = cat.get("color", "#cba6f7")
+            self.dict_tree.tag_configure(f"sfx_{sfx}", foreground=col)
 
         self.dict_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.dict_tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.dict_tree.bind("<Double-Button-1>", lambda e: self._dict_copy_selected())
         self.dict_tree.bind("<Button-3>", self._dict_show_context_menu)
+        self.dict_tree.bind("<MouseWheel>", self._on_dict_mousewheel)
 
-        # Context Menu Klik Kanan
-        self.dict_context_menu = tk.Menu(self.dict_win, tearoff=0, bg="#181825", fg="#cdd6f4", activebackground="#313244", activeforeground="#f5e0dc")
-        self.dict_context_menu.add_command(label="📋 Salin Kata", command=self._dict_copy_selected)
-        self.dict_context_menu.add_command(label="⭐ Tambah ke Whitelist", command=self._dict_whitelist_selected)
-        self.dict_context_menu.add_command(label="🚫 Masukkan ke Blocklist", command=self._dict_blacklist_selected)
-
-        # Footer Action Bar
-        footer = tk.Frame(self.dict_win, bg="#181825", padx=14, pady=8)
+        # Footer Action Bar (Integrasi Whitelist, Blocklist, & Operasi Kamus)
+        footer = tk.Frame(self.dict_win, bg="#181825", padx=12, pady=6)
         footer.pack(fill=tk.X)
 
         btn_cp = tk.Button(
             footer,
-            text="📋 Salin Terpilih",
-            font=("Segoe UI", 9, "bold"),
+            text="📋 Salin",
+            font=("Segoe UI", 8, "bold"),
             bg="#89b4fa",
             fg="#11111b",
             activebackground="#b4befe",
             relief=tk.FLAT,
-            padx=10,
-            pady=3,
+            padx=8,
+            pady=2,
             cursor="hand2",
             command=self._dict_copy_selected
         )
-        btn_cp.pack(side=tk.LEFT, padx=(0, 6))
+        btn_cp.pack(side=tk.LEFT, padx=(0, 4))
 
         btn_wl = tk.Button(
             footer,
             text="⭐ Whitelist",
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 8, "bold"),
             bg="#313244",
             fg="#f9e2af",
             activebackground="#45475a",
             relief=tk.FLAT,
             padx=8,
-            pady=3,
+            pady=2,
             cursor="hand2",
-            command=self._dict_whitelist_selected
+            command=self._dict_toggle_whitelist
         )
-        btn_wl.pack(side=tk.LEFT, padx=4)
+        btn_wl.pack(side=tk.LEFT, padx=3)
 
         btn_bl = tk.Button(
             footer,
             text="🚫 Blocklist",
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 8, "bold"),
             bg="#313244",
             fg="#f38ba8",
             activebackground="#45475a",
             relief=tk.FLAT,
             padx=8,
-            pady=3,
+            pady=2,
             cursor="hand2",
-            command=self._dict_blacklist_selected
+            command=self._dict_toggle_blacklist
         )
-        btn_bl.pack(side=tk.LEFT, padx=4)
+        btn_bl.pack(side=tk.LEFT, padx=3)
 
-        lbl_hint = tk.Label(
+        btn_add = tk.Button(
             footer,
-            text="💡 Dobel-klik untuk salin kata",
-            font=("Segoe UI", 8, "italic"),
-            fg="#a6adc8",
-            bg="#181825"
+            text="➕ Tambah",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#a6e3a1",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=8,
+            pady=2,
+            cursor="hand2",
+            command=self.open_add_word_dialog
         )
-        lbl_hint.pack(side=tk.RIGHT)
+        btn_add.pack(side=tk.LEFT, padx=3)
+
+        btn_open_bl = tk.Button(
+            footer,
+            text="📂 blacklist.txt",
+            font=("Segoe UI", 8),
+            bg="#181825",
+            fg="#6c7086",
+            activeforeground="#f38ba8",
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=lambda: os.startfile(self.solver.blacklist_path)
+        )
+        btn_open_bl.pack(side=tk.RIGHT, padx=4)
+
+        btn_open_wl = tk.Button(
+            footer,
+            text="📂 whitelist.txt",
+            font=("Segoe UI", 8),
+            bg="#181825",
+            fg="#6c7086",
+            activeforeground="#f9e2af",
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=lambda: os.startfile(self.solver.whitelist_path)
+        )
+        btn_open_wl.pack(side=tk.RIGHT, padx=4)
 
         # Trigger search awal
         self._dict_refresh_search()
 
     def _dict_render_tag_chips(self):
-        """Merender tombol tag chip filter dengan wrapping baris adaptif"""
+        """Merender tombol tag chip filter dengan wrapping baris adaptif dan counter Whitelist/Blocklist"""
         if not hasattr(self, "dict_tag_container") or not self.dict_tag_container.winfo_exists():
             return
 
@@ -5338,7 +5431,6 @@ class SambungKataApp:
 
         self.dict_tag_buttons.clear()
 
-        # Kumpulkan daftar tag: custom endings + built-in traps + special
         tag_items = []
         seen = set()
 
@@ -5355,15 +5447,15 @@ class SambungKataApp:
                 seen.add(ch)
                 tag_items.append((ch, "#fab387" if ch == "X" else "#f9e2af"))
 
-        # Special tags
-        tag_items.append(("WHITELIST", "#f9e2af"))
-        tag_items.append(("BLOCKLIST", "#f38ba8"))
+        # Special Whitelist & Blocklist dengan jumlah kata
+        wl_cnt = len(self.solver.whitelisted_words)
+        bl_cnt = len(self.solver.blacklisted_words)
+        tag_items.append((f"⭐ WHITELIST ({wl_cnt})", "#f9e2af"))
+        tag_items.append((f"🚫 BLOCKLIST ({bl_cnt})", "#f38ba8"))
 
-        # Baris pertama
         current_row = tk.Frame(self.dict_tag_container, bg="#181825")
         current_row.pack(fill=tk.X, pady=(0, 2))
 
-        # Tombol Reset / Semua Tag
         btn_all = tk.Button(
             current_row,
             text="Semua Tag",
@@ -5377,22 +5469,30 @@ class SambungKataApp:
             cursor="hand2",
             command=self._dict_clear_tags
         )
-        btn_all.pack(side=tk.LEFT, padx=(0, 4), pady=2)
+        btn_all.pack(side=tk.LEFT, padx=(0, 4), pady=1)
 
-        avail_w = 580
+        avail_w = 620
         cur_row_w = 75
 
-        for tag_name, color in tag_items:
-            approx_w = max(24, len(tag_name) * 8 + 14) + 4
+        for tag_display, color in tag_items:
+            # Identifikasi tag canonical
+            if "WHITELIST" in tag_display:
+                canon_tag = "WHITELIST"
+            elif "BLOCKLIST" in tag_display:
+                canon_tag = "BLOCKLIST"
+            else:
+                canon_tag = tag_display
+
+            approx_w = max(24, len(tag_display) * 7 + 12) + 4
             if cur_row_w + approx_w > avail_w and cur_row_w > 80:
                 current_row = tk.Frame(self.dict_tag_container, bg="#181825")
                 current_row.pack(fill=tk.X, pady=(0, 2))
                 cur_row_w = 0
 
-            is_sel = tag_name in self.dict_selected_tags
+            is_sel = canon_tag in self.dict_selected_tags
             btn = tk.Button(
                 current_row,
-                text=tag_name,
+                text=tag_display,
                 font=("Segoe UI", 8, "bold"),
                 bg=color if is_sel else "#313244",
                 fg="#11111b" if is_sel else "#a6adc8",
@@ -5402,10 +5502,10 @@ class SambungKataApp:
                 padx=5,
                 pady=1,
                 cursor="hand2",
-                command=lambda t=tag_name: self._dict_toggle_tag(t)
+                command=lambda t=canon_tag: self._dict_toggle_tag(t)
             )
-            btn.pack(side=tk.LEFT, padx=2, pady=2)
-            self.dict_tag_buttons[tag_name] = (btn, color)
+            btn.pack(side=tk.LEFT, padx=2, pady=1)
+            self.dict_tag_buttons[canon_tag] = (btn, color)
             cur_row_w += approx_w
 
     def _dict_toggle_tag(self, tag_name):
@@ -5415,7 +5515,6 @@ class SambungKataApp:
         else:
             self.dict_selected_tags.add(tag_name)
 
-        # Update warna tombol chip
         for tn, (btn, col) in self.dict_tag_buttons.items():
             if tn in self.dict_selected_tags:
                 btn.config(bg=col, fg="#11111b", activebackground="#f5e0dc", activeforeground="#11111b")
@@ -5432,98 +5531,272 @@ class SambungKataApp:
         self._dict_refresh_search()
 
     def _dict_refresh_search(self):
-        """Menjalankan query pencarian kata ke solver dan memperbarui Treeview"""
+        """Menjalankan query pencarian kata ke solver dan merender batch awal"""
         if not hasattr(self, "dict_tree") or not self.dict_tree.winfo_exists():
             return
 
         query = self.dict_search_var.get().strip() if hasattr(self, "dict_search_var") else ""
         sm = self.dict_search_mode_var.get() if hasattr(self, "dict_search_mode_var") else "prefix"
+        sf = self.dict_source_filter_var.get() if hasattr(self, "dict_source_filter_var") else "all"
         tags = list(self.dict_selected_tags) if hasattr(self, "dict_selected_tags") else []
 
         results, total = self.solver.search_dictionary(
             query=query,
             search_type=sm,
             selected_tags=tags,
-            limit=1000
+            source_filter=sf,
+            limit=None
         )
 
+        self._dict_all_results = results
+        self._dict_apply_sort_to_results()
+        self._dict_render_initial_batch()
+
+    def _dict_apply_sort_to_results(self):
+        """Mengurutkan _dict_all_results berdasarkan kolom dan arah sortir aktif"""
+        col = self._dict_sort_col
+        desc = self._dict_sort_desc
+
+        if col == "no":
+            self._dict_all_results.sort(key=lambda r: r.get("original_index", 0), reverse=desc)
+        elif col == "word":
+            self._dict_all_results.sort(key=lambda r: r.get("word", ""), reverse=desc)
+        elif col == "len":
+            self._dict_all_results.sort(key=lambda r: (r.get("length", 0), r.get("word", "")), reverse=desc)
+        elif col == "tags":
+            self._dict_all_results.sort(key=lambda r: (r.get("tag", ""), r.get("word", "")), reverse=desc)
+        elif col == "source":
+            self._dict_all_results.sort(key=lambda r: (r.get("status", ""), r.get("word", "")), reverse=desc)
+
+    def _dict_sort_by(self, col):
+        """Mengubah kolom sortir atau membalik arah urutan (Ascending / Descending)"""
+        if self._dict_sort_col == col:
+            self._dict_sort_desc = not self._dict_sort_desc
+        else:
+            self._dict_sort_col = col
+            self._dict_sort_desc = False
+
+        cols = {
+            "no": "#",
+            "word": "Kata",
+            "len": "Panjang",
+            "tags": "Tag / Akhiran",
+            "source": "Sumber"
+        }
+        for c_id, c_title in cols.items():
+            if c_id == col:
+                arrow = " ▼" if self._dict_sort_desc else " ▲"
+                self.dict_tree.heading(c_id, text=f"{c_title}{arrow}")
+            else:
+                self.dict_tree.heading(c_id, text=c_title)
+
+        self._dict_apply_sort_to_results()
+        self._dict_render_initial_batch()
+
+    def _dict_render_initial_batch(self):
+        """Merender batch pertama (500 item) ke Treeview dan mereset posisi scroll"""
+        if not hasattr(self, "dict_tree") or not self.dict_tree.winfo_exists():
+            return
         for item in self.dict_tree.get_children():
             self.dict_tree.delete(item)
 
-        for idx, r in enumerate(results, 1):
-            self.dict_tree.insert("", "end", values=(idx, r["word"], r["length"], r["tag"], r["status"]))
+        self._dict_loaded_count = 0
+        self._dict_load_next_batch(count=self._dict_batch_size)
+        try:
+            self.dict_tree.yview_moveto(0.0)
+        except Exception:
+            pass
 
-        if hasattr(self, "lbl_dict_stats") and self.lbl_dict_stats.winfo_exists():
-            if total > len(results):
-                self.lbl_dict_stats.config(text=f"Menampilkan {len(results):,} dari {total:,} kata (Persempit pencarian)")
-            else:
-                self.lbl_dict_stats.config(text=f"Ditemukan {total:,} kata")
+    def _dict_load_next_batch(self, count=None):
+        """Memuat batch item berikutnya ke Treeview secara halus tanpa freeze"""
+        if not hasattr(self, "dict_tree") or not self.dict_tree.winfo_exists():
+            return
+        batch = count or self._dict_batch_size
+        start = self._dict_loaded_count
+        end = min(start + batch, len(self._dict_all_results))
+        if start >= end:
+            self._dict_update_stats_label()
+            return
+
+        chunk = self._dict_all_results[start:end]
+        for r in chunk:
+            self.dict_tree.insert(
+                "",
+                "end",
+                values=(
+                    r.get("original_index", 0),
+                    r.get("word", ""),
+                    r.get("length", 0),
+                    r.get("tag", ""),
+                    r.get("status", "")
+                ),
+                tags=(r.get("tag_id", "sfx_Normal"),)
+            )
+        self._dict_loaded_count = end
+        self._dict_update_stats_label()
+
+    def _dict_load_all(self):
+        """Memuat seluruh sisa entri ke Treeview secara langsung"""
+        if not hasattr(self, "dict_tree") or not self.dict_tree.winfo_exists():
+            return
+        remaining = len(self._dict_all_results) - self._dict_loaded_count
+        if remaining > 0:
+            self._dict_load_next_batch(count=remaining)
+            self.show_toast(f"⚡ Seluruh {len(self._dict_all_results):,} kata telah dimuat!")
+
+    def _on_dict_tree_scroll(self, first, last):
+        """Callback scrollbar untuk memicu infinite scroll saat mendekati bawah"""
+        if hasattr(self, "dict_tree_scroll") and self.dict_tree_scroll.winfo_exists():
+            self.dict_tree_scroll.set(first, last)
+        if float(last) >= 0.85 and self._dict_loaded_count < len(self._dict_all_results):
+            self.root.after_idle(self._dict_load_next_batch)
+
+    def _on_dict_mousewheel(self, event):
+        """Deteksi mousewheel ke bawah untuk memuat batch berikutnya jika di ujung"""
+        if event.delta < 0 and self._dict_loaded_count < len(self._dict_all_results):
+            try:
+                _, last = self.dict_tree.yview()
+                if last >= 0.85:
+                    self.root.after_idle(self._dict_load_next_batch)
+            except Exception:
+                pass
+
+    def _dict_update_stats_label(self):
+        """Memperbarui teks statistik dan menampilkan tombol 'Muat Semua' jika relevan"""
+        if not hasattr(self, "lbl_dict_stats") or not self.lbl_dict_stats.winfo_exists():
+            return
+        total = len(self._dict_all_results)
+        loaded = self._dict_loaded_count
+        if total == 0:
+            self.lbl_dict_stats.config(text="Tidak ada kata cocok")
+            if hasattr(self, "btn_dict_load_all") and self.btn_dict_load_all.winfo_exists():
+                self.btn_dict_load_all.pack_forget()
+        elif loaded < total:
+            self.lbl_dict_stats.config(text=f"Menampilkan {loaded:,} dari {total:,} kata (Scroll ke bawah)")
+            if hasattr(self, "btn_dict_load_all") and self.btn_dict_load_all.winfo_exists():
+                self.btn_dict_load_all.config(text=f"⚡ Muat Semua ({total:,})")
+                self.btn_dict_load_all.pack(side=tk.RIGHT, padx=4)
+        else:
+            self.lbl_dict_stats.config(text=f"Menampilkan seluruh {total:,} kata")
+            if hasattr(self, "btn_dict_load_all") and self.btn_dict_load_all.winfo_exists():
+                self.btn_dict_load_all.pack_forget()
+
+    def _dict_get_target_words(self):
+        """Mengambil daftar kata yang ditargetkan: dari seleksi Treeview atau kolom pencarian"""
+        words = []
+        if hasattr(self, "dict_tree") and self.dict_tree.winfo_exists():
+            selected = self.dict_tree.selection()
+            for s in selected:
+                item = self.dict_tree.item(s)
+                val = item.get("values", [])
+                if len(val) >= 2:
+                    words.append(str(val[1]).strip().lower())
+        if not words:
+            q = self.dict_search_var.get().strip().lower() if hasattr(self, "dict_search_var") else ""
+            if q and q.isalpha() and len(q) >= 2:
+                words.append(q)
+        return words
 
     def _dict_copy_selected(self):
         """Menyalin kata yang sedang dipilih di Treeview ke clipboard"""
-        if not hasattr(self, "dict_tree") or not self.dict_tree.winfo_exists():
-            return
-        selected = self.dict_tree.selection()
-        if not selected:
+        words = self._dict_get_target_words()
+        if not words:
             self.show_toast("⚠️ Pilih kata terlebih dahulu untuk disalin")
             return
-        words = []
-        for s in selected:
-            item = self.dict_tree.item(s)
-            val = item.get("values", [])
-            if len(val) >= 2:
-                words.append(str(val[1]))
-        if words:
-            clip_text = "\n".join(words)
-            self.root.clipboard_clear()
-            self.root.clipboard_append(clip_text)
-            if len(words) == 1:
-                self.show_toast(f"📋 '{words[0]}' disalin ke clipboard!")
-            else:
-                self.show_toast(f"📋 {len(words)} kata disalin ke clipboard!")
+        clip_text = "\n".join(words)
+        self.root.clipboard_clear()
+        self.root.clipboard_append(clip_text)
+        if len(words) == 1:
+            self.show_toast(f"📋 '{words[0].upper()}' disalin ke clipboard!")
+        else:
+            self.show_toast(f"📋 {len(words)} kata disalin ke clipboard!")
 
-    def _dict_whitelist_selected(self):
-        """Memasukkan kata terpilih di Treeview ke Whitelist"""
-        if not hasattr(self, "dict_tree") or not self.dict_tree.winfo_exists():
+    def _dict_toggle_whitelist(self):
+        """Menambah atau membatalkan status Whitelist pada kata terpilih atau input search"""
+        words = self._dict_get_target_words()
+        if not words:
+            self.show_toast("⚠️ Pilih kata dari tabel atau ketik di kolom cari")
             return
-        selected = self.dict_tree.selection()
-        if not selected:
-            return
-        for s in selected:
-            item = self.dict_tree.item(s)
-            val = item.get("values", [])
-            if len(val) >= 2:
-                w = str(val[1]).strip().lower()
+
+        added = []
+        removed = []
+        for w in words:
+            if self.solver.is_whitelisted(w):
+                self.solver.unwhitelist_word(w)
+                removed.append(w.upper())
+            else:
                 self.solver.whitelist_word(w)
-                self.show_toast(f"⭐ '{w.upper()}' ditambahkan ke Whitelist!")
+                added.append(w.upper())
+
+        if added and not removed:
+            self.show_toast(f"⭐ {', '.join(added)} ditambahkan ke Whitelist!")
+        elif removed and not added:
+            self.show_toast(f"↩️ {', '.join(removed)} dihapus dari Whitelist!")
+        else:
+            self.show_toast(f"⭐ Whitelist diperbarui ({len(added)} ditambah, {len(removed)} dihapus)")
+
+        self._dict_render_tag_chips()
         self._dict_refresh_search()
 
-    def _dict_blacklist_selected(self):
-        """Memasukkan kata terpilih di Treeview ke Blocklist"""
-        if not hasattr(self, "dict_tree") or not self.dict_tree.winfo_exists():
+    def _dict_toggle_blacklist(self):
+        """Menambah atau memulihkan status Blocklist pada kata terpilih atau input search"""
+        words = self._dict_get_target_words()
+        if not words:
+            self.show_toast("⚠️ Pilih kata dari tabel atau ketik di kolom cari")
             return
-        selected = self.dict_tree.selection()
-        if not selected:
-            return
-        for s in selected:
-            item = self.dict_tree.item(s)
-            val = item.get("values", [])
-            if len(val) >= 2:
-                w = str(val[1]).strip().lower()
+
+        added = []
+        restored = []
+        for w in words:
+            if w in self.solver.blacklisted_words:
+                self.solver.unblacklist_word(w)
+                restored.append(w.upper())
+            else:
                 self.solver.blacklist_word(w)
-                self.show_toast(f"🚫 '{w.upper()}' dimasukkan ke Blocklist!")
+                added.append(w.upper())
+
+        if added and not restored:
+            self.show_toast(f"🚫 {', '.join(added)} dimasukkan ke Blocklist!")
+        elif restored and not added:
+            self.show_toast(f"✅ {', '.join(restored)} dipulihkan dari Blocklist!")
+        else:
+            self.show_toast(f"🚫 Blocklist diperbarui ({len(added)} diblokir, {len(restored)} dipulihkan)")
+
+        self._dict_render_tag_chips()
         self._dict_refresh_search()
 
     def _dict_show_context_menu(self, event):
-        """Menampilkan menu popup klik kanan pada baris Treeview"""
+        """Menampilkan menu popup klik kanan dengan opsi dinamis Whitelist & Blocklist"""
         if not hasattr(self, "dict_tree") or not self.dict_tree.winfo_exists():
             return
         row_id = self.dict_tree.identify_row(event.y)
         if row_id:
             if row_id not in self.dict_tree.selection():
                 self.dict_tree.selection_set(row_id)
-            if hasattr(self, "dict_context_menu"):
-                self.dict_context_menu.tk_popup(event.x_root, event.y_root)
+
+            words = self._dict_get_target_words()
+            menu = tk.Menu(self.dict_win, tearoff=0, bg="#181825", fg="#cdd6f4", activebackground="#313244", activeforeground="#f5e0dc")
+            menu.add_command(label="📋 Salin Kata", command=self._dict_copy_selected)
+            menu.add_separator()
+
+            if words:
+                w0 = words[0]
+                is_wl = self.solver.is_whitelisted(w0)
+                is_bl = w0 in self.solver.blacklisted_words
+
+                lbl_wl = f"⭐ Hapus '{w0.upper()}' dari Whitelist" if is_wl else f"⭐ Tambah '{w0.upper()}' ke Whitelist"
+                lbl_bl = f"✅ Pulihkan '{w0.upper()}' dari Blocklist" if is_bl else f"🚫 Masukkan '{w0.upper()}' ke Blocklist"
+
+                menu.add_command(label=lbl_wl, command=self._dict_toggle_whitelist)
+                menu.add_command(label=lbl_bl, command=self._dict_toggle_blacklist)
+                menu.add_separator()
+
+            menu.add_command(label="➕ Tambah Kata Baru ke Kamus...", command=self.open_add_word_dialog)
+            menu.add_separator()
+            menu.add_command(label="📂 Buka whitelist.txt", command=lambda: os.startfile(self.solver.whitelist_path))
+            menu.add_command(label="📂 Buka blacklist.txt", command=lambda: os.startfile(self.solver.blacklist_path))
+
+            menu.tk_popup(event.x_root, event.y_root)
 
     def on_close(self):
         try:
