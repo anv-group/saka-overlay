@@ -110,6 +110,7 @@ Jendela aplikasi didesain khusus dengan konsep **Ultra-Compact Overlay** yang me
 | **`📖 Eksplorasi Kamus`** | Jendela penjelajah seluruh kosakata aktif (147,000+ kata). Mendukung pencarian berdasarkan **Awalan (Prefix)**, **Akhiran (Suffix)**, dan **Mengandung (Contains)**, serta filter **Multi-Tag** (bisa memilih satu atau beberapa tag sekaligus seperti `[NS]`, `[MP]`, `[X]`, `[Z]`, `[⭐ Whitelist]`, `[🚫 Blocklist]`). Dapat dibuka dari `⚙️ Settings` atau klik kanan `➕ Kamus`. |
 | **`F2` (Screenshot Area Deteksi)** | **Global Hotkey:** Screenshot instan (< 5ms) saat ada huruf salah baca ke folder `sample/kurang_tepat/` tanpa popup yang mengganggu permainan. Review dilakukan setelah bermain lewat menu **`📝 Pendataan Koreksi Sampel`**. |
 | **`F3` (Screenshot Area Gameplay)** | Mengambil snapshot visual gameplay (kotak kata & avatar pemain) dan menyimpan metadata warna RGB/HSV ke folder `deteksi-gameplay/sample_kalibrasi/`. |
+| **Desain Jendela Frameless Konsisten** | Seluruh 10 dialog popup (Kamus, Whitelist, Blocklist, Tag Kustom, Koreksi, Update, dll.) menggunakan titlebar frameless bertema gelap Catppuccin yang seragam dengan UI utama, drag-to-move, resize grip, dan shortcut <kbd>Esc</kbd> untuk menutup. |
 
 ---
 

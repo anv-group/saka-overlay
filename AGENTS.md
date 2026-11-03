@@ -280,6 +280,33 @@ Aplikasi dilengkapi modul `GitUpdater` (`updater.py`) untuk menjaga repository l
 
 ---
 
+## 🎨 6b. Standar Desain UI Frameless & Window Title Konsisten (`_create_clean_toplevel`)
+
+Seluruh jendela sekunder / dialog popup di dalam aplikasi mengimplementasikan metode pembantu `_create_clean_toplevel()` pada `SambungKataApp` untuk mempertahankan estetika gelap Catppuccin yang bersih, modern, dan konsisten dengan antarmuka overlay utama:
+
+1. **Custom Frameless Titlebar (`overrideredirect(True)`):**
+   - Menggantikan title bar putih default Windows yang kaku dengan header gelap Catppuccin `#11111b` (tinggi 30px) berborder luar 1px `#313244`.
+   - Menampilkan label judul di sisi kiri (`Segoe UI`, ukuran 8/9 Bold, warna `#cdd6f4`).
+   - Tombol close interaktif `✕` di sudut kanan atas dengan transisi efek hover merah muda (`#f38ba8`).
+2. **Interaktivitas & Kenyamanan Pengguna:**
+   - **Drag-to-move:** Title bar dan label judul dapat diseret dengan mouse (`<ButtonPress-1>` & `<B1-Motion>`) untuk memindahkan posisi window secara mulus.
+   - **Escape-to-Close:** Tombol keyboard `<Escape>` otomatis terikat untuk menutup jendela sekunder seketika.
+   - **Resize Grip (`⋰`):** Pada jendela resizable, grip sudut kanan bawah (`#89b4fa`) memungkinkan penyesuaian ukuran jendela dengan batas minimum (`minsize`) yang aman.
+   - **Penempatan Cerdas (Adjacent Placement):** Jendela popup otomatis ditempatkan berdampingan di sebelah kiri jendela utama overlay agar tidak saling tumpang tindih atau menghalangi area game Roblox.
+3. **Daftar 10 Jendela Sekunder yang Terstandarisasi:**
+   - `gameplay_history_win` (Riwayat Auto-Index Gameplay)
+   - `classifier_win` (Klasifikasi Momen Gameplay)
+   - `blacklist_win` (Kelola Blocklist Kata)
+   - `whitelist_win` (Kelola Whitelist Kata)
+   - `custom_cats_win` (Kategori & Akhiran Kustom)
+   - `edit_win` (Edit Tag Akhiran Kustom)
+   - `koreksi_win` (Pendataan Koreksi Sampel)
+   - `add_word_win` (Tambah Kata ke Kamus)
+   - `update_win` (Pembaruan & Info Updater)
+   - `dict_win` (Eksplorasi & Pencarian Kamus)
+
+---
+
 ## 🌿 7. Strategi Branching & CI Workflow
 
 Untuk menghemat kuota komputasi GitHub Actions dan mempercepat siklus development:

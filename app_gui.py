@@ -126,6 +126,121 @@ class SambungKataApp:
         except Exception:
             pass
 
+    def _create_clean_toplevel(self, title, width, height, min_w=None, min_h=None, resizable=True, on_close=None, parent=None):
+        """
+        Membuat jendela Toplevel dengan custom titlebar frameless yang konsisten dengan UI utama:
+        - Frameless (overrideredirect) dengan border luar Catppuccin 1px (#313244).
+        - Titlebar gelap (#11111b) dengan teks judul Segoe UI 8/9 Bold (#cdd6f4).
+        - Tombol Close '✕' di sudut kanan dengan hover merah (#f38ba8).
+        - Drag-to-move pada titlebar dan label judul.
+        - Resize grip ⋰ di sudut kanan bawah jika resizable.
+        - Tombol Escape untuk menutup.
+        - Posisi otomatis di samping window utama agar tidak menutupi overlay game.
+        """
+        parent_win = parent if parent else self.root
+        win = tk.Toplevel(parent_win)
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.configure(bg="#1e1e2e", highlightthickness=1, highlightbackground="#313244")
+
+        min_w = min_w or max(340, width - 60)
+        min_h = min_h or max(300, height - 80)
+
+        try:
+            rx = self.root.winfo_x()
+            ry = self.root.winfo_y()
+            target_x = max(20, rx - width - 12) if rx > 500 else rx + self.root.winfo_width() + 12
+            target_y = max(30, ry)
+            win.geometry(f"{width}x{height}+{target_x}+{target_y}")
+        except Exception:
+            win.geometry(f"{width}x{height}")
+
+        close_fn = on_close if on_close else win.destroy
+
+        # 0. Custom Frameless Titlebar
+        tbar = tk.Frame(win, bg="#11111b", height=30)
+        tbar.pack(fill=tk.X, side=tk.TOP)
+
+        btn_close = tk.Button(
+            tbar,
+            text="✕",
+            font=("Segoe UI", 10, "bold"),
+            fg="#cdd6f4",
+            bg="#11111b",
+            activebackground="#f38ba8",
+            activeforeground="#11111b",
+            relief=tk.FLAT,
+            bd=0,
+            padx=14,
+            pady=3,
+            cursor="hand2",
+            command=close_fn
+        )
+        btn_close.pack(side=tk.RIGHT, padx=(0, 4), pady=2)
+        btn_close.bind("<Enter>", lambda e: btn_close.config(bg="#f38ba8", fg="#11111b"))
+        btn_close.bind("<Leave>", lambda e: btn_close.config(bg="#11111b", fg="#cdd6f4"))
+
+        lbl_title = tk.Label(
+            tbar,
+            text=title,
+            font=("Segoe UI", 8, "bold"),
+            fg="#cdd6f4",
+            bg="#11111b",
+            anchor="w"
+        )
+        lbl_title.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(10, 4), pady=4)
+
+        drag_data = {"x": 0, "y": 0}
+        def _start_drag(event):
+            drag_data["x"] = event.x_root - win.winfo_x()
+            drag_data["y"] = event.y_root - win.winfo_y()
+
+        def _on_drag(event):
+            win.geometry(f"+{event.x_root - drag_data['x']}+{event.y_root - drag_data['y']}")
+
+        tbar.bind("<ButtonPress-1>", _start_drag)
+        tbar.bind("<B1-Motion>", _on_drag)
+        lbl_title.bind("<ButtonPress-1>", _start_drag)
+        lbl_title.bind("<B1-Motion>", _on_drag)
+
+        sep_title = tk.Frame(win, bg="#313244", height=1)
+        sep_title.pack(fill=tk.X, side=tk.TOP)
+
+        if resizable:
+            grip_bar = tk.Frame(win, bg="#11111b", height=16, cursor="size_ns")
+            grip_bar.pack(fill=tk.X, side=tk.BOTTOM)
+            lbl_grip = tk.Label(
+                grip_bar,
+                text="⋰",
+                font=("Segoe UI", 9, "bold"),
+                fg="#89b4fa",
+                bg="#11111b",
+                cursor="size_nw_se"
+            )
+            lbl_grip.pack(side=tk.RIGHT, padx=6)
+
+            resize_data = {}
+            def _start_resize(event):
+                resize_data["x"] = event.x_root
+                resize_data["y"] = event.y_root
+                resize_data["w"] = win.winfo_width()
+                resize_data["h"] = win.winfo_height()
+
+            def _on_resize(event):
+                dw = event.x_root - resize_data["x"]
+                dh = event.y_root - resize_data["y"]
+                nw = max(min_w, resize_data["w"] + dw)
+                nh = max(min_h, resize_data["h"] + dh)
+                win.geometry(f"{nw}x{nh}")
+
+            lbl_grip.bind("<ButtonPress-1>", _start_resize)
+            lbl_grip.bind("<B1-Motion>", _on_resize)
+            grip_bar.bind("<ButtonPress-1>", _start_resize)
+            grip_bar.bind("<B1-Motion>", _on_resize)
+
+        win.bind("<Escape>", lambda e: close_fn())
+        return win, lbl_title
+
     def _build_ui(self):
         # 0. Custom Frameless Titlebar (Dark Theme, Judul Penuh & Hanya Tombol Close ✕)
         self.custom_title_bar = tk.Frame(self.root, bg="#11111b", height=30)
@@ -1022,33 +1137,19 @@ class SambungKataApp:
             self.gameplay_history_win.focus_force()
             return
 
-        self.gameplay_history_win = tk.Toplevel(self.root)
-        self.gameplay_history_win.title("🎮 Riwayat Auto-Index Gameplay")
-        self.gameplay_history_win.geometry("560x490")
-        self.gameplay_history_win.minsize(500, 400)
-        self.gameplay_history_win.attributes("-topmost", True)
-        self.gameplay_history_win.configure(bg="#1e1e2e")
-        self.gameplay_history_win.bind("<Escape>", lambda e: self.gameplay_history_win.destroy())
-
-        try:
-            x = self.root.winfo_x() + 20
-            y = self.root.winfo_y() + 20
-            self.gameplay_history_win.geometry(f"560x490+{x}+{y}")
-        except Exception:
-            pass
-
-        # Header Frame
-        hdr = tk.Frame(self.gameplay_history_win, bg="#181825", padx=12, pady=10)
-        hdr.pack(fill=tk.X)
-
-        title_lbl = tk.Label(
-            hdr,
-            text="🎮 Riwayat Auto-Index Gameplay (File Terpisah)",
-            font=("Segoe UI", 12, "bold"),
-            fg="#a6e3a1",
-            bg="#181825"
+        self.gameplay_history_win, _ = self._create_clean_toplevel(
+            "🎮 Riwayat Auto-Index Gameplay", 560, 490, min_w=500, min_h=400
         )
-        title_lbl.pack(side=tk.LEFT)
+
+        sub_hdr = tk.Frame(self.gameplay_history_win, bg="#181825", padx=12, pady=6)
+        sub_hdr.pack(fill=tk.X)
+        tk.Label(
+            sub_hdr,
+            text="Log pemantauan frame status game (auto_blacklist & auto_kata_baru)",
+            font=("Segoe UI", 8),
+            fg="#a6adc8",
+            bg="#181825"
+        ).pack(side=tk.LEFT)
 
         # Options Frame
         opts_box = tk.Frame(self.gameplay_history_win, bg="#1e1e2e", padx=12, pady=6)
@@ -1265,19 +1366,9 @@ class SambungKataApp:
             self.classifier_win.focus_force()
             return
 
-        self.classifier_win = tk.Toplevel(self.root)
-        self.classifier_win.title("🎮 Klasifikasi Momen Gameplay")
-        self.classifier_win.geometry("540x670")
-        self.classifier_win.minsize(480, 580)
-        self.classifier_win.attributes("-topmost", True)
-        self.classifier_win.configure(bg="#1e1e2e")
-
-        try:
-            x = self.root.winfo_x() + 25
-            y = self.root.winfo_y() + 15
-            self.classifier_win.geometry(f"540x670+{x}+{y}")
-        except Exception:
-            pass
+        self.classifier_win, _ = self._create_clean_toplevel(
+            "🎮 Klasifikasi Momen Gameplay", 540, 670, min_w=480, min_h=580
+        )
 
         self._classifier_unclassified_dir = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "deteksi-gameplay", "unclassified"
@@ -1288,18 +1379,16 @@ class SambungKataApp:
         self._classifier_current_idx = 0
         self._classifier_tk_img = None
 
-        # Header Frame
-        hdr = tk.Frame(self.classifier_win, bg="#181825", padx=12, pady=10)
+        hdr = tk.Frame(self.classifier_win, bg="#181825", padx=12, pady=6)
         hdr.pack(fill=tk.X)
 
-        title_lbl = tk.Label(
+        tk.Label(
             hdr,
-            text="🎮 Klasifikasi Momen Gameplay",
-            font=("Segoe UI", 12, "bold"),
-            fg="#89b4fa",
+            text="Klasifikasi visual momen gameplay unclassified",
+            font=("Segoe UI", 8),
+            fg="#a6adc8",
             bg="#181825"
-        )
-        title_lbl.pack(side=tk.LEFT)
+        ).pack(side=tk.LEFT)
 
         self.btn_classifier_extract = tk.Button(
             hdr,
@@ -2345,54 +2434,28 @@ class SambungKataApp:
                 self.entry_bl_add.select_range(0, tk.END)
             return
 
-        self.blacklist_win = tk.Toplevel(self.root)
-        self.blacklist_win.title("🚫 Kelola Blocklist Kata")
-        self.blacklist_win.geometry("400x520")
-        self.blacklist_win.minsize(360, 440)
-        self.blacklist_win.attributes("-topmost", True)
-        self.blacklist_win.configure(bg="#1e1e2e")
-        self.blacklist_win.bind("<Escape>", lambda e: self.blacklist_win.destroy())
+        self.blacklist_win, _ = self._create_clean_toplevel(
+            "🚫 Kelola Blocklist Kata", 400, 520, min_w=360, min_h=440
+        )
 
-        # Posisikan relatif terhadap window utama
-        try:
-            x = self.root.winfo_x() + 25
-            y = self.root.winfo_y() + 25
-            self.blacklist_win.geometry(f"400x520+{x}+{y}")
-        except Exception:
-            pass
+        sub_hdr = tk.Frame(self.blacklist_win, bg="#181825", padx=12, pady=6)
+        sub_hdr.pack(fill=tk.X)
+        tk.Label(
+            sub_hdr,
+            text="Kata ditolak Roblox & tidak disarankan bot",
+            font=("Segoe UI", 8),
+            fg="#a6adc8",
+            bg="#181825"
+        ).pack(side=tk.LEFT)
 
-        # Header Frame
-        hdr = tk.Frame(self.blacklist_win, bg="#181825", padx=12, pady=10)
-        hdr.pack(fill=tk.X)
-
-        title_lbl = tk.Label(
-            hdr,
-            text="🚫 Daftar Blocklist Kata",
-            font=("Segoe UI", 12, "bold"),
+        self.lbl_bl_count = tk.Label(
+            sub_hdr,
+            text="0 kata",
+            font=("Segoe UI", 8, "bold"),
             fg="#f38ba8",
             bg="#181825"
         )
-        title_lbl.pack(side=tk.LEFT)
-
-        self.lbl_bl_count = tk.Label(
-            hdr,
-            text="0 kata",
-            font=("Segoe UI", 10, "bold"),
-            fg="#a6adc8",
-            bg="#181825"
-        )
         self.lbl_bl_count.pack(side=tk.RIGHT)
-
-        sub_lbl = tk.Label(
-            self.blacklist_win,
-            text="Kata di bawah ditolak oleh Roblox dan tidak akan disarankan bot.",
-            font=("Segoe UI", 8),
-            fg="#6c7086",
-            bg="#1e1e2e",
-            padx=12,
-            pady=4
-        )
-        sub_lbl.pack(anchor=tk.W)
 
         # Bar Tambah Kata Baru
         add_frame = tk.Frame(self.blacklist_win, bg="#1e1e2e", padx=12, pady=4)
@@ -2627,53 +2690,28 @@ class SambungKataApp:
                 self.entry_wl_add.select_range(0, tk.END)
             return
 
-        self.whitelist_win = tk.Toplevel(self.root)
-        self.whitelist_win.title("⭐ Kelola Whitelist Kata (Terverifikasi)")
-        self.whitelist_win.geometry("400x520")
-        self.whitelist_win.minsize(360, 440)
-        self.whitelist_win.attributes("-topmost", True)
-        self.whitelist_win.configure(bg="#1e1e2e")
-        self.whitelist_win.bind("<Escape>", lambda e: self.whitelist_win.destroy())
+        self.whitelist_win, _ = self._create_clean_toplevel(
+            "⭐ Kelola Whitelist Kata", 400, 520, min_w=360, min_h=440
+        )
 
-        try:
-            x = self.root.winfo_x() + 25
-            y = self.root.winfo_y() + 25
-            self.whitelist_win.geometry(f"400x520+{x}+{y}")
-        except Exception:
-            pass
+        sub_hdr = tk.Frame(self.whitelist_win, bg="#181825", padx=12, pady=6)
+        sub_hdr.pack(fill=tk.X)
+        tk.Label(
+            sub_hdr,
+            text="Kata terbukti 100% valid & prioritas teratas",
+            font=("Segoe UI", 8),
+            fg="#a6adc8",
+            bg="#181825"
+        ).pack(side=tk.LEFT)
 
-        # Header Frame
-        hdr = tk.Frame(self.whitelist_win, bg="#181825", padx=12, pady=10)
-        hdr.pack(fill=tk.X)
-
-        title_lbl = tk.Label(
-            hdr,
-            text="⭐ Daftar Whitelist Kata",
-            font=("Segoe UI", 12, "bold"),
+        self.lbl_wl_count = tk.Label(
+            sub_hdr,
+            text="0 kata",
+            font=("Segoe UI", 8, "bold"),
             fg="#f9e2af",
             bg="#181825"
         )
-        title_lbl.pack(side=tk.LEFT)
-
-        self.lbl_wl_count = tk.Label(
-            hdr,
-            text="0 kata",
-            font=("Segoe UI", 10, "bold"),
-            fg="#a6adc8",
-            bg="#181825"
-        )
         self.lbl_wl_count.pack(side=tk.RIGHT)
-
-        sub_lbl = tk.Label(
-            self.whitelist_win,
-            text="Kata di bawah terbukti valid di Roblox dan menjadi prioritas utama di kategorinya.",
-            font=("Segoe UI", 8),
-            fg="#6c7086",
-            bg="#1e1e2e",
-            padx=12,
-            pady=4
-        )
-        sub_lbl.pack(anchor=tk.W)
 
         # Bar Tambah Kata Baru
         add_frame = tk.Frame(self.whitelist_win, bg="#1e1e2e", padx=12, pady=4)
@@ -2928,38 +2966,25 @@ class SambungKataApp:
                 self.entry_cat_sfx.select_range(0, tk.END)
             return
 
-        self.custom_cats_win = tk.Toplevel(self.root)
-        self.custom_cats_win.title("🏷️ Kategori & Akhiran Kustom (Custom Traps)")
-        self.custom_cats_win.geometry("500x660")
-        self.custom_cats_win.minsize(460, 520)
-        self.custom_cats_win.attributes("-topmost", True)
-        self.custom_cats_win.configure(bg="#1e1e2e")
-        self.custom_cats_win.bind("<Escape>", lambda e: self.custom_cats_win.destroy())
+        def _on_custom_cats_close():
+            self.custom_cats_canvas = None
+            if hasattr(self, "custom_cats_win") and self.custom_cats_win and self.custom_cats_win.winfo_exists():
+                self.custom_cats_win.destroy()
+            self._unbind_mousewheel()
 
-        # Header
-        hdr = tk.Frame(self.custom_cats_win, bg="#181825", padx=14, pady=10)
-        hdr.pack(fill=tk.X)
-
-        title_lbl = tk.Label(
-            hdr,
-            text="🏷️ Kategori Akhiran Kustom",
-            font=("Segoe UI", 12, "bold"),
-            fg="#cba6f7",
-            bg="#181825"
+        self.custom_cats_win, _ = self._create_clean_toplevel(
+            "🏷️ Kategori & Akhiran Kustom", 500, 660, min_w=460, min_h=520, on_close=_on_custom_cats_close
         )
-        title_lbl.pack(side=tk.LEFT)
 
-        subtitle_lbl = tk.Label(
-            self.custom_cats_win,
-            text="Kata berakhiran ini diprioritaskan paling atas (Super Jebakan, di atas X)\nuntuk menjebak lawan dengan awalan yang hampir mustahil disambung.",
+        sub_hdr = tk.Frame(self.custom_cats_win, bg="#181825", padx=14, pady=6)
+        sub_hdr.pack(fill=tk.X)
+        tk.Label(
+            sub_hdr,
+            text="Kata berakhiran ini diprioritaskan super jebakan (di atas X)",
             font=("Segoe UI", 8),
             fg="#a6adc8",
-            bg="#1e1e2e",
-            justify=tk.LEFT,
-            padx=14,
-            pady=4
-        )
-        subtitle_lbl.pack(fill=tk.X)
+            bg="#181825"
+        ).pack(side=tk.LEFT)
 
         # Mode Sortir Tier 0 Control Frame
         sort_box = tk.LabelFrame(
@@ -3123,15 +3148,7 @@ class SambungKataApp:
         canvas.bind("<Enter>", lambda e: self._bind_mousewheel())
         self.custom_cats_inner.bind("<Enter>", lambda e: self._bind_mousewheel())
 
-        # Cleanup saat jendela custom_cats ditutup
-        def _on_custom_cats_close():
-            self.custom_cats_canvas = None
-            if hasattr(self, "custom_cats_win") and self.custom_cats_win and self.custom_cats_win.winfo_exists():
-                self.custom_cats_win.destroy()
-            self._unbind_mousewheel()
-
-        self.custom_cats_win.protocol("WM_DELETE_WINDOW", _on_custom_cats_close)
-        self.custom_cats_win.bind("<Escape>", lambda e: _on_custom_cats_close())
+        # Cleanup handler configured in _create_clean_toplevel
 
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -3460,25 +3477,11 @@ class SambungKataApp:
         cur_name = cat.get("name") or f"Akhiran {cur_sfx}"
         cur_color = cat.get("color", "#cba6f7")
 
-        edit_win = tk.Toplevel(self.custom_cats_win if hasattr(self, "custom_cats_win") and self.custom_cats_win.winfo_exists() else self.root)
-        edit_win.title(f"✏️ Edit Tag: {cur_sfx}")
-        edit_win.geometry("420x460")
-        edit_win.resizable(False, False)
-        edit_win.attributes("-topmost", True)
-        edit_win.configure(bg="#1e1e2e")
+        parent_w = self.custom_cats_win if hasattr(self, "custom_cats_win") and self.custom_cats_win.winfo_exists() else self.root
+        edit_win, _ = self._create_clean_toplevel(
+            f"✏️ Edit Tag: [{cur_sfx}]", 420, 460, min_w=380, min_h=420, resizable=False, parent=parent_w
+        )
         edit_win.grab_set()
-
-        # Header
-        hdr = tk.Frame(edit_win, bg="#181825", padx=14, pady=10)
-        hdr.pack(fill=tk.X)
-
-        tk.Label(
-            hdr,
-            text=f"✏️ Edit Kategori Akhiran [{cur_sfx}]",
-            font=("Segoe UI", 11, "bold"),
-            fg="#cba6f7",
-            bg="#181825"
-        ).pack(side=tk.LEFT)
 
         body = tk.Frame(edit_win, bg="#1e1e2e", padx=16, pady=12)
         body.pack(fill=tk.BOTH, expand=True)
@@ -3824,39 +3827,27 @@ class SambungKataApp:
             self.koreksi_win.focus_force()
             return
 
-        self.koreksi_win = tk.Toplevel(self.root)
-        self.koreksi_win.title("📝 Pendataan Koreksi Sampel")
-        self.koreksi_win.geometry("480x620")
-        self.koreksi_win.minsize(440, 540)
-        self.koreksi_win.attributes("-topmost", True)
-        self.koreksi_win.configure(bg="#1e1e2e")
-
-        try:
-            x = self.root.winfo_x() + 30
-            y = self.root.winfo_y() + 20
-            self.koreksi_win.geometry(f"480x620+{x}+{y}")
-        except Exception:
-            pass
+        self.koreksi_win, _ = self._create_clean_toplevel(
+            "📝 Pendataan Koreksi Sampel", 480, 620, min_w=440, min_h=540
+        )
 
         self._koreksi_items = []
         self._koreksi_current_idx = 0
         self._koreksi_tk_img = None
 
-        # Header Frame
-        hdr = tk.Frame(self.koreksi_win, bg="#181825", padx=12, pady=10)
-        hdr.pack(fill=tk.X)
+        sub_hdr = tk.Frame(self.koreksi_win, bg="#181825", padx=12, pady=6)
+        sub_hdr.pack(fill=tk.X)
 
-        title_lbl = tk.Label(
-            hdr,
-            text="📝 Pendataan Koreksi Sampel",
-            font=("Segoe UI", 12, "bold"),
-            fg="#fab387",
+        tk.Label(
+            sub_hdr,
+            text="Koreksi visual sampel pembacaan OCR",
+            font=("Segoe UI", 8),
+            fg="#a6adc8",
             bg="#181825"
-        )
-        title_lbl.pack(side=tk.LEFT)
+        ).pack(side=tk.LEFT)
 
         btn_folder = tk.Button(
-            hdr,
+            sub_hdr,
             text="📂 Buka Folder",
             font=("Segoe UI", 8),
             bg="#313244",
@@ -3864,7 +3855,8 @@ class SambungKataApp:
             activebackground="#45475a",
             relief=tk.FLAT,
             padx=6,
-            pady=2,
+            pady=1,
+            cursor="hand2",
             command=self._koreksi_open_folder
         )
         btn_folder.pack(side=tk.RIGHT)
@@ -4364,54 +4356,29 @@ class SambungKataApp:
                 self.entry_new_word.select_range(0, tk.END)
             return
 
-        self.add_word_win = tk.Toplevel(self.root)
-        self.add_word_win.title("➕ Tambah Kata ke Kamus")
-        self.add_word_win.geometry("420x440")
-        self.add_word_win.minsize(380, 400)
-        self.add_word_win.attributes("-topmost", True)
-        self.add_word_win.configure(bg="#1e1e2e")
-        self.add_word_win.bind("<Escape>", lambda e: self.add_word_win.destroy())
+        self.add_word_win, _ = self._create_clean_toplevel(
+            "➕ Tambah Kata ke Kamus", 420, 440, min_w=380, min_h=400
+        )
 
-        try:
-            x = self.root.winfo_x() + 30
-            y = self.root.winfo_y() + 40
-            self.add_word_win.geometry(f"420x440+{x}+{y}")
-        except Exception:
-            pass
+        sub_hdr = tk.Frame(self.add_word_win, bg="#181825", padx=14, pady=6)
+        sub_hdr.pack(fill=tk.X)
 
-        # Header Frame
-        hdr = tk.Frame(self.add_word_win, bg="#181825", padx=14, pady=10)
-        hdr.pack(fill=tk.X)
+        tk.Label(
+            sub_hdr,
+            text="Tambahkan kata resmi baru ke kamus aktif",
+            font=("Segoe UI", 8),
+            fg="#a6adc8",
+            bg="#181825"
+        ).pack(side=tk.LEFT)
 
-        title_lbl = tk.Label(
-            hdr,
-            text="📚 Tambah Kata Baru ke Kamus",
-            font=("Segoe UI", 12, "bold"),
+        self.lbl_dict_total = tk.Label(
+            sub_hdr,
+            text=f"{len(self.solver.words):,} kata",
+            font=("Segoe UI", 8, "bold"),
             fg="#a6e3a1",
             bg="#181825"
         )
-        title_lbl.pack(side=tk.LEFT)
-
-        self.lbl_dict_total = tk.Label(
-            hdr,
-            text=f"{len(self.solver.words):,} kata",
-            font=("Segoe UI", 9, "bold"),
-            fg="#a6adc8",
-            bg="#181825"
-        )
         self.lbl_dict_total.pack(side=tk.RIGHT)
-
-        sub_lbl = tk.Label(
-            self.add_word_win,
-            text="Kosakata yang ditambahkan akan tersimpan ke kamus_lengkap.txt\ndan langsung siap digunakan oleh bot saat bermain.",
-            font=("Segoe UI", 8),
-            fg="#a6adc8",
-            bg="#1e1e2e",
-            padx=14,
-            pady=6,
-            justify=tk.LEFT
-        )
-        sub_lbl.pack(anchor=tk.W)
 
         # Input Card Frame
         input_card = tk.Frame(self.add_word_win, bg="#313244", padx=12, pady=10)
@@ -4712,58 +4679,43 @@ class SambungKataApp:
         current_branch = res.get("current_branch", self.updater.get_current_branch())
         is_branch_switch = res.get("is_branch_switch", (current_branch != branch))
 
-        self.update_win = tk.Toplevel(self.root)
-        self.update_win.title("🚀 Pembaruan Aplikasi — Sambung Kata" if has_update else "⚙️ Pengaturan & Info Pembaruan")
-        self.update_win.geometry("480x620")
-        self.update_win.minsize(440, 520)
-        self.update_win.attributes("-topmost", True)
-        self.update_win.configure(bg="#1e1e2e")
-        self.update_win.bind("<Escape>", lambda e: self.update_win.destroy())
+        upd_title = "🔀 Beralih Branch" if (has_update and is_branch_switch) else ("🚀 Pembaruan Tersedia" if has_update else "⚙️ Pengaturan & Info Pembaruan")
+        self.update_win, _ = self._create_clean_toplevel(
+            upd_title, 480, 620, min_w=440, min_h=520
+        )
 
-        try:
-            x = self.root.winfo_x() + 20
-            y = self.root.winfo_y() + 20
-            self.update_win.geometry(f"480x620+{x}+{y}")
-        except Exception:
-            pass
-
-        # 1. Header Frame
-        hdr = tk.Frame(self.update_win, bg="#181825", padx=14, pady=10)
-        hdr.pack(fill=tk.X)
+        sub_hdr = tk.Frame(self.update_win, bg="#181825", padx=14, pady=6)
+        sub_hdr.pack(fill=tk.X)
 
         if has_update:
-            lbl_title = tk.Label(
-                hdr,
-                text="🔀 Beralih Branch" if is_branch_switch else "🚀 Pembaruan Tersedia!",
-                font=("Segoe UI", 12, "bold"),
-                fg="#f9e2af",
-                bg="#181825"
-            )
-            lbl_title.pack(side=tk.LEFT)
-
             status_text = f"Target: {branch}" if is_branch_switch else f"{behind_count} commit baru"
+            tk.Label(
+                sub_hdr,
+                text="Pembaruan baru terdeteksi dari GitHub",
+                font=("Segoe UI", 8),
+                fg="#a6adc8",
+                bg="#181825"
+            ).pack(side=tk.LEFT)
             lbl_count = tk.Label(
-                hdr,
+                sub_hdr,
                 text=status_text,
-                font=("Segoe UI", 9, "bold"),
-                fg="#a6e3a1",
+                font=("Segoe UI", 8, "bold"),
+                fg="#f9e2af",
                 bg="#181825"
             )
             lbl_count.pack(side=tk.RIGHT)
         else:
-            lbl_title = tk.Label(
-                hdr,
-                text="✅ Versi Terbaru",
-                font=("Segoe UI", 12, "bold"),
-                fg="#a6e3a1",
+            tk.Label(
+                sub_hdr,
+                text="Aplikasi sudah versi terbaru",
+                font=("Segoe UI", 8),
+                fg="#a6adc8",
                 bg="#181825"
-            )
-            lbl_title.pack(side=tk.LEFT)
-
+            ).pack(side=tk.LEFT)
             lbl_cur = tk.Label(
-                hdr,
+                sub_hdr,
                 text=f"Commit #{curr_commit.get('hash', 'latest')}",
-                font=("Segoe UI", 9, "bold"),
+                font=("Segoe UI", 8, "bold"),
                 fg="#89b4fa",
                 bg="#181825"
             )
@@ -5168,46 +5120,29 @@ class SambungKataApp:
                 self.entry_dict_search.select_range(0, tk.END)
             return
 
-        self.dict_win = tk.Toplevel(self.root)
-        self.dict_win.title("📖 Eksplorasi & Pencarian Kamus")
-        self.dict_win.geometry("640x720")
-        self.dict_win.minsize(540, 580)
-        self.dict_win.attributes("-topmost", True)
-        self.dict_win.configure(bg="#1e1e2e")
-        self.dict_win.bind("<Escape>", lambda e: self.dict_win.destroy())
+        self.dict_win, _ = self._create_clean_toplevel(
+            "📖 Eksplorasi & Pencarian Kamus", 640, 720, min_w=540, min_h=580
+        )
 
-        # Header Frame
-        hdr = tk.Frame(self.dict_win, bg="#181825", padx=14, pady=10)
-        hdr.pack(fill=tk.X)
+        sub_hdr = tk.Frame(self.dict_win, bg="#181825", padx=14, pady=6)
+        sub_hdr.pack(fill=tk.X)
 
-        title_lbl = tk.Label(
-            hdr,
-            text="📖 Eksplorasi Kamus Kata",
-            font=("Segoe UI", 12, "bold"),
+        tk.Label(
+            sub_hdr,
+            text="Cari seluruh kosakata kamus berdasarkan awalan, akhiran, atau filter multi-tag",
+            font=("Segoe UI", 8),
+            fg="#a6adc8",
+            bg="#181825"
+        ).pack(side=tk.LEFT)
+
+        self.lbl_dict_stats = tk.Label(
+            sub_hdr,
+            text=f"Total: {len(self.solver.words):,} kata",
+            font=("Segoe UI", 8, "bold"),
             fg="#89b4fa",
             bg="#181825"
         )
-        title_lbl.pack(side=tk.LEFT)
-
-        self.lbl_dict_stats = tk.Label(
-            hdr,
-            text=f"Total: {len(self.solver.words):,} kata",
-            font=("Segoe UI", 9, "bold"),
-            fg="#a6adc8",
-            bg="#181825"
-        )
         self.lbl_dict_stats.pack(side=tk.RIGHT)
-
-        sub_lbl = tk.Label(
-            self.dict_win,
-            text="Cari seluruh kosakata kamus berdasarkan awalan, akhiran, atau filter multi-tag.",
-            font=("Segoe UI", 8),
-            fg="#6c7086",
-            bg="#1e1e2e",
-            padx=14,
-            pady=3
-        )
-        sub_lbl.pack(anchor=tk.W)
 
         # Control Box (Mode & Search Entry)
         ctrl_box = tk.Frame(self.dict_win, bg="#1e1e2e", padx=14, pady=2)
