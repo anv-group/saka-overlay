@@ -376,11 +376,10 @@ class SambungKataSolver:
         - Jika prefix 'IX'  -> mencari kata berawalan 'ix' (ixora, ixodes, dll)
         
         Prioritas Jawaban (Mode Normal):
-        0. Kata berakhiran 'X' (💥 Jebakan Mematikan - senjata pamungkas nomor satu di Roblox)
-           dan Kata berakhiran Kategori Custom / Custom Traps (🔥 Super Jebakan, misal NS, NGK)
-           (Kata X tidak akan pernah tertimpa oleh puluhan custom traps)
-        1. Kata berakhiran huruf sulit 'Z', 'Q', 'V', 'J', 'W', 'F' (⚡ Jebakan Sulit)
-        2. Kata normal/seadanya (🛡️ Bertahan)
+        0. Kata berakhiran Kategori Custom / Custom Traps (🔥 Super Jebakan, misal NS, NGK)
+        1. Kata berakhiran 'X' (💥 Jebakan Mematikan)
+        2. Kata berakhiran huruf sulit 'Z', 'Q', 'V', 'J', 'W', 'F' (⚡ Jebakan Sulit)
+        3. Kata normal/seadanya (🛡️ Bertahan)
 
         Prioritas Jawaban (Mode Santai - tanpa X, Q, F):
         0. Kata berakhiran Kategori Custom yang tidak mengandung X, Q, F
@@ -589,21 +588,16 @@ class SambungKataSolver:
                 "is_whitelisted": (w in self.whitelisted_words)
             })
 
-        # Anti-Starvation Jebakan X:
-        # Kata berakhiran X (seperti SEX, BOX, DETOX, COMPLEX) adalah senjata paling mematikan di Roblox Sambung Kata.
-        # Karena jumlah kata X sangat langka (~120 kata di seluruh kamus), jangan biarkan puluhan kata
-        # custom endings menenggelamkan kata X ke bawah sehingga tidak terlihat oleh pemain.
-        if effective_sort_mode == "tag_order" and list_custom:
-            # Pada mode tag_order, tampilkan hingga 3 kata dari tag teratas terlebih dahulu, lalu jebakan X, lalu sisa custom
-            hasil.extend(list_custom[:3])
-            hasil.extend(list_x)
-            hasil.extend(list_custom[3:])
-        else:
-            # Pada mode default: Prioritaskan Jebakan X di puncak, disusul seluruh kata Custom Traps
-            hasil.extend(list_x)
-            hasil.extend(list_custom)
+        # TIER 0: Custom Traps (#1 Prioritas Super)
+        hasil.extend(list_custom)
 
+        # TIER 1: Jebakan X (#2 Prioritas Mematikan)
+        hasil.extend(list_x)
+
+        # TIER 2: Jebakan Sulit (#3 Prioritas Konsonan Sulit)
         hasil.extend(list_sulit)
+
+        # TIER 3: Kata Biasa (#4 Normal / Bertahan)
         hasil.extend(list_biasa)
 
         return hasil[:limit]

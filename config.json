@@ -28,6 +28,12 @@
     "dev_mode": true,
     "custom_trap_endings": [
         {
+            "suffix": "X",
+            "name": "Akhiran X",
+            "enabled": true,
+            "color": "#f38ba8"
+        },
+        {
             "suffix": "NS",
             "name": "Akhiran NS",
             "enabled": true,
@@ -130,6 +136,7 @@
             "color": "#89dceb"
         }
     ],
-    "window_geometry": "550x1074+1345+55",
+    "auto_copy_top_word": false,
+    "window_geometry": "550x1074+1199+82",
     "santai_auto_disabled_tags": []
 }
