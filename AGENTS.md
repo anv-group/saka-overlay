@@ -151,7 +151,7 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
      - **Tier 2 (⚡ JEBAKAN SULIT):** Kata yang berakhiran konsonan sulit: `Z`, `Q`, `V`, `J`, `W`, `F`.
      - **Tier 3 (🛡️ NORMAL):** Kata standar KBBI, diurutkan dari yang terpendek agar cepat diketik.
    - **Manajemen Tag Kustom (Edit, Sortir & Auto-Reflow Layout):**
-     - Tag kustom dapat diubah urutannya via tombol panah `▲`/`▼` atau diurutkan otomatis (`🔤 A-Z`, `📊 Terbanyak`).
+     - Tag kustom dapat diubah urutannya via tombol panah `▲`/`▼` atau diurutkan otomatis (`🔤 A-Z`, `📊 Terbanyak`, `📏 Terpanjang`, `📏 Tersedikit` [paling sedikit huruf]).
      - Setiap tag dapat diedit huruf akhiran, label nama, serta warna badge (Catppuccin swatches / Color Picker).
      - **Baris Quick Toggle Tag di UI Utama (`custom_cats_bar`):**
        - Deretan tombol tag cepat tepat di atas kartu rekomendasi kata mendukung pembungkusan baris dinamis (*dynamic multi-row auto-wrap*).

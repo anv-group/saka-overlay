@@ -15,37 +15,7 @@
         "TL",
         "BD"
     ],
-    "saved_normal_tags": [
-        "X",
-        "NS",
-        "NGK",
-        "MP",
-        "PP",
-        "OO",
-        "SEA",
-        "RD",
-        "RS",
-        "GY",
-        "TY",
-        "LY",
-        "CY",
-        "Z",
-        "Q",
-        "UF",
-        "LEX",
-        "GH",
-        "DY",
-        "DYA",
-        "EZ",
-        "AMSI",
-        "KSO",
-        "RHU",
-        "TL",
-        "BD",
-        "DJ",
-        "YUAN",
-        "ACY"
-    ],
+    "saved_normal_tags": [],
     "report_hotkey": "F2",
     "ocr_engine": "winocr",
     "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
@@ -67,16 +37,58 @@
     "dev_mode": true,
     "custom_trap_endings": [
         {
-            "suffix": "X",
-            "name": "Akhiran X",
+            "suffix": "NGKAR",
+            "name": "Akhiran NGKAR",
             "enabled": true,
-            "color": "#f38ba8"
+            "color": "#fab387"
         },
         {
-            "suffix": "NS",
-            "name": "Akhiran NS",
+            "suffix": "TETEH",
+            "name": "Akhiran TEYEH",
             "enabled": true,
-            "color": "#cba6f7"
+            "color": "#a6e3a1"
+        },
+        {
+            "suffix": "AESI",
+            "name": "Akhiran AESI",
+            "enabled": true,
+            "color": "#f5c2e7"
+        },
+        {
+            "suffix": "AMSI",
+            "name": "Akhiran AMSI",
+            "enabled": true,
+            "color": "#f9e2af"
+        },
+        {
+            "suffix": "YUAN",
+            "name": "Akhiran YUAN",
+            "enabled": true,
+            "color": "#89dceb"
+        },
+        {
+            "suffix": "ACY",
+            "name": "Akhiran ACY",
+            "enabled": true,
+            "color": "#f9e2af"
+        },
+        {
+            "suffix": "DYA",
+            "name": "DYA",
+            "enabled": true,
+            "color": "#f5c2e7"
+        },
+        {
+            "suffix": "KSO",
+            "name": "Akhiran KSO",
+            "enabled": true,
+            "color": "#a6e3a1"
+        },
+        {
+            "suffix": "LEX",
+            "name": "LEX",
+            "enabled": true,
+            "color": "#fab387"
         },
         {
             "suffix": "NGK",
@@ -85,16 +97,100 @@
             "color": "#f5c2e7"
         },
         {
+            "suffix": "RHU",
+            "name": "Akhiran RHU",
+            "enabled": true,
+            "color": "#fab387"
+        },
+        {
+            "suffix": "SEA",
+            "name": "Akhiran SEA",
+            "enabled": true,
+            "color": "#fab387"
+        },
+        {
+            "suffix": "BD",
+            "name": "Akhiran BD",
+            "enabled": true,
+            "color": "#cba6f7"
+        },
+        {
+            "suffix": "CY",
+            "name": "Akhiran CY",
+            "enabled": true,
+            "color": "#94e2d5"
+        },
+        {
+            "suffix": "DJ",
+            "name": "Akhiran DJ",
+            "enabled": true,
+            "color": "#f5c2e7"
+        },
+        {
+            "suffix": "DY",
+            "name": "DY",
+            "enabled": true,
+            "color": "#cba6f7"
+        },
+        {
+            "suffix": "EI",
+            "name": "Akhiran EI",
+            "enabled": false,
+            "color": "#89dceb"
+        },
+        {
+            "suffix": "EZ",
+            "name": "EZ",
+            "enabled": true,
+            "color": "#89dceb"
+        },
+        {
+            "suffix": "GH",
+            "name": "GH",
+            "enabled": true,
+            "color": "#94e2d5"
+        },
+        {
+            "suffix": "GY",
+            "name": "Akhiran GY",
+            "enabled": true,
+            "color": "#f9e2af"
+        },
+        {
+            "suffix": "IF",
+            "name": "Akhiran IF",
+            "enabled": false,
+            "color": "#89dceb"
+        },
+        {
+            "suffix": "LY",
+            "name": "Akhiran LY",
+            "enabled": true,
+            "color": "#fab387"
+        },
+        {
             "suffix": "MP",
             "name": "Akhiran MP",
             "enabled": true,
             "color": "#89dceb"
         },
         {
-            "suffix": "PP",
-            "name": "Akhiran PP",
+            "suffix": "MR",
+            "name": "Akhiran MR",
             "enabled": true,
-            "color": "#f9e2af"
+            "color": "#cba6f7"
+        },
+        {
+            "suffix": "NS",
+            "name": "Akhiran NS",
+            "enabled": true,
+            "color": "#cba6f7"
+        },
+        {
+            "suffix": "OI",
+            "name": "Akhiran OI",
+            "enabled": false,
+            "color": "#f5c2e7"
         },
         {
             "suffix": "OO",
@@ -103,10 +199,10 @@
             "color": "#a6e3a1"
         },
         {
-            "suffix": "SEA",
-            "name": "Akhiran SEA",
+            "suffix": "PP",
+            "name": "Akhiran PP",
             "enabled": true,
-            "color": "#fab387"
+            "color": "#f9e2af"
         },
         {
             "suffix": "RD",
@@ -121,112 +217,10 @@
             "color": "#cba6f7"
         },
         {
-            "suffix": "OI",
-            "name": "Akhiran OI",
-            "enabled": false,
-            "color": "#f5c2e7"
-        },
-        {
-            "suffix": "EI",
-            "name": "Akhiran EI",
-            "enabled": false,
-            "color": "#89dceb"
-        },
-        {
-            "suffix": "GY",
-            "name": "Akhiran GY",
-            "enabled": true,
-            "color": "#f9e2af"
-        },
-        {
-            "suffix": "TY",
-            "name": "Akhiran TY",
-            "enabled": true,
-            "color": "#a6e3a1"
-        },
-        {
-            "suffix": "LY",
-            "name": "Akhiran LY",
-            "enabled": true,
-            "color": "#fab387"
-        },
-        {
-            "suffix": "CY",
-            "name": "Akhiran CY",
+            "suffix": "SV",
+            "name": "Akhiran SV",
             "enabled": true,
             "color": "#94e2d5"
-        },
-        {
-            "suffix": "Z",
-            "name": "Akhiran Z",
-            "enabled": true,
-            "color": "#cba6f7"
-        },
-        {
-            "suffix": "Q",
-            "name": "Akhiran Q",
-            "enabled": true,
-            "color": "#f5c2e7"
-        },
-        {
-            "suffix": "IF",
-            "name": "Akhiran IF",
-            "enabled": false,
-            "color": "#89dceb"
-        },
-        {
-            "suffix": "UF",
-            "name": "UF",
-            "enabled": true,
-            "color": "#a6e3a1"
-        },
-        {
-            "suffix": "LEX",
-            "name": "LEX",
-            "enabled": true,
-            "color": "#fab387"
-        },
-        {
-            "suffix": "GH",
-            "name": "GH",
-            "enabled": true,
-            "color": "#94e2d5"
-        },
-        {
-            "suffix": "DY",
-            "name": "DY",
-            "enabled": true,
-            "color": "#cba6f7"
-        },
-        {
-            "suffix": "DYA",
-            "name": "DYA",
-            "enabled": true,
-            "color": "#f5c2e7"
-        },
-        {
-            "suffix": "EZ",
-            "name": "EZ",
-            "enabled": true,
-            "color": "#89dceb"
-        },
-        {
-            "suffix": "AMSI",
-            "name": "Akhiran AMSI",
-            "enabled": true,
-            "color": "#f9e2af"
-        },
-        {
-            "suffix": "KSO",
-            "name": "Akhiran KSO",
-            "enabled": true,
-            "color": "#a6e3a1"
-        },
-        {
-            "suffix": "RHU",
-            "name": "Akhiran RHU",
-            "enabled": true,
-            "color": "#fab387"
         },
         {
             "suffix": "TL",
@@ -235,28 +229,34 @@
             "color": "#94e2d5"
         },
         {
-            "suffix": "BD",
-            "name": "Akhiran BD",
+            "suffix": "TY",
+            "name": "Akhiran TY",
             "enabled": true,
-            "color": "#cba6f7"
+            "color": "#a6e3a1"
         },
         {
-            "suffix": "DJ",
-            "name": "Akhiran DJ",
+            "suffix": "UF",
+            "name": "UF",
+            "enabled": true,
+            "color": "#a6e3a1"
+        },
+        {
+            "suffix": "Q",
+            "name": "Akhiran Q",
             "enabled": true,
             "color": "#f5c2e7"
         },
         {
-            "suffix": "YUAN",
-            "name": "Akhiran YUAN",
+            "suffix": "X",
+            "name": "Akhiran X",
             "enabled": true,
-            "color": "#89dceb"
+            "color": "#f38ba8"
         },
         {
-            "suffix": "ACY",
-            "name": "Akhiran ACY",
+            "suffix": "Z",
+            "name": "Akhiran Z",
             "enabled": true,
-            "color": "#f9e2af"
+            "color": "#cba6f7"
         }
     ],
     "auto_copy_top_word": false,

@@ -169,7 +169,7 @@ Di dalam setiap tier (terutama pada **Tier 0: Custom Traps**), sistem mengurutka
 > [!TIP]
 > **Pilihan Mode Sortir Tier 0:**
 > 1. **Default (Panjang & Abjad):** Memprioritaskan kata panjang 4–7 huruf (nyaman & cepat diketik), urutan abjad asli kamus dipertahankan lintas tag.
-> 2. **Sesuai Urutan Tag Kustom:** Seluruh kata dari tag urutan teratas (misal tag jebakan tersulit buatan Anda) dimunculkan terlebih dahulu sebelum beralih ke tag berikutnya.
+> 2. **Sesuai Urutan Tag Kustom:** Seluruh kata dari tag urutan teratas (misal tag jebakan tersulit buatan Anda) dimunculkan terlebih dahulu sebelum beralih ke tag berikutnya. Tag dapat diurutkan secara instan via tombol **`🔤 A-Z`**, **`📊 Terbanyak`**, **`📏 Terpanjang`**, atau **`📏 Tersedikit`** di jendela Kelola Tag.
 > Pengaturan ini dapat diubah langsung 1-klik via tombol **`📊 DEFAULT` / `🏷️ URUT TAG`** di header UI utama, di jendela `🏷️ Kelola Kategori Custom`, atau via menu `⚙️ Settings ➔ 📊 Mode Sortir Tier 0`.
 
 ---

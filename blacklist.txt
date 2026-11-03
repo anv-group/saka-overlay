@@ -32,6 +32,7 @@ kata_kasar
 kontol
 latex
 liras
+nding
 ngki
 nguja
 nisi

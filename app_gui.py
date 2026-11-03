@@ -3256,6 +3256,21 @@ class SambungKataApp:
             bg="#181825"
         ).pack(side=tk.LEFT)
 
+        btn_brutal_cfg = tk.Button(
+            sub_hdr,
+            text="🔥 Mode Brutal...",
+            font=("Segoe UI", 8, "bold"),
+            bg="#313244",
+            fg="#fab387",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=8,
+            pady=2,
+            cursor="hand2",
+            command=self.open_brutal_settings_window
+        )
+        btn_brutal_cfg.pack(side=tk.RIGHT)
+
         # Mode Sortir Tier 0 Control Frame
         sort_box = tk.LabelFrame(
             self.custom_cats_win,
@@ -3357,20 +3372,35 @@ class SambungKataApp:
         )
         self.lbl_cat_list_title.pack(side=tk.LEFT)
 
-        btn_brutal_cfg = tk.Button(
+        btn_sort_len_asc = tk.Button(
             list_toolbar,
-            text="🔥 Mode Brutal...",
-            font=("Segoe UI", 8, "bold"),
+            text="📏 Tersedikit",
+            font=("Segoe UI", 8),
             bg="#313244",
-            fg="#fab387",
+            fg="#cdd6f4",
             activebackground="#45475a",
             relief=tk.FLAT,
-            padx=6,
+            padx=5,
             pady=1,
             cursor="hand2",
-            command=self.open_brutal_settings_window
+            command=lambda: self._on_sort_custom_categories_length(reverse=False)
         )
-        btn_brutal_cfg.pack(side=tk.RIGHT, padx=(3, 0))
+        btn_sort_len_asc.pack(side=tk.RIGHT, padx=(2, 0))
+
+        btn_sort_len_desc = tk.Button(
+            list_toolbar,
+            text="📏 Terpanjang",
+            font=("Segoe UI", 8),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=5,
+            pady=1,
+            cursor="hand2",
+            command=lambda: self._on_sort_custom_categories_length(reverse=True)
+        )
+        btn_sort_len_desc.pack(side=tk.RIGHT, padx=2)
 
         btn_sort_cnt = tk.Button(
             list_toolbar,
@@ -3380,12 +3410,12 @@ class SambungKataApp:
             fg="#cdd6f4",
             activebackground="#45475a",
             relief=tk.FLAT,
-            padx=6,
+            padx=5,
             pady=1,
             cursor="hand2",
             command=self._on_sort_custom_categories_count
         )
-        btn_sort_cnt.pack(side=tk.RIGHT, padx=(3, 0))
+        btn_sort_cnt.pack(side=tk.RIGHT, padx=2)
 
         btn_sort_az = tk.Button(
             list_toolbar,
@@ -3395,12 +3425,12 @@ class SambungKataApp:
             fg="#cdd6f4",
             activebackground="#45475a",
             relief=tk.FLAT,
-            padx=6,
+            padx=5,
             pady=1,
             cursor="hand2",
             command=self._on_sort_custom_categories_az
         )
-        btn_sort_az.pack(side=tk.RIGHT, padx=3)
+        btn_sort_az.pack(side=tk.RIGHT, padx=2)
 
         lbl_sort_txt = tk.Label(
             list_toolbar,
@@ -3409,7 +3439,7 @@ class SambungKataApp:
             fg="#6c7086",
             bg="#1e1e2e"
         )
-        lbl_sort_txt.pack(side=tk.RIGHT)
+        lbl_sort_txt.pack(side=tk.RIGHT, padx=(0, 2))
 
         # Scrollable list container
         list_container = tk.Frame(self.custom_cats_win, bg="#181825")
@@ -4105,6 +4135,34 @@ class SambungKataApp:
         if hasattr(self, "last_detected_word") and self.last_detected_word:
             self.update_results(self.last_detected_word)
         self.show_toast("📊 Kategori akhiran diurutkan berdasarkan kata terbanyak")
+
+    def _on_sort_custom_categories_length(self, reverse=True):
+        """
+        Mengurutkan kategori kustom berdasarkan panjang total huruf akhiran (suffix):
+        - reverse=True: Terpanjang dahulu (misal: 5 huruf -> 4 -> 3 -> 2 -> 1, tie-break A-Z)
+        - reverse=False: Paling sedikit huruf dahulu (misal: 1 huruf -> 2 -> 3 -> 4 -> 5, tie-break A-Z)
+        """
+        categories = self.config.get("custom_trap_endings", [])
+        if not categories:
+            return
+
+        if reverse:
+            # Terpanjang dahulu: panjang suffix terbanyak (-len), kemudian abjad A-Z
+            categories.sort(key=lambda c: (-len(c.get("suffix", "")), c.get("suffix", "").upper()))
+        else:
+            # Paling sedikit huruf dahulu: panjang suffix tersedikit (len), kemudian abjad A-Z
+            categories.sort(key=lambda c: (len(c.get("suffix", "")), c.get("suffix", "").upper()))
+
+        self.config["custom_trap_endings"] = categories
+        save_config(self.config)
+        self.solver.set_custom_endings(categories)
+        self._render_custom_category_items()
+        self._render_custom_category_quick_bar()
+        if hasattr(self, "last_detected_word") and self.last_detected_word:
+            self.update_results(self.last_detected_word)
+
+        mode_txt = "terpanjang" if reverse else "paling sedikit"
+        self.show_toast(f"📏 Kategori akhiran diurutkan huruf {mode_txt}")
 
     def open_edit_custom_category_dialog(self, idx):
         """Membuka dialog popup modal untuk mengedit akhiran, nama, dan warna kategori"""
