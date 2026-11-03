@@ -1,8 +1,8 @@
-# 🎮 Roblox Sambung Kata Assistant & Auto Solver
+# 🎮 SAKA Overlay - Roblox Sambung Kata Assistant & Auto Solver
 
 [![CI & Regression Tests](https://github.com/anv-group/sambung-kata-overlay/actions/workflows/test.yml/badge.svg)](https://github.com/anv-group/sambung-kata-overlay/actions/workflows/test.yml)
 
-Asisten cerdas pendamping bermain game **Roblox Sambung Kata** ([Mainkan di Roblox](https://www.roblox.com/games/130342654546662/Sambung-Kata)).
+**SAKA Overlay** (dari kata **SAmbung KAta** + **Overlay**) adalah asisten cerdas pendamping bermain game **Roblox Sambung Kata** ([Mainkan di Roblox](https://www.roblox.com/games/130342654546662/Sambung-Kata)).
 
 Aplikasi ini secara otomatis mendeteksi kotak awalan huruf giliran Anda di layar secara *real-time*, memilihkan kata serangan terbaik dari kamus **147.880+ kata** (KBBI v6 + Database Contek Game Roblox), lengkap dengan petunjuk sisa huruf yang perlu Anda ketik sebelum waktu habis!
 
@@ -93,7 +93,7 @@ Jendela aplikasi didesain khusus dengan konsep **Ultra-Compact Overlay** yang me
 
 | Elemen UI / Shortcut | Fungsi & Cara Pakai |
 | :--- | :--- |
-| **Title Bar Dinamis** | Format: `Sambung Kata Overlay (<branch> <commit>) [<kecepatan scan>]`. Menampilkan branch git aktif, commit hash saat ini, dan kecepatan scan secara *real-time*. |
+| **Title Bar Dinamis** | Format: `SAKA Overlay (<branch> <commit>) [<kecepatan scan>]`. Menampilkan branch git aktif, commit hash saat ini, dan kecepatan scan secara *real-time*. |
 | **`▶️ Mulai` / `⏹️ Stop`** | Menjalankan atau menghentikan pemindaian OCR layar secara instan. |
 | **`🔄` (Restart)** | Merestart aplikasi dalam 1-klik secara bersih untuk mereload kamus, memori, atau konfigurasi. |
 | **`NORMAL` / `SANTAI`** | Tombol tag cepat untuk beralih mode. Saat mode **`SANTAI`** aktif, seluruh kata yang mengandung atau berakhiran **X, Q, dan F** otomatis disaring dan dibuang. |
@@ -102,7 +102,7 @@ Jendela aplikasi didesain khusus dengan konsep **Ultra-Compact Overlay** yang me
 | **`⚡ Kecepatan Scan`** | Submenu radio button 1-klik untuk memilih kecepatan: **`🔥 40ms (Ultra Instan)`**, **`⚡ 80ms (Kilat Turbo)`**, **`🚀 150ms (Cepat)`**, atau **`🐢 300ms (Santai)`**. |
 | **Search Bar Real-Time** | Input manual awalan huruf. Hasil rekomendasi langsung terfilter saat Anda mengetik tanpa perlu klik tombol cari. Input ini otomatis meng-overwrite OCR. Terdapat tombol **`❌`** di ujung kanan untuk membersihkan teks seketika. |
 | **`🏷️` Quick Toggle Bar** | Deretan tombol tag kategori akhiran kustom (misal: `NS`, `NGK`, `EI`) tepat di atas rekomendasi kata. Mendukung pembungkusan multi-baris dinamis (*dynamic auto-reflow* saat resize) dengan kalkulasi lebar tombol presisi font sehingga semua tag selalu terlihat utuh di layar (*never off-screen*). Klik icon `🏷️` untuk membuka jendela Kelola Tag (edit akhiran, nama, warna, dan urutan prioritas). |
-| **`⚡ Restart` (Dev Mode)** | Tombol restart instan di header (disembunyikan secara default, dapat diaktifkan lewat `⚙️ Settings ➔ 🛠️ Mode Development` atau shortcut `Ctrl+Shift+D`). Kebal git update via `config.local.json`. |
+| **`⚡` (Dev Mode Restart)** | Tombol restart instan di header (disembunyikan secara default, dapat diaktifkan lewat `⚙️ Settings ➔ 🛠️ Mode Development` atau shortcut `Ctrl+Shift+D`). Kebal git update via `config.local.json`. |
 | **Rekomendasi Kata (Ultra-Smooth 60fps)** | Menampilkan kartu kata terurut berdasarkan tier jebakan (Tier 0 -> X -> Sulit -> Normal). Dilengkapi *widget pooling* berbasis *dirty-checking* (render instan < 0.1ms tanpa relayout spam), scroll terpusat tanpa lag, reset otomatis ke atas saat giliran berganti, serta sistem resize jendela adaptif 60fps dengan anti-ghost drag (*langsung berhenti saat mouse dilepas*). |
 | **`⭐` / `☆` di Kartu Kata** | Menandai kata sebagai **Whitelist** (terbukti valid). Kata langsung mendapat prioritas #1 di kategorinya tanpa mencemari kamus utama. |
 | **`❌` di Kartu Kata** | Memasukkan kata yang ditolak server Roblox ke dalam `blacklist.txt` seketika (dapat dibatalkan dengan tombol `↩️ Batalkan`). |

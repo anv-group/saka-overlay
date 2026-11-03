@@ -1,9 +1,9 @@
 @echo off
-title Roblox Sambung Kata Assistant & Auto Solver
+title SAKA Overlay - Roblox Sambung Kata Assistant & Auto Solver
 cd /d "%~dp0"
 
 echo ===================================================
-echo     Roblox Sambung Kata Assistant & Auto Solver
+echo     SAKA Overlay - Roblox Sambung Kata Assistant
 echo ===================================================
 echo.
 
@@ -17,7 +17,7 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo [*] Menjalankan Sambung Kata Assistant...
+echo [*] Menjalankan SAKA Overlay...
 python main.py
 if %ERRORLEVEL% NEQ 0 (
     echo.

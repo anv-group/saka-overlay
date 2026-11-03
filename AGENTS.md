@@ -6,7 +6,7 @@
 
 ## 📌 1. Ringkasan Proyek & Target Game
 
-- **Nama Project:** Roblox Sambung Kata Assistant & Auto Solver
+- **Nama Project:** SAKA Overlay (Roblox Sambung Kata Assistant & Auto Solver)
 - **Direktori Utama:** `C:\Users\Alden\Documents\VSCode\sambung-kata-overlay`
 - **Target Game:** Roblox Sambung Kata (`https://www.roblox.com/games/130342654546662/Sambung-Kata`)
 - **Mekanisme Game:**
@@ -158,7 +158,7 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
        - Perhitungan lebar fisik tombol dihitung secara presisi menggunakan `tkfont.Font.measure(sfx)` ditambah padding internal dan margin Windows (`btn_w = tag_font.measure(sfx) + 20`) dengan *safety margin* 14px.
        - Dilengkapi event listener `<Configure>` dengan debouncing 30ms sehingga setiap kali jendela UI di-resize atau diperkecil, barisan tag otomatis melakukan reflow secara real-time dan tag di ujung (seperti `EI`, `GY`, `TY`) tidak akan pernah terpotong atau keluar dari layar (*never off-screen*).
    - **Mode Development & Tombol Restart (`config.local.json`):**
-     - Tombol `⚡ Restart` di header disembunyikan secara default (`dev_mode: false`).
+     - Tombol `⚡` (Restart) di header disembunyikan secara default (`dev_mode: false`).
      - Pengguna/developer dapat mengaktifkannya via `⚙️ Settings ➔ 🛠️ Mode Development` atau shortcut `Ctrl+Shift+D`.
      - Pengaturan `dev_mode` disimpan ke `config.local.json` (terdaftar di `.gitignore`).
      - **Kebal Pembaruan Git:** Karena `config.local.json` tidak dilacak oleh Git, saat pengguna melakukan `git pull` atau auto-update repository, mode development dan status tombol restart tetap aktif tanpa ter-reset ke default GitHub.

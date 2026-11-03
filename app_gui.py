@@ -31,7 +31,7 @@ from extract_gameplay_recording import extract_gameplay_events
 class SambungKataApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Sambung Kata Overlay")
+        self.root.title("SAKA Overlay")
 
         self.config = load_config()
         if self.config.get("game_mode") == "normal":
@@ -307,7 +307,7 @@ class SambungKataApp:
         # Tombol Restart (Mode Development) diposisikan tepat di samping tombol close di titlebar
         self.btn_restart = tk.Button(
             self.custom_title_bar,
-            text="⚡ Restart",
+            text="⚡",
             font=("Segoe UI", 8, "bold"),
             bg="#11111b",
             fg="#fab387",
@@ -330,7 +330,7 @@ class SambungKataApp:
 
         self.lbl_title_bar = tk.Label(
             self.custom_title_bar,
-            text="Sambung Kata Overlay",
+            text="SAKA Overlay",
             font=("Segoe UI", 8, "bold"),
             fg="#cdd6f4",
             bg="#11111b",
@@ -958,7 +958,7 @@ class SambungKataApp:
             self.entry_manual.focus_set()
 
     def _update_window_title(self):
-        """Memperbarui judul window: Sambung Kata Overlay (<branch jika bukan main> <commit>) [<kecepatan scan>]"""
+        """Memperbarui judul window: SAKA Overlay (<branch jika bukan main> <commit>) [<kecepatan scan>]"""
         try:
             branch = self.updater.get_current_branch()
             commit_info = self.updater.get_current_commit()
@@ -981,7 +981,7 @@ class SambungKataApp:
         if not speed_label:
             speed_label = f"⚡ {int(curr_sec * 1000)}ms"
 
-        parts = ["Sambung Kata Overlay"]
+        parts = ["SAKA Overlay"]
         if git_str:
             parts.append(git_str)
         parts.append(f"[{speed_label}]")
@@ -5964,10 +5964,10 @@ class SambungKataApp:
                 self.btn_restart.pack(side=tk.RIGHT, padx=(0, 2), pady=2, after=self.btn_title_close)
             else:
                 self.btn_restart.pack(side=tk.RIGHT, padx=(0, 2), pady=2)
-            self.show_toast("🛠️ Mode Development DIAKTIFKAN (Tombol ⚡ Restart muncul di titlebar)")
+            self.show_toast("🛠️ Mode Development DIAKTIFKAN (Tombol ⚡ muncul di titlebar)")
         else:
             self.btn_restart.pack_forget()
-            self.show_toast("🛠️ Mode Development DINONAKTIFKAN (Tombol ⚡ Restart disembunyikan)")
+            self.show_toast("🛠️ Mode Development DINONAKTIFKAN (Tombol ⚡ disembunyikan)")
 
     def _toggle_dev_mode_shortcut(self):
         """Toggle cepat mode development via keyboard Ctrl+Shift+D"""
