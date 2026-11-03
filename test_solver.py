@@ -164,5 +164,37 @@ class TestSambungKataSolver(unittest.TestCase):
         self.assertGreater(first_ns, last_mp)
 
 
+
+    def test_search_dictionary_prefix_suffix_and_tags(self):
+        """Memastikan fitur pencarian kamus (prefix, suffix, contains, dan multi-tag) bekerja akurat"""
+        custom_rules = [
+            {"suffix": "NS", "name": "Akhiran NS"},
+            {"suffix": "MP", "name": "Akhiran MP"}
+        ]
+        self.solver.set_custom_endings(custom_rules)
+
+        # 1. Pencarian Awalan (Prefix)
+        res_pre, tot_pre = self.solver.search_dictionary(query="BUK", search_type="prefix", limit=10)
+        self.assertGreater(tot_pre, 0)
+        for r in res_pre:
+            self.assertTrue(r["word"].startswith("BUK"))
+
+        # 2. Pencarian Akhiran (Suffix)
+        res_suf, tot_suf = self.solver.search_dictionary(query="X", search_type="suffix", limit=10)
+        self.assertGreater(tot_suf, 0)
+        for r in res_suf:
+            self.assertTrue(r["word"].endswith("X"))
+
+        # 3. Pencarian Mengandung (Contains)
+        res_con, tot_con = self.solver.search_dictionary(query="OBX", search_type="contains", limit=10)
+        for r in res_con:
+            self.assertIn("OBX", r["word"])
+
+        # 4. Filter Multi-Tag (NS dan MP)
+        res_tag, tot_tag = self.solver.search_dictionary(query="", selected_tags=["NS", "MP"], limit=50)
+        self.assertGreater(tot_tag, 0)
+        for r in res_tag:
+            self.assertTrue(r["word"].endswith("NS") or r["word"].endswith("MP"))
+
 if __name__ == "__main__":
     unittest.main()

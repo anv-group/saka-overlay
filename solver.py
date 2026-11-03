@@ -591,3 +591,122 @@ class SambungKataSolver:
             })
 
         return hasil[:limit]
+
+
+    def search_dictionary(
+        self,
+        query="",
+        search_type="prefix",
+        selected_tags=None,
+        min_len=0,
+        max_len=999,
+        limit=2000
+    ):
+        """
+        Mencari kata di seluruh kosakata aktif berdasarkan awalan/akhiran/mengandung
+        dan opsi filter multi-tag (bisa memilih satu atau beberapa tag).
+        Mengembalikan tuple: (results, total_count)
+        di mana results adalah list dict dengan detail kata terstruktur.
+        """
+        q = (query or "").strip().lower()
+        search_type = (search_type or "prefix").strip().lower()
+        if search_type not in ("prefix", "suffix", "contains"):
+            search_type = "prefix"
+
+        tag_set = set(t.strip().upper() for t in (selected_tags or []) if t.strip())
+        suffix_tags = [t.lower() for t in tag_set if t not in ("WHITELIST", "⭐ WHITELIST", "BLACKLIST", "🚫 BLOCKLIST", "BLOCKLIST")]
+
+        check_whitelist = any("WHITELIST" in t for t in tag_set)
+        check_blacklist = any("BLOCKLIST" in t or "BLACKLIST" in t for t in tag_set)
+
+        # Optimasi pemilihan kandidat kata awal
+        if q and search_type == "prefix" and q[0] in self.words_by_initial:
+            cand = self.words_by_initial[q[0]]
+        else:
+            cand = self.words
+
+        matches = []
+        for w in cand:
+            w_len = len(w)
+            if w_len < min_len or w_len > max_len:
+                continue
+
+            if q:
+                if search_type == "prefix" and not w.startswith(q):
+                    continue
+                elif search_type == "suffix" and not w.endswith(q):
+                    continue
+                elif search_type == "contains" and q not in w:
+                    continue
+
+            if tag_set:
+                matched_tag = False
+                if check_whitelist and w in self.whitelisted_words:
+                    matched_tag = True
+                elif check_blacklist and w in self.blacklisted_words:
+                    matched_tag = True
+                elif suffix_tags and any(w.endswith(st) for st in suffix_tags):
+                    matched_tag = True
+                if not matched_tag:
+                    continue
+
+            matches.append(w)
+
+        total_count = len(matches)
+        trimmed = matches[:limit]
+
+        # Buat lookup custom endings
+        custom_lookup = {}
+        for c in self.custom_endings:
+            if isinstance(c, dict):
+                sfx = c.get("suffix", "").lower()
+                if sfx:
+                    custom_lookup[sfx] = c.get("name") or f"Akhiran {sfx.upper()}"
+            elif isinstance(c, str) and c.strip():
+                sfx = c.strip().lower()
+                custom_lookup[sfx] = f"Akhiran {sfx.upper()}"
+
+        results = []
+        for w in trimmed:
+            tag_label = ""
+            matched_custom = None
+            for sfx in custom_lookup:
+                if w.endswith(sfx):
+                    matched_custom = sfx.upper()
+                    break
+
+            if matched_custom:
+                tag_label = f"[{matched_custom}]"
+            elif w.endswith("x"):
+                tag_label = "[💥 X]"
+            elif any(w.endswith(ch) for ch in ("z", "q", "v", "j", "w", "f")):
+                tag_label = f"[⚡ {w[-1].upper()}]"
+            else:
+                tag_label = "[🛡️ Normal]"
+
+            is_wl = w in self.whitelisted_words
+            is_bl = w in self.blacklisted_words
+
+            if is_bl:
+                status_src = "🚫 Blocklist"
+            elif is_wl:
+                status_src = "⭐ Whitelist"
+            elif w in self.kbbi_set and w not in self.contek_set:
+                status_src = "KBBI"
+            elif w in self.contek_set and w not in self.kbbi_set:
+                status_src = "Contek"
+            elif w in self.kbbi_set and w in self.contek_set:
+                status_src = "KBBI + Contek"
+            else:
+                status_src = "Kamus"
+
+            results.append({
+                "word": w.upper(),
+                "length": len(w),
+                "tag": tag_label,
+                "status": status_src,
+                "is_whitelisted": is_wl,
+                "is_blacklisted": is_bl
+            })
+
+        return results, total_count

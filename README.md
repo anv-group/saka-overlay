@@ -106,7 +106,8 @@ Jendela aplikasi didesain khusus dengan konsep **Ultra-Compact Overlay** yang me
 | **Rekomendasi Kata (Scrollable)** | Menampilkan kartu kata terurut berdasarkan tier jebakan. Dilengkapi *smooth mousewheel scroll* (scroll roda mouse di mana saja di area kartu) dan *widget pooling* (render super kilat 0.5ms). |
 | **`⭐` / `☆` di Kartu Kata** | Menandai kata sebagai **Whitelist** (terbukti valid). Kata langsung mendapat prioritas #1 di kategorinya tanpa mencemari kamus utama. |
 | **`❌` di Kartu Kata** | Memasukkan kata yang ditolak server Roblox ke dalam `blacklist.txt` seketika (dapat dibatalkan dengan tombol `↩️ Batalkan`). |
-| **`➕ Kamus`** | Menambahkan kata baru ke kamus secara permanen (tersedia di menu pengaturan atau dialog). |
+| **`➕ Kamus`** | Menambahkan kata baru ke kamus secara permanen (klik kiri). Klik kanan tombol ini untuk membuka **📖 Eksplorasi Kamus**. |
+| **`📖 Eksplorasi Kamus`** | Jendela penjelajah seluruh kosakata aktif (147,000+ kata). Mendukung pencarian berdasarkan **Awalan (Prefix)**, **Akhiran (Suffix)**, dan **Mengandung (Contains)**, serta filter **Multi-Tag** (bisa memilih satu atau beberapa tag sekaligus seperti `[NS]`, `[MP]`, `[X]`, `[Z]`, `[⭐ Whitelist]`, `[🚫 Blocklist]`). Dapat dibuka dari `⚙️ Settings` atau klik kanan `➕ Kamus`. |
 | **`F2` (Screenshot Area Deteksi)** | **Global Hotkey:** Screenshot instan (< 5ms) saat ada huruf salah baca ke folder `sample/kurang_tepat/` tanpa popup yang mengganggu permainan. Review dilakukan setelah bermain lewat menu **`📝 Pendataan Koreksi Sampel`**. |
 | **`F3` (Screenshot Area Gameplay)** | Mengambil snapshot visual gameplay (kotak kata & avatar pemain) dan menyimpan metadata warna RGB/HSV ke folder `deteksi-gameplay/sample_kalibrasi/`. |
 

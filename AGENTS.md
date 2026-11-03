@@ -198,7 +198,21 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
    - Kata divalidasi (alfabet murni, min 2 huruf, wajib punya vokal `AIUEO`).
    - Disimpan secara persisten ke `kamus_lengkap.txt` dan diindeks langsung ke memori solver ($O(1)$) tanpa perlu restart aplikasi.
    - Jika kata sebelumnya berada di `blacklist.txt`, status blacklist otomatis dibatalkan/dipulihkan.
-7. **Pemilihan Sumber Kamus (KBBI vs Contek Sambung Kata)**:
+7. **UI Penjelajah & Eksplorasi Kamus Lengkap (`search_dictionary`)**:
+   - Memungkinkan pemain menelusuri seluruh basis data kosakata aktif (147,000+ kata) secara instan.
+   - **Tiga Mode Pencarian Fleksibel:**
+     - **Awalan (Prefix):** Menyaring kata yang berawalan teks tertentu (dioptimasi via indeks huruf awal $O(1)$).
+     - **Akhiran (Suffix):** Menyaring kata yang berakhiran teks tertentu.
+     - **Mengandung (Contains):** Menemukan kata yang memuat teks tertentu di posisi mana pun.
+   - **Filter Multi-Tag Interaktif:**
+     - Pemain dapat memilih satu atau beberapa tag sekaligus (`[NS]`, `[MP]`, `[X]`, `[Z]`, `[⭐ Whitelist]`, `[🚫 Blocklist]`).
+     - Menggunakan visualisasi tag chips auto-wrapping multi-baris yang adaptif terhadap lebar jendela.
+   - **Integrasi Cepat:**
+     - Menampilkan statistik kata yang cocok (`Menampilkan X dari Y kata`).
+     - Dobel-klik pada kata untuk menyalin langsung ke clipboard.
+     - Klik kanan pada baris hasil menyediakan menu cepat untuk menambah ke Whitelist atau Blocklist.
+     - Dapat dibuka via menu `⚙️ Settings ➔ 📖 Cari di Kamus (Eksplorasi)` atau klik kanan tombol `➕ Kamus`.
+8. **Pemilihan Sumber Kamus (KBBI vs Contek Sambung Kata)**:
    - Pemain dapat memilih sumber kamus yang digunakan melalui checkbox di GUI:
      - **`KBBI` (`kamus_kbbi.txt`):** 112,822 kosakata baku bahasa Indonesia murni.
      - **`Contek Sambung Kata` (`kamus_contek.txt`):** 108,123 kosakata dari basis data `contek-sambungkata.web.id` + jebakan kata Roblox.
