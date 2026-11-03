@@ -2585,32 +2585,23 @@ class SambungKataApp:
 
         categories = self.config.get("custom_trap_endings", [])
 
-        # Label Header baris
-        lbl_title = tk.Label(
+        # Icon tag 🏷️ sebagai tombol untuk membuka jendela Kelola Kategori Custom
+        btn_tag_icon = tk.Button(
             self.custom_cats_bar,
             text="🏷️",
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 10),
+            bg="#1e1e2e",
             fg="#cdd6f4",
-            bg="#1e1e2e"
-        )
-        lbl_title.pack(side=tk.LEFT, padx=(0, 4))
-
-        # Tombol Kelola '⚙️' di ujung kanan horizontal
-        btn_manage = tk.Button(
-            self.custom_cats_bar,
-            text="⚙️ Kelola",
-            font=("Segoe UI", 8),
-            bg="#181825",
-            fg="#a6adc8",
             activebackground="#313244",
-            activeforeground="#cdd6f4",
+            activeforeground="#f5e0dc",
             relief=tk.FLAT,
-            padx=6,
-            pady=2,
+            bd=0,
+            padx=3,
+            pady=1,
             cursor="hand2",
             command=self.open_custom_categories_window
         )
-        btn_manage.pack(side=tk.RIGHT, padx=(4, 0))
+        btn_tag_icon.pack(side=tk.LEFT, padx=(0, 4))
 
         if not categories:
             lbl_none = tk.Label(
