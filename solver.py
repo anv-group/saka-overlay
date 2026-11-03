@@ -366,7 +366,7 @@ class SambungKataSolver:
             return 0
         return sum(1 for w in self.words if w.endswith(s) and w not in self.blacklisted_words)
 
-    def cari_jawaban(self, awalan_prefix, limit=100, mode_santai=False, custom_endings=None, sort_mode=None):
+    def cari_jawaban(self, awalan_prefix, limit=100, mode_santai=False, custom_endings=None, sort_mode=None, mode_brutal=False):
         """
         Mencari kata yang DIAWALI oleh `awalan_prefix`:
         Contoh:
@@ -580,7 +580,12 @@ class SambungKataSolver:
 
         list_biasa = []
         for w in kata_biasa:
-            desc = "Kata Santai" if mode_santai else "Kata Normal"
+            if mode_brutal:
+                desc = "Kata Brutal"
+            elif mode_santai:
+                desc = "Kata Santai"
+            else:
+                desc = "Kata Normal"
             list_biasa.append({
                 "kata": w,
                 "tipe": "BIASA",

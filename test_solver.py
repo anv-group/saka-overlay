@@ -87,6 +87,29 @@ class TestSambungKataSolver(unittest.TestCase):
         if_traps = [x for x in hasil_custom if x.get("suffix") == "IF"]
         self.assertEqual(len(if_traps), 0)
 
+    def test_mode_brutal(self):
+        """Memastikan Mode Brutal memprioritaskan tag jebakan brutal (AMSI, KSO, RHU, TL, BD) di Tier 0"""
+        brutal_rules = [
+            {"suffix": "AMSI", "name": "Akhiran AMSI", "enabled": True, "color": "#f9e2af"},
+            {"suffix": "KSO", "name": "Akhiran KSO", "enabled": True, "color": "#a6e3a1"},
+            {"suffix": "RHU", "name": "Akhiran RHU", "enabled": True, "color": "#fab387"},
+            {"suffix": "TL", "name": "Akhiran TL", "enabled": True, "color": "#94e2d5"},
+            {"suffix": "BD", "name": "Akhiran BD", "enabled": True, "color": "#cba6f7"},
+        ]
+        hasil = self.solver.cari_jawaban("AK", limit=20, mode_brutal=True, custom_endings=brutal_rules)
+        self.assertTrue(len(hasil) > 0)
+        # Kata 'akamsi' berakhiran AMSI harus berada di posisi #1 (Tier 0)
+        top = hasil[0]
+        self.assertEqual(top["tipe"], "CUSTOM_TRAP")
+        self.assertEqual(top["suffix"], "AMSI")
+        self.assertEqual(top["kata"].lower(), "akamsi")
+
+        # Cek kata berakhiran KSO (seperti bakso)
+        hasil_b = self.solver.cari_jawaban("BA", limit=20, mode_brutal=True, custom_endings=brutal_rules)
+        kso_items = [x for x in hasil_b if x.get("suffix") == "KSO"]
+        self.assertTrue(len(kso_items) > 0)
+        self.assertTrue(kso_items[0]["kata"].lower().endswith("kso"))
+
     def test_blacklist_mechanism(self):
         """Memastikan kata yang diblacklist tidak muncul dan dapat dipulihkan"""
         kata_uji = "buku"

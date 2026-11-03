@@ -483,9 +483,11 @@ class SambungKataApp:
         self.btn_add_word.pack(side=tk.LEFT, padx=3)
         self.btn_add_word.bind("<Button-3>", lambda e: self.open_dictionary_browser_window())
 
-        # Mode Toggle Button: NORMAL vs SANTAI (Model tag compact tanpa emoji)
-        self.mode_santai_var = tk.BooleanVar(value=self.config.get("mode_santai", False))
-        self.btn_mode_santai = tk.Button(
+        # Mode Permainan: NORMAL vs SANTAI vs BRUTAL (Model compact, 1-klik cycle, klik-kanan menu)
+        cur_mode_val = self.config.get("game_mode", "santai" if self.config.get("mode_santai", False) else "normal")
+        self.game_mode_var = tk.StringVar(value=cur_mode_val)
+        self.mode_santai_var = tk.BooleanVar(value=(cur_mode_val == "santai"))
+        self.btn_game_mode = tk.Button(
             top_bar,
             text="",
             font=("Segoe UI", 8, "bold"),
@@ -493,10 +495,12 @@ class SambungKataApp:
             padx=6,
             pady=2,
             cursor="hand2",
-            command=self.toggle_mode_santai
+            command=self.cycle_game_mode
         )
-        self.btn_mode_santai.pack(side=tk.LEFT, padx=(4, 2))
-        self.chk_santai = self.btn_mode_santai
+        self.btn_game_mode.pack(side=tk.LEFT, padx=(4, 2))
+        self.btn_game_mode.bind("<Button-3>", lambda e: self._show_game_mode_menu(e))
+        self.btn_mode_santai = self.btn_game_mode
+        self.chk_santai = self.btn_game_mode
         self._update_mode_santai_button()
 
         # Mode Sortir Button: DEFAULT vs URUT TAG (Langsung di UI Utama)
@@ -668,8 +672,16 @@ class SambungKataApp:
 
         # 5. Daftar Rekomendasi Jawaban (Memenuhi sisa seluruh window)
         is_santai_init = self.config.get("mode_santai", False)
-        recom_title = " Rekomendasi Kata (tanpa X, Q, F) " if is_santai_init else " Rekomendasi Kata (NORMAL) "
-        recom_fg = "#a6e3a1" if is_santai_init else "#f38ba8"
+        cur_mode_init = self.config.get("game_mode", "santai" if is_santai_init else "normal")
+        if cur_mode_init == "brutal":
+            recom_title = " Rekomendasi Kata (🔥 BRUTAL) "
+            recom_fg = "#f38ba8"
+        elif cur_mode_init == "santai":
+            recom_title = " Rekomendasi Kata (tanpa X, Q, F) "
+            recom_fg = "#a6e3a1"
+        else:
+            recom_title = " Rekomendasi Kata (NORMAL) "
+            recom_fg = "#f38ba8"
         # Resize grip di sudut kanan bawah & tepi bawah window
         self.grip_bar = tk.Frame(self.root, bg="#11111b", height=16, cursor="size_ns")
         self.grip_bar.pack(fill=tk.X, side=tk.BOTTOM)
@@ -819,6 +831,26 @@ class SambungKataApp:
         menu.add_command(label="🚫 Buka Blocklist Kata", command=self.open_blacklist_window)
         menu.add_command(label="📝 Pendataan Koreksi Sampel", command=self.open_koreksi_window)
         menu.add_command(label="🏷️ Kelola Kategori Custom", command=self.open_custom_categories_window)
+        menu.add_command(label="🔥 Pengaturan Mode Brutal", command=self.open_brutal_settings_window)
+
+        # Submenu Mode Permainan (Normal, Santai, Brutal)
+        cur_gm = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
+        game_mode_menu = tk.Menu(menu, tearoff=0, bg="#181825", fg="#cdd6f4", activebackground="#313244", activeforeground="#f5e0dc", selectcolor="#a6e3a1")
+        game_mode_menu.add_command(
+            label=f"{'✓ ' if cur_gm == 'normal' else '   '}⚔️ Mode Normal",
+            command=lambda: self.set_game_mode("normal")
+        )
+        game_mode_menu.add_command(
+            label=f"{'✓ ' if cur_gm == 'santai' else '   '}🌿 Mode Santai (Tanpa X, Q, F)",
+            command=lambda: self.set_game_mode("santai")
+        )
+        game_mode_menu.add_command(
+            label=f"{'✓ ' if cur_gm == 'brutal' else '   '}🔥 Mode Brutal",
+            command=lambda: self.set_game_mode("brutal")
+        )
+        game_mode_menu.add_separator()
+        game_mode_menu.add_command(label="🔥 Pengaturan Mode Brutal...", command=self.open_brutal_settings_window)
+        menu.add_cascade(label=f"🎮 Mode Permainan: {cur_gm.upper()}", menu=game_mode_menu)
 
         # Submenu Mode Sortir Tier 0 (Custom Traps)
         cur_t0 = self.config.get("tier0_sort_mode", "default")
@@ -946,26 +978,59 @@ class SambungKataApp:
             self.lbl_title_bar.config(text=full_title)
 
     def _update_mode_santai_button(self):
-        """Memperbarui teks dan warna tombol toggle Mode Normal / Santai"""
-        if not hasattr(self, "btn_mode_santai") or not self.btn_mode_santai.winfo_exists():
+        """Memperbarui teks dan warna tombol toggle Mode Permainan (NORMAL, SANTAI, BRUTAL)"""
+        btn = getattr(self, "btn_game_mode", getattr(self, "btn_mode_santai", None))
+        if not btn or not btn.winfo_exists():
             return
-        is_santai = self.mode_santai_var.get()
-        if is_santai:
-            self.btn_mode_santai.config(
+        cur_mode = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
+        if cur_mode == "santai":
+            btn.config(
                 text="SANTAI",
                 bg="#a6e3a1",
                 fg="#11111b",
                 activebackground="#94e2d5",
                 activeforeground="#11111b"
             )
+        elif cur_mode == "brutal":
+            btn.config(
+                text="BRUTAL",
+                bg="#f38ba8",
+                fg="#11111b",
+                activebackground="#eba0ac",
+                activeforeground="#11111b"
+            )
         else:
-            self.btn_mode_santai.config(
+            btn.config(
                 text="NORMAL",
                 bg="#313244",
                 fg="#cdd6f4",
                 activebackground="#45475a",
                 activeforeground="#cdd6f4"
             )
+
+    def _show_game_mode_menu(self, event=None):
+        """Menampilkan menu pilihan mode permainan saat tombol mode diklik kanan"""
+        menu = tk.Menu(self.root, tearoff=0, bg="#181825", fg="#cdd6f4", activebackground="#313244", activeforeground="#f5e0dc", selectcolor="#a6e3a1")
+        cur_gm = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
+        
+        prefix_n = "✓ " if cur_gm == "normal" else "   "
+        prefix_s = "✓ " if cur_gm == "santai" else "   "
+        prefix_b = "✓ " if cur_gm == "brutal" else "   "
+        
+        menu.add_command(label=f"{prefix_n}⚔️ Mode Normal", command=lambda: self.set_game_mode("normal"))
+        menu.add_command(label=f"{prefix_s}🌿 Mode Santai (Tanpa X, Q, F)", command=lambda: self.set_game_mode("santai"))
+        menu.add_command(label=f"{prefix_b}🔥 Mode Brutal", command=lambda: self.set_game_mode("brutal"))
+        menu.add_separator()
+        menu.add_command(label="🔥 Pengaturan Mode Brutal...", command=self.open_brutal_settings_window)
+        menu.add_command(label="🏷️ Kelola Kategori Custom...", command=self.open_custom_categories_window)
+        
+        btn = getattr(self, "btn_game_mode", getattr(self, "btn_mode_santai", None))
+        if event:
+            menu.tk_popup(event.x_root, event.y_root)
+        elif btn and btn.winfo_exists():
+            x = btn.winfo_rootx()
+            y = btn.winfo_rooty() + btn.winfo_height()
+            menu.tk_popup(x, y)
 
     def _update_sort_mode_button(self):
         """Memperbarui teks dan warna tombol toggle Mode Sortir di Top Bar"""
@@ -995,45 +1060,119 @@ class SambungKataApp:
         new_mode = "tag_order" if cur == "default" else "default"
         self._set_tier0_sort_mode(new_mode)
 
+    def cycle_game_mode(self):
+        """Beralih mode permainan berurutan: NORMAL -> SANTAI -> BRUTAL -> NORMAL"""
+        cur = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
+        if cur == "normal":
+            self.set_game_mode("santai")
+        elif cur == "santai":
+            self.set_game_mode("brutal")
+        else:
+            self.set_game_mode("normal")
+
     def toggle_mode_santai(self):
-        """Toggle mode permainan antara NORMAL dan SANTAI"""
-        new_val = not self.mode_santai_var.get()
-        self.mode_santai_var.set(new_val)
-        self.on_toggle_mode_santai()
+        """Kompatibilitas lama toggle mode"""
+        self.cycle_game_mode()
 
     def on_toggle_mode_santai(self):
-        is_santai = self.mode_santai_var.get()
-        self.config["mode_santai"] = is_santai
+        """Kompatibilitas lama"""
+        pass
+
+    def set_game_mode(self, new_mode, show_toast=True):
+        """
+        Mengatur mode permainan (normal, santai, atau brutal) dan menyelaraskan status tag kustom.
+        - Normal: Mengembalikan tag profil normal yang disimpan.
+        - Santai: Menonaktifkan tag berhuruf X, Q, F dan memfilter kata dengan X/Q/F.
+        - Brutal: Mengaktifkan tag kustom yang dikonfigurasi untuk Mode Brutal (AMSI, KSO, RHU, TL, BD, dll).
+        """
+        cur_mode = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
+        if new_mode == cur_mode:
+            return
 
         categories = self.config.get("custom_trap_endings", [])
-        changed_tags = []
 
-        if is_santai:
-            # Mode Santai Aktif:
-            # Saring custom tag yang mengandung X, Q, atau F.
-            # Jika sebelumnya aktif (enabled=True), matikan dan catat ke santai_auto_disabled_tags.
-            # Jika dari awal sudah mati (enabled=False), biarkan mati dan JANGAN dicatat.
-            auto_disabled = set(self.config.get("santai_auto_disabled_tags", []))
+        # 1. Simpan state tag dari mode yang ditinggalkan
+        if cur_mode == "normal":
+            self.config["saved_normal_tags"] = [c.get("suffix", "").upper() for c in categories if c.get("enabled", True)]
+        elif cur_mode == "brutal":
+            self.config["brutal_mode_tags"] = [c.get("suffix", "").upper() for c in categories if c.get("enabled", True)]
+
+        # 2. Terapkan konfigurasi mode baru
+        if new_mode == "brutal":
+            self.config["santai_auto_disabled_tags"] = []
+            brutal_tags = set(self.config.get("brutal_mode_tags", ["AMSI", "KSO", "RHU", "TL", "BD"]))
+            for cat in categories:
+                sfx = cat.get("suffix", "").upper()
+                cat["enabled"] = (sfx in brutal_tags)
+
+            self.config["game_mode"] = "brutal"
+            self.config["mode_santai"] = False
+            self.mode_santai_var.set(False)
+            if hasattr(self, "game_mode_var"):
+                self.game_mode_var.set("brutal")
+
+            if hasattr(self, "recom_frame") and self.recom_frame.winfo_exists():
+                self.recom_frame.config(text=" Rekomendasi Kata (🔥 BRUTAL) ", fg="#f38ba8")
+            if show_toast:
+                active_cnt = sum(1 for c in categories if c.get("enabled", True))
+                self.show_toast(f"🔥 Mode Brutal aktif ({active_cnt} tag brutal dinyalakan)")
+
+        elif new_mode == "santai":
+            # Jika sebelumnya dari brutal, pulihkan dulu tag normal sebelum menerapkan santai
+            if cur_mode == "brutal":
+                saved_normal = set(self.config.get("saved_normal_tags", []))
+                if saved_normal:
+                    for cat in categories:
+                        cat["enabled"] = (cat.get("suffix", "").upper() in saved_normal)
+
+            # Matikan tag yang mengandung X, Q, F
+            auto_disabled = set()
             for cat in categories:
                 sfx = cat.get("suffix", "").upper()
                 if any(ch in sfx.lower() for ch in ("x", "q", "f")):
                     if cat.get("enabled", True):
                         cat["enabled"] = False
                         auto_disabled.add(sfx)
-                        changed_tags.append(sfx)
             self.config["santai_auto_disabled_tags"] = list(auto_disabled)
-        else:
-            # Mode Normal Aktif:
-            # Kembalikan HANYA tag yang sebelumnya otomatis dimatikan oleh Mode Santai.
-            # Tag yang memang sudah mati dari awal akan tetap mati.
-            auto_disabled = set(self.config.get("santai_auto_disabled_tags", []))
-            for cat in categories:
-                sfx = cat.get("suffix", "").upper()
-                if sfx in auto_disabled:
-                    cat["enabled"] = True
-                    changed_tags.append(sfx)
-            # Bersihkan catatan auto-disabled
-            self.config["santai_auto_disabled_tags"] = []
+
+            self.config["game_mode"] = "santai"
+            self.config["mode_santai"] = True
+            self.mode_santai_var.set(True)
+            if hasattr(self, "game_mode_var"):
+                self.game_mode_var.set("santai")
+
+            if hasattr(self, "recom_frame") and self.recom_frame.winfo_exists():
+                self.recom_frame.config(text=" Rekomendasi Kata (tanpa X, Q, F) ", fg="#a6e3a1")
+            if show_toast:
+                if auto_disabled:
+                    tag_str = ", ".join(f"[{t}]" for t in sorted(auto_disabled))
+                    self.show_toast(f"🌿 Mode Santai aktif (tanpa X, Q, F) - Tag {tag_str} dinonaktifkan")
+                else:
+                    self.show_toast("🌿 Mode Santai aktif (tanpa X, Q, F)")
+
+        else:  # "normal"
+            if cur_mode == "santai":
+                auto_disabled = set(self.config.get("santai_auto_disabled_tags", []))
+                for cat in categories:
+                    if cat.get("suffix", "").upper() in auto_disabled:
+                        cat["enabled"] = True
+                self.config["santai_auto_disabled_tags"] = []
+            elif cur_mode == "brutal":
+                saved_normal = set(self.config.get("saved_normal_tags", []))
+                if saved_normal:
+                    for cat in categories:
+                        cat["enabled"] = (cat.get("suffix", "").upper() in saved_normal)
+
+            self.config["game_mode"] = "normal"
+            self.config["mode_santai"] = False
+            self.mode_santai_var.set(False)
+            if hasattr(self, "game_mode_var"):
+                self.game_mode_var.set("normal")
+
+            if hasattr(self, "recom_frame") and self.recom_frame.winfo_exists():
+                self.recom_frame.config(text=" Rekomendasi Kata (NORMAL) ", fg="#f38ba8")
+            if show_toast:
+                self.show_toast("⚔️ Mode Normal aktif (Jebakan X/Z/Q/F aktif)")
 
         self.config["custom_trap_endings"] = categories
         save_config(self.config)
@@ -1043,24 +1182,6 @@ class SambungKataApp:
         self._render_custom_category_items()
         self._render_custom_category_quick_bar()
 
-        if is_santai:
-            if changed_tags:
-                tag_str = ", ".join(f"[{t}]" for t in changed_tags)
-                self.show_toast(f"🌿 Mode Santai aktif (tanpa X, Q, F) - Tag {tag_str} dinonaktifkan")
-            else:
-                self.show_toast("🌿 Mode Santai aktif (tanpa X, Q, F)")
-            if hasattr(self, "recom_frame") and self.recom_frame.winfo_exists():
-                self.recom_frame.config(text=" Rekomendasi Kata (tanpa X, Q, F) ", fg="#a6e3a1")
-        else:
-            if changed_tags:
-                tag_str = ", ".join(f"[{t}]" for t in changed_tags)
-                self.show_toast(f"⚔️ Mode Normal aktif - Tag {tag_str} diaktifkan kembali")
-            else:
-                self.show_toast("⚔️ Mode Normal aktif (Jebakan X/Z/Q/F aktif)")
-            if hasattr(self, "recom_frame") and self.recom_frame.winfo_exists():
-                self.recom_frame.config(text=" Rekomendasi Kata (NORMAL) ", fg="#f38ba8")
-
-        # Cek apakah sedang ada input manual aktif atau kata OCR terakhir
         manual_text = "".join([c for c in self.search_var.get().strip().upper() if c.isalpha()]) if hasattr(self, "search_var") else ""
         if manual_text:
             self.update_results(manual_text)
@@ -2289,9 +2410,17 @@ class SambungKataApp:
         if not prefix_clean:
             return
 
-        is_santai = self.mode_santai_var.get()
+        cur_mode = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
+        is_santai = (cur_mode == "santai")
+        is_brutal = (cur_mode == "brutal")
         # Muat 50 kata rekomendasi terbaik (Prioritas Tier 0 -> Tier 1 (X) -> Tier 2 (Sulit) -> Tier 3)
-        results = self.solver.cari_jawaban(prefix_clean, limit=50, mode_santai=is_santai, sort_mode=self.config.get("tier0_sort_mode", "default"))
+        results = self.solver.cari_jawaban(
+            prefix_clean,
+            limit=50,
+            mode_santai=is_santai,
+            mode_brutal=is_brutal,
+            sort_mode=self.config.get("tier0_sort_mode", "default")
+        )
 
         if not results:
             for slot in self.word_card_pool:
@@ -3228,6 +3357,21 @@ class SambungKataApp:
         )
         self.lbl_cat_list_title.pack(side=tk.LEFT)
 
+        btn_brutal_cfg = tk.Button(
+            list_toolbar,
+            text="🔥 Mode Brutal...",
+            font=("Segoe UI", 8, "bold"),
+            bg="#313244",
+            fg="#fab387",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=6,
+            pady=1,
+            cursor="hand2",
+            command=self.open_brutal_settings_window
+        )
+        btn_brutal_cfg.pack(side=tk.RIGHT, padx=(3, 0))
+
         btn_sort_cnt = tk.Button(
             list_toolbar,
             text="📊 Terbanyak",
@@ -3300,6 +3444,352 @@ class SambungKataApp:
         # Footer padding
         pad_bottom = tk.Frame(self.custom_cats_win, bg="#1e1e2e", height=8)
         pad_bottom.pack(fill=tk.X)
+
+    def open_brutal_settings_window(self):
+        """Membuka dialog popup pengaturan Mode Brutal untuk memilih tag kustom yang otomatis aktif"""
+        if hasattr(self, "brutal_win") and self.brutal_win and self.brutal_win.winfo_exists():
+            self.brutal_win.lift()
+            self.brutal_win.focus_force()
+            return
+
+        def _on_brutal_close():
+            if hasattr(self, "brutal_win") and self.brutal_win and self.brutal_win.winfo_exists():
+                self.brutal_win.destroy()
+            self._unbind_mousewheel()
+
+        self.brutal_win, _ = self._create_clean_toplevel(
+            "🔥 Pengaturan Mode Brutal", 500, 640, min_w=460, min_h=500, on_close=_on_brutal_close
+        )
+
+        sub_hdr = tk.Frame(self.brutal_win, bg="#181825", padx=14, pady=8)
+        sub_hdr.pack(fill=tk.X)
+        tk.Label(
+            sub_hdr,
+            text="Pilih tag akhiran kustom yang otomatis dinyalakan saat Mode BRUTAL aktif.\nTag ini akan diprioritaskan di baris teratas rekomendasi (Tier 0).",
+            font=("Segoe UI", 8),
+            fg="#a6adc8",
+            bg="#181825",
+            justify=tk.LEFT
+        ).pack(anchor="w")
+
+        # Status & Toggle Mode Saat Ini
+        status_frame = tk.Frame(self.brutal_win, bg="#1e1e2e", padx=14, pady=6)
+        status_frame.pack(fill=tk.X, pady=(0, 4))
+
+        cur_gm = self.config.get("game_mode", "normal")
+        lbl_status_txt = "🔥 Mode Brutal Saat Ini: AKTIF" if cur_gm == "brutal" else f"⚪ Mode Saat Ini: {cur_gm.upper()}"
+        lbl_status_col = "#f38ba8" if cur_gm == "brutal" else "#89dceb"
+
+        lbl_mode_cur = tk.Label(
+            status_frame,
+            text=lbl_status_txt,
+            font=("Segoe UI", 9, "bold"),
+            fg=lbl_status_col,
+            bg="#1e1e2e"
+        )
+        lbl_mode_cur.pack(side=tk.LEFT)
+
+        btn_toggle_mode = tk.Button(
+            status_frame,
+            text="Matikan Mode Brutal" if cur_gm == "brutal" else "🔥 Aktifkan Mode Brutal Sekarang",
+            font=("Segoe UI", 8, "bold"),
+            bg="#313244" if cur_gm == "brutal" else "#f38ba8",
+            fg="#cdd6f4" if cur_gm == "brutal" else "#11111b",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=8,
+            pady=2,
+            cursor="hand2"
+        )
+        btn_toggle_mode.pack(side=tk.RIGHT)
+
+        # Form Tambah Suffix Baru ke Brutal
+        add_frame = tk.LabelFrame(
+            self.brutal_win,
+            text=" Tambah Akhiran Baru ke Daftar Brutal ",
+            font=("Segoe UI", 9, "bold"),
+            fg="#fab387",
+            bg="#181825",
+            padx=10,
+            pady=6
+        )
+        add_frame.pack(fill=tk.X, padx=14, pady=(2, 6))
+
+        row_add = tk.Frame(add_frame, bg="#181825")
+        row_add.pack(fill=tk.X, pady=2)
+
+        tk.Label(row_add, text="Akhiran:", font=("Segoe UI", 9, "bold"), fg="#cdd6f4", bg="#181825").pack(side=tk.LEFT, padx=(0, 4))
+        entry_sfx = tk.Entry(row_add, font=("Segoe UI", 10, "bold"), bg="#313244", fg="#f5e0dc", insertbackground="white", width=9)
+        entry_sfx.pack(side=tk.LEFT, padx=(0, 8))
+        entry_sfx.focus_set()
+
+        selected_brutal_tags = set(self.config.get("brutal_mode_tags", ["AMSI", "KSO", "RHU", "TL", "BD"]))
+
+        # Toolbar Aksi Cepat (Pilih Semua, Default, Hapus Semua)
+        tb = tk.Frame(self.brutal_win, bg="#1e1e2e", padx=14, pady=4)
+        tb.pack(fill=tk.X)
+
+        lbl_tb_title = tk.Label(
+            tb,
+            text="Daftar Tag Brutal:",
+            font=("Segoe UI", 9, "bold"),
+            fg="#cdd6f4",
+            bg="#1e1e2e"
+        )
+        lbl_tb_title.pack(side=tk.LEFT)
+
+        # List Area Container with Canvas
+        list_container = tk.Frame(self.brutal_win, bg="#181825")
+        list_container.pack(fill=tk.BOTH, expand=True, padx=14, pady=4)
+
+        canvas = tk.Canvas(list_container, bg="#181825", highlightthickness=0)
+        scrollbar = tk.Scrollbar(list_container, orient=tk.VERTICAL, command=canvas.yview)
+        inner = tk.Frame(canvas, bg="#181825")
+
+        canvas_win_id = canvas.create_window((0, 0), window=inner, anchor="nw", width=440)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_win_id, width=e.width))
+
+        self._bind_mousewheel()
+        self.brutal_win.bind("<Enter>", lambda e: self._bind_mousewheel())
+        list_container.bind("<Enter>", lambda e: self._bind_mousewheel())
+        canvas.bind("<Enter>", lambda e: self._bind_mousewheel())
+        inner.bind("<Enter>", lambda e: self._bind_mousewheel())
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def _render_list():
+            for w in inner.winfo_children():
+                w.destroy()
+
+            cats = self.config.get("custom_trap_endings", [])
+            lbl_tb_title.config(text=f"Daftar Tag Brutal ({len(selected_brutal_tags)} dari {len(cats)} aktif):")
+
+            if not cats:
+                tk.Label(inner, text="Belum ada kategori akhiran kustom.", font=("Segoe UI", 9, "italic"), fg="#6c7086", bg="#181825", pady=20).pack(fill=tk.X)
+                return
+
+            for idx, cat in enumerate(cats):
+                sfx = cat.get("suffix", "").upper()
+                name = cat.get("name") or f"Akhiran {sfx}"
+                col = cat.get("color", "#cba6f7")
+                is_checked = (sfx in selected_brutal_tags)
+                cnt = self.solver.count_words_by_suffix(sfx) if hasattr(self.solver, "count_words_by_suffix") else 0
+
+                row = tk.Frame(inner, bg="#1e1e2e", padx=8, pady=4)
+                row.pack(fill=tk.X, padx=4, pady=2)
+
+                var = tk.BooleanVar(value=is_checked)
+
+                def _toggle(s=sfx, v=var):
+                    if v.get():
+                        selected_brutal_tags.add(s)
+                    else:
+                        selected_brutal_tags.discard(s)
+                    lbl_tb_title.config(text=f"Daftar Tag Brutal ({len(selected_brutal_tags)} dari {len(cats)} aktif):")
+
+                cb = tk.Checkbutton(
+                    row,
+                    variable=var,
+                    bg="#1e1e2e",
+                    activebackground="#1e1e2e",
+                    selectcolor="#313244",
+                    command=_toggle
+                )
+                cb.pack(side=tk.LEFT, padx=(0, 4))
+
+                badge = tk.Label(
+                    row,
+                    text=sfx,
+                    font=("Segoe UI", 9, "bold"),
+                    bg=col,
+                    fg="#11111b",
+                    padx=6,
+                    pady=1
+                )
+                badge.pack(side=tk.LEFT, padx=(0, 6))
+
+                info_frame = tk.Frame(row, bg="#1e1e2e")
+                info_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+                lbl_name = tk.Label(
+                    info_frame,
+                    text=name,
+                    font=("Segoe UI", 9, "bold"),
+                    fg="#cdd6f4" if is_checked else "#6c7086",
+                    bg="#1e1e2e",
+                    anchor="w"
+                )
+                lbl_name.pack(anchor="w")
+
+                lbl_cnt = tk.Label(
+                    info_frame,
+                    text=f"{cnt} kata di kamus",
+                    font=("Segoe UI", 8),
+                    fg="#a6adc8" if is_checked else "#585b70",
+                    bg="#1e1e2e",
+                    anchor="w"
+                )
+                lbl_cnt.pack(anchor="w")
+
+                lbl_flag = tk.Label(
+                    row,
+                    text="🔥 BRUTAL" if is_checked else "⚪ NONAKTIF",
+                    font=("Segoe UI", 8, "bold"),
+                    fg="#f38ba8" if is_checked else "#585b70",
+                    bg="#1e1e2e"
+                )
+                lbl_flag.pack(side=tk.RIGHT, padx=4)
+
+            inner.update_idletasks()
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _on_toggle_current_mode():
+            c_mode = self.config.get("game_mode", "normal")
+            if c_mode == "brutal":
+                self.set_game_mode("normal")
+                lbl_mode_cur.config(text="⚪ Mode Saat Ini: NORMAL", fg="#89dceb")
+                btn_toggle_mode.config(text="🔥 Aktifkan Mode Brutal Sekarang", bg="#f38ba8", fg="#11111b")
+            else:
+                self.set_game_mode("brutal")
+                lbl_mode_cur.config(text="🔥 Mode Brutal Saat Ini: AKTIF", fg="#f38ba8")
+                btn_toggle_mode.config(text="Matikan Mode Brutal", bg="#313244", fg="#cdd6f4")
+            _render_list()
+
+        btn_toggle_mode.config(command=_on_toggle_current_mode)
+
+        def _on_quick_add_brutal():
+            sfx = "".join(c for c in entry_sfx.get().strip().upper() if c.isalpha())
+            if not sfx:
+                self.show_toast("⚠️ Masukkan huruf akhiran terlebih dahulu!")
+                return
+            
+            categories = self.config.get("custom_trap_endings", [])
+            found = False
+            for cat in categories:
+                if cat.get("suffix", "").upper() == sfx:
+                    found = True
+                    break
+            
+            if not found:
+                swatches = ["#cba6f7", "#f5c2e7", "#89dceb", "#94e2d5", "#f9e2af", "#fab387", "#a6e3a1"]
+                col = swatches[len(categories) % len(swatches)]
+                new_cat = {
+                    "suffix": sfx,
+                    "name": f"Akhiran {sfx}",
+                    "enabled": (self.config.get("game_mode") == "brutal"),
+                    "color": col
+                }
+                categories.append(new_cat)
+                self.config["custom_trap_endings"] = categories
+                save_config(self.config)
+                self.solver.set_custom_endings(categories)
+                self._render_custom_category_quick_bar()
+
+            selected_brutal_tags.add(sfx)
+            entry_sfx.delete(0, tk.END)
+            _render_list()
+            self.show_toast(f"✅ Akhiran [{sfx}] ditambahkan ke Mode Brutal!")
+
+        entry_sfx.bind("<Return>", lambda e: _on_quick_add_brutal())
+
+        btn_add_brutal = tk.Button(
+            row_add,
+            text="➕ Tambah ke Brutal",
+            font=("Segoe UI", 8, "bold"),
+            bg="#fab387",
+            fg="#11111b",
+            activebackground="#f9e2af",
+            relief=tk.FLAT,
+            padx=8,
+            pady=2,
+            cursor="hand2",
+            command=_on_quick_add_brutal
+        )
+        btn_add_brutal.pack(side=tk.LEFT)
+
+        def _select_all():
+            for c in self.config.get("custom_trap_endings", []):
+                selected_brutal_tags.add(c.get("suffix", "").upper())
+            _render_list()
+
+        def _reset_default():
+            selected_brutal_tags.clear()
+            for t in ["AMSI", "KSO", "RHU", "TL", "BD"]:
+                selected_brutal_tags.add(t)
+            _render_list()
+
+        def _clear_all():
+            selected_brutal_tags.clear()
+            _render_list()
+
+        btn_clr = tk.Button(tb, text="❌ Hapus Semua", font=("Segoe UI", 8), bg="#313244", fg="#f38ba8", activebackground="#45475a", relief=tk.FLAT, padx=6, pady=1, cursor="hand2", command=_clear_all)
+        btn_clr.pack(side=tk.RIGHT, padx=(2, 0))
+
+        btn_def = tk.Button(tb, text="🔄 Reset Default (AMSI, KSO, ...)", font=("Segoe UI", 8), bg="#313244", fg="#fab387", activebackground="#45475a", relief=tk.FLAT, padx=6, pady=1, cursor="hand2", command=_reset_default)
+        btn_def.pack(side=tk.RIGHT, padx=2)
+
+        btn_all = tk.Button(tb, text="⚡ Pilih Semua", font=("Segoe UI", 8), bg="#313244", fg="#89dceb", activebackground="#45475a", relief=tk.FLAT, padx=6, pady=1, cursor="hand2", command=_select_all)
+        btn_all.pack(side=tk.RIGHT, padx=2)
+
+        _render_list()
+
+        # Bottom Action Bar
+        bottom_bar = tk.Frame(self.brutal_win, bg="#1e1e2e", padx=14, pady=8)
+        bottom_bar.pack(fill=tk.X)
+
+        def _on_save_brutal():
+            self.config["brutal_mode_tags"] = list(selected_brutal_tags)
+            save_config(self.config)
+
+            if self.config.get("game_mode") == "brutal":
+                categories = self.config.get("custom_trap_endings", [])
+                for cat in categories:
+                    sfx = cat.get("suffix", "").upper()
+                    cat["enabled"] = (sfx in selected_brutal_tags)
+                self.config["custom_trap_endings"] = categories
+                save_config(self.config)
+                self.solver.set_custom_endings(categories)
+                self._render_custom_category_items()
+                self._render_custom_category_quick_bar()
+                if hasattr(self, "last_detected_word") and self.last_detected_word:
+                    self.update_results(self.last_detected_word)
+
+            self.show_toast(f"✅ Pengaturan Mode Brutal disimpan ({len(selected_brutal_tags)} tag aktif)!")
+            _on_brutal_close()
+
+        btn_save = tk.Button(
+            bottom_bar,
+            text="💾 Simpan & Terapkan",
+            font=("Segoe UI", 9, "bold"),
+            bg="#a6e3a1",
+            fg="#11111b",
+            activebackground="#94e2d5",
+            relief=tk.FLAT,
+            padx=14,
+            pady=4,
+            cursor="hand2",
+            command=_on_save_brutal
+        )
+        btn_save.pack(side=tk.RIGHT, padx=(6, 0))
+
+        btn_cancel = tk.Button(
+            bottom_bar,
+            text="Tutup",
+            font=("Segoe UI", 9),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=12,
+            pady=4,
+            cursor="hand2",
+            command=_on_brutal_close
+        )
+        btn_cancel.pack(side=tk.RIGHT)
 
     def _render_custom_category_quick_bar(self):
         """Merender tombol toggle untuk tiap kategori custom (Compact, tanpa simbol centang/silang & Auto-Wrap multi-baris presisi)"""
@@ -3521,6 +4011,8 @@ class SambungKataApp:
             cnt_desc = f"{cnt} kata tersedia di kamus"
             if is_forbidden_santai:
                 cnt_desc += " • ⚠️ Dilarang di Mode Santai (X/Q/F)"
+            elif sfx in set(self.config.get("brutal_mode_tags", ["AMSI", "KSO", "RHU", "TL", "BD"])):
+                cnt_desc += " • 🔥 Brutal"
 
             lbl_cnt = tk.Label(
                 info_frame,
@@ -3854,6 +4346,23 @@ class SambungKataApp:
 
             categories[idx]["enabled"] = bool(new_val)
 
+            cur_mode = self.config.get("game_mode", "santai" if self.mode_santai_var.get() else "normal")
+            if cur_mode == "brutal":
+                brutal_tags = set(self.config.get("brutal_mode_tags", []))
+                if new_val:
+                    brutal_tags.add(sfx)
+                else:
+                    brutal_tags.discard(sfx)
+                self.config["brutal_mode_tags"] = list(brutal_tags)
+            elif cur_mode == "normal":
+                normal_tags = set(self.config.get("saved_normal_tags", []))
+                if normal_tags:
+                    if new_val:
+                        normal_tags.add(sfx)
+                    else:
+                        normal_tags.discard(sfx)
+                    self.config["saved_normal_tags"] = list(normal_tags)
+
             # Jika pengguna sengaja menonaktifkan tag saat di Mode Santai, hapus dari daftar auto-restore
             auto_disabled = set(self.config.get("santai_auto_disabled_tags", []))
             if not new_val and sfx in auto_disabled:
@@ -3875,6 +4384,15 @@ class SambungKataApp:
         categories = self.config.get("custom_trap_endings", [])
         if 0 <= idx < len(categories):
             removed = categories.pop(idx)
+            sfx = removed.get("suffix", "").upper()
+            brutal_tags = set(self.config.get("brutal_mode_tags", []))
+            brutal_tags.discard(sfx)
+            self.config["brutal_mode_tags"] = list(brutal_tags)
+
+            normal_tags = set(self.config.get("saved_normal_tags", []))
+            normal_tags.discard(sfx)
+            self.config["saved_normal_tags"] = list(normal_tags)
+
             self.config["custom_trap_endings"] = categories
             save_config(self.config)
             self.solver.set_custom_endings(categories)

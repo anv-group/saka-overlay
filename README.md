@@ -137,10 +137,13 @@ flowchart TD
    Jika tidak ada akhiran X, bot memilihkan kata berakhiran konsonan sulit: **`Z`**, **`Q`**, **`V`**, **`J`**, **`W`**, dan **`F`**.
 4. **🛡️ Tier 3: NORMAL / BERTAHAN:**  
    Kosakata baku bahasa Indonesia yang pendek (3–6 huruf) agar sangat cepat dan aman diketik secara manual saat waktu giliran menipis.
-5. **🌿 Mode Santai:**  
-   Pilihan khusus saat bermain di room Roblox Mode Santai (melarang huruf X, Q, dan F). Bot secara otomatis menyaring seluruh kata yang mengandung atau berakhiran `X, Q, F`, lalu mengalihkan serangan ke `Z, V, J, W`.
-   - **Auto-Filter Custom Tag:** Seluruh tag kustom yang mengandung huruf `X`, `Q`, atau `F` (contoh: akhiran `IF`, `Q`, `EX`) otomatis dinonaktifkan seketika saat mode santai aktif.
-   - **Smart Recovery:** Saat beralih kembali ke Mode Normal, hanya tag yang tadinya aktif yang dihidupkan kembali. Tag yang dari awal memang sudah nonaktif akan tetap mati secara cerdas.
+5. **🎮 Tiga Mode Permainan (NORMAL, SANTAI, BRUTAL):**  
+   - **⚔️ Mode Normal:** Mode standar menyerang dengan jebakan X, konsonan sulit, dan tag kustom aktif pilihan pemain.
+   - **🌿 Mode Santai:** Pilihan khusus saat bermain di room Roblox Mode Santai (melarang huruf X, Q, dan F). Bot secara otomatis menyaring seluruh kata yang mengandung atau berakhiran `X, Q, F`, lalu mengalihkan serangan ke `Z, V, J, W`.
+     - **Auto-Filter Custom Tag:** Seluruh tag kustom yang mengandung huruf `X`, `Q`, atau `F` otomatis dinonaktifkan dan dipulihkan saat kembali ke Mode Normal.
+   - **🔥 Mode Brutal:** Mode ofensif ekstrem untuk room brutal/kompetitif dengan akhiran mematikan seperti `AMSI, KSO, RHU, TL, BD`, dll.
+     - **Pengaturan Tag Brutal:** Pemain bebas memilih tag kustom mana saja yang otomatis dinyalakan saat Mode Brutal aktif melalui jendela `🔥 Pengaturan Mode Brutal` atau menu klik-kanan pada tombol mode.
+     - **Isolasi Tag Cerdas:** Tag normal pemain tetap tersimpan aman dan otomatis dipulihkan saat beralih kembali dari Mode Brutal.
 
 ### 🔄 Logika Pengurutan di Dalam Tier (Panjang Kata & Abjad)
 Mengapa kata dengan akhiran berbeda bisa tampil berselang-seling (contoh saat mengetik `S` muncul `SAMP [MP]`, `SANS [NS]`, `SENS [NS]`, `SIMP [MP]`, `SINGK [NGK]`)?

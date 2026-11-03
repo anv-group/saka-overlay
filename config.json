@@ -6,7 +6,46 @@
         "height": 81
     },
     "scan_interval_sec": 0.04,
+    "game_mode": "normal",
     "mode_santai": false,
+    "brutal_mode_tags": [
+        "AMSI",
+        "KSO",
+        "RHU",
+        "TL",
+        "BD"
+    ],
+    "saved_normal_tags": [
+        "X",
+        "NS",
+        "NGK",
+        "MP",
+        "PP",
+        "OO",
+        "SEA",
+        "RD",
+        "RS",
+        "GY",
+        "TY",
+        "LY",
+        "CY",
+        "Z",
+        "Q",
+        "UF",
+        "LEX",
+        "GH",
+        "DY",
+        "DYA",
+        "EZ",
+        "AMSI",
+        "KSO",
+        "RHU",
+        "TL",
+        "BD",
+        "DJ",
+        "YUAN",
+        "ACY"
+    ],
     "report_hotkey": "F2",
     "ocr_engine": "winocr",
     "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
@@ -188,9 +227,39 @@
             "name": "Akhiran RHU",
             "enabled": true,
             "color": "#fab387"
+        },
+        {
+            "suffix": "TL",
+            "name": "Akhiran TL",
+            "enabled": true,
+            "color": "#94e2d5"
+        },
+        {
+            "suffix": "BD",
+            "name": "Akhiran BD",
+            "enabled": true,
+            "color": "#cba6f7"
+        },
+        {
+            "suffix": "DJ",
+            "name": "Akhiran DJ",
+            "enabled": true,
+            "color": "#f5c2e7"
+        },
+        {
+            "suffix": "YUAN",
+            "name": "Akhiran YUAN",
+            "enabled": true,
+            "color": "#89dceb"
+        },
+        {
+            "suffix": "ACY",
+            "name": "Akhiran ACY",
+            "enabled": true,
+            "color": "#f9e2af"
         }
     ],
     "auto_copy_top_word": false,
-    "window_geometry": "443x1074+1467+60",
+    "window_geometry": "438x1074+1457+51",
     "santai_auto_disabled_tags": []
 }

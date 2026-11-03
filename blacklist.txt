@@ -2,14 +2,18 @@ affix
 alden
 angsi
 aslam
+detox
+deux
 exam
 exekutif
 exim
 exit
 extra
 fax
+fizz
 flex
 flux
+fuzz
 haq
 hilirsasi
 hla
@@ -43,6 +47,7 @@ paradox
 quiz
 reflex
 remix
+sard
 ssmudra
 uana
 uane

@@ -12,7 +12,10 @@ DEFAULT_CONFIG = {
         "height": 120
     },
     "scan_interval_sec": 0.08,
-    "mode_santai": False,  # True jika main di Mode Santai (tanpa X, Q, F)
+    "game_mode": "normal",  # "normal", "santai", atau "brutal"
+    "mode_santai": False,  # True jika main di Mode Santai (tanpa X, Q, F) - backward compatibility
+    "brutal_mode_tags": ["AMSI", "KSO", "RHU", "TL", "BD"],  # Tag kustom yang otomatis aktif saat Mode Brutal
+    "saved_normal_tags": [],  # Snapshot tag aktif di Mode Normal untuk pemulihan saat keluar dari Mode Brutal
     "report_hotkey": "F2",  # Hotkey screenshot instan deteksi salah
     "ocr_engine": "winocr",  # "winocr" atau "tesseract"
     "tesseract_path": r"C:\Program Files\Tesseract-OCR\tesseract.exe",
