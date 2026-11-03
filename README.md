@@ -137,12 +137,12 @@ flowchart TD
    Jika tidak ada akhiran X, bot memilihkan kata berakhiran konsonan sulit: **`Z`**, **`Q`**, **`V`**, **`J`**, **`W`**, dan **`F`**.
 4. **🛡️ Tier 3: NORMAL / BERTAHAN:**  
    Kosakata baku bahasa Indonesia yang pendek (3–6 huruf) agar sangat cepat dan aman diketik secara manual saat waktu giliran menipis.
-5. **🎮 Tiga Mode Permainan (NORMAL, SANTAI, BRUTAL):**  
+5. **🎮 Tiga Mode Permainan (DEFAULT, SANTAI, BRUTAL):**  
    - **⚔️ Mode Default:** Mode standar menyerang dengan jebakan X, konsonan sulit, dan tag kustom aktif pilihan pemain.
    - **🌿 Mode Santai:** Pilihan khusus saat bermain di room Roblox Mode Santai (melarang huruf X, Q, dan F). Bot secara otomatis menyaring seluruh kata yang mengandung atau berakhiran `X, Q, F`, lalu mengalihkan serangan ke `Z, V, J, W`.
      - **Auto-Filter Custom Tag:** Seluruh tag kustom yang mengandung huruf `X`, `Q`, atau `F` otomatis dinonaktifkan dan dipulihkan saat kembali ke Mode Default.
    - **🔥 Mode Brutal:** Mode ofensif ekstrem untuk room brutal/kompetitif dengan akhiran mematikan seperti `AMSI, KSO, RHU, TL, BD`, dll.
-     - **Pengaturan Tag Brutal:** Pemain bebas memilih tag kustom mana saja yang otomatis dinyalakan saat Mode Brutal aktif melalui jendela `🔥 Pengaturan Mode Brutal` atau menu klik-kanan pada tombol mode. Dilengkapi fitur **klik se-baris** (click anywhere untuk toggle tanpa harus tepat pada checkbox), visual berbobot **kontras tinggi** (baris merah marun + badge pill menyala `🔥 BRUTAL` vs `⚪ NONAKTIF`), dan scrolling mousewheel yang mulus.
+     - **Pengaturan Tag Brutal:** Pemain bebas memilih tag kustom mana saja yang otomatis dinyalakan saat Mode Brutal aktif melalui jendela `🔥 Pengaturan Mode Brutal` atau menu klik-kanan pada tombol mode. Dilengkapi fitur **klik se-baris** (click anywhere untuk toggle tanpa harus tepat pada checkbox), visual berbobot **kontras tinggi** (baris merah marun + badge pill menyala `🔥 BRUTAL` vs `⚪ NONAKTIF`), scrolling mousewheel mulus, **jendela lebih lega (580x720)** dengan tombol aksi permanen di dasar layar, serta **auto-save saat ditutup** (pengaturan langsung tersimpan otomatis tanpa khawatir lupa menekan tombol simpan).
      - **Isolasi Tag Cerdas:** Tag normal pemain tetap tersimpan aman dan otomatis dipulihkan saat beralih kembali dari Mode Brutal.
 
 ### 🔄 Logika Pengurutan di Dalam Tier (Panjang Kata & Abjad)

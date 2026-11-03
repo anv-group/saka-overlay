@@ -151,8 +151,14 @@ class SambungKataApp:
         try:
             rx = self.root.winfo_x()
             ry = self.root.winfo_y()
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
             target_x = max(20, rx - width - 12) if rx > 500 else rx + self.root.winfo_width() + 12
+            if target_x + width > sw - 20:
+                target_x = max(20, sw - width - 20)
             target_y = max(30, ry)
+            if target_y + height > sh - 50:
+                target_y = max(30, sh - height - 60)
             win.geometry(f"{width}x{height}+{target_x}+{target_y}")
         except Exception:
             win.geometry(f"{width}x{height}")
@@ -3508,20 +3514,88 @@ class SambungKataApp:
             self.brutal_win.focus_force()
             return
 
+        selected_brutal_tags = set(self.config.get("brutal_mode_tags", ["AMSI", "KSO", "RHU", "TL", "BD"]))
+        initial_brutal_tags = set(selected_brutal_tags)
+
+        def _save_and_apply(show_toast_msg=True):
+            self.config["brutal_mode_tags"] = list(selected_brutal_tags)
+            save_config(self.config)
+
+            if self.config.get("game_mode") == "brutal":
+                categories = self.config.get("custom_trap_endings", [])
+                for cat in categories:
+                    sfx = cat.get("suffix", "").upper()
+                    cat["enabled"] = (sfx in selected_brutal_tags)
+                self.config["custom_trap_endings"] = categories
+                save_config(self.config)
+                self.solver.set_custom_endings(categories)
+                self._render_custom_category_items()
+                self._render_custom_category_quick_bar()
+                if hasattr(self, "last_detected_word") and self.last_detected_word:
+                    self.update_results(self.last_detected_word)
+
+            if show_toast_msg:
+                self.show_toast(f"✅ Pengaturan Mode Brutal disimpan ({len(selected_brutal_tags)} tag aktif)!")
+
         def _on_brutal_close():
+            # Otomatis simpan jika ada perubahan tag saat user menutup jendela langsung (agar tidak hilang)
+            if selected_brutal_tags != initial_brutal_tags:
+                _save_and_apply(show_toast_msg=True)
             self.brutal_canvas = None
             self.brutal_inner = None
             if hasattr(self, "brutal_win") and self.brutal_win and self.brutal_win.winfo_exists():
                 self.brutal_win.destroy()
             self._unbind_mousewheel()
 
+        # Window lebih besar dan lega (580x720) dengan batas minimum 500x520
         self.brutal_win, _ = self._create_clean_toplevel(
-            "🔥 Pengaturan Mode Brutal", 520, 650, min_w=460, min_h=500, on_close=_on_brutal_close
+            "🔥 Pengaturan Mode Brutal", 580, 720, min_w=500, min_h=520, on_close=_on_brutal_close
         )
         self.brutal_win.bind("<Destroy>", lambda e: (setattr(self, "brutal_canvas", None), setattr(self, "brutal_inner", None)) if e.widget == self.brutal_win else None, add="+")
 
+        # 1. Pinned Bottom Action Bar (Dipack terlebih dahulu dengan side=tk.BOTTOM agar SELALU tampak di dasar window)
+        bottom_bar = tk.Frame(self.brutal_win, bg="#1e1e2e", padx=16, pady=10)
+        bottom_bar.pack(fill=tk.X, side=tk.BOTTOM)
+
+        def _on_save_button_click():
+            _save_and_apply(show_toast_msg=True)
+            initial_brutal_tags.clear()
+            initial_brutal_tags.update(selected_brutal_tags)
+            _on_brutal_close()
+
+        btn_save = tk.Button(
+            bottom_bar,
+            text="💾 Simpan & Terapkan",
+            font=("Segoe UI", 9, "bold"),
+            bg="#a6e3a1",
+            fg="#11111b",
+            activebackground="#94e2d5",
+            relief=tk.FLAT,
+            padx=16,
+            pady=5,
+            cursor="hand2",
+            command=_on_save_button_click
+        )
+        btn_save.pack(side=tk.RIGHT, padx=(8, 0))
+
+        btn_cancel = tk.Button(
+            bottom_bar,
+            text="Tutup",
+            font=("Segoe UI", 9),
+            bg="#313244",
+            fg="#cdd6f4",
+            activebackground="#45475a",
+            relief=tk.FLAT,
+            padx=14,
+            pady=5,
+            cursor="hand2",
+            command=_on_brutal_close
+        )
+        btn_cancel.pack(side=tk.RIGHT)
+
+        # 2. Header & Toolbar (Dipack di bagian atas)
         sub_hdr = tk.Frame(self.brutal_win, bg="#181825", padx=14, pady=8)
-        sub_hdr.pack(fill=tk.X)
+        sub_hdr.pack(fill=tk.X, side=tk.TOP)
         tk.Label(
             sub_hdr,
             text="Pilih tag akhiran kustom yang otomatis dinyalakan saat Mode BRUTAL aktif.\nTag ini akan diprioritaskan di baris teratas rekomendasi (Tier 0).",
@@ -3533,7 +3607,7 @@ class SambungKataApp:
 
         # Status & Toggle Mode Saat Ini
         status_frame = tk.Frame(self.brutal_win, bg="#1e1e2e", padx=14, pady=6)
-        status_frame.pack(fill=tk.X, pady=(0, 4))
+        status_frame.pack(fill=tk.X, side=tk.TOP, pady=(0, 4))
 
         cur_gm = self.config.get("game_mode", "default")
         if cur_gm == "normal":
@@ -3574,7 +3648,7 @@ class SambungKataApp:
             padx=10,
             pady=6
         )
-        add_frame.pack(fill=tk.X, padx=14, pady=(2, 6))
+        add_frame.pack(fill=tk.X, side=tk.TOP, padx=14, pady=(2, 6))
 
         row_add = tk.Frame(add_frame, bg="#181825")
         row_add.pack(fill=tk.X, pady=2)
@@ -3584,11 +3658,9 @@ class SambungKataApp:
         entry_sfx.pack(side=tk.LEFT, padx=(0, 8))
         entry_sfx.focus_set()
 
-        selected_brutal_tags = set(self.config.get("brutal_mode_tags", ["AMSI", "KSO", "RHU", "TL", "BD"]))
-
         # Toolbar Aksi Cepat (Pilih Semua, Default, Hapus Semua)
         tb = tk.Frame(self.brutal_win, bg="#1e1e2e", padx=14, pady=4)
-        tb.pack(fill=tk.X)
+        tb.pack(fill=tk.X, side=tk.TOP)
 
         lbl_tb_title = tk.Label(
             tb,
@@ -3599,9 +3671,9 @@ class SambungKataApp:
         )
         lbl_tb_title.pack(side=tk.LEFT)
 
-        # List Area Container with Canvas
+        # 3. List Area Container with Canvas (Memenuhi sisa seluruh ruang window secara dinamis)
         list_container = tk.Frame(self.brutal_win, bg="#181825")
-        list_container.pack(fill=tk.BOTH, expand=True, padx=14, pady=4)
+        list_container.pack(fill=tk.BOTH, expand=True, padx=14, pady=(4, 6))
 
         canvas = tk.Canvas(list_container, bg="#181825", highlightthickness=0)
         scrollbar = tk.Scrollbar(list_container, orient=tk.VERTICAL, command=canvas.yview)
@@ -3610,7 +3682,7 @@ class SambungKataApp:
         self.brutal_canvas = canvas
         self.brutal_inner = inner
 
-        canvas_win_id = canvas.create_window((0, 0), window=inner, anchor="nw", width=460)
+        canvas_win_id = canvas.create_window((0, 0), window=inner, anchor="nw", width=520)
         canvas.configure(yscrollcommand=scrollbar.set)
 
         inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
@@ -3643,6 +3715,7 @@ class SambungKataApp:
         _bind_scroll_recursive(status_frame)
         _bind_scroll_recursive(add_frame)
         _bind_scroll_recursive(tb)
+        _bind_scroll_recursive(bottom_bar)
 
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -3809,7 +3882,7 @@ class SambungKataApp:
             canvas.configure(scrollregion=canvas.bbox("all"))
 
         def _on_toggle_current_mode():
-            c_mode = self.config.get("game_mode", "normal")
+            c_mode = self.config.get("game_mode", "default")
             if c_mode == "brutal":
                 self.set_game_mode("default")
                 lbl_mode_cur.config(text="⚪ Mode Saat Ini: DEFAULT", fg="#89dceb")
@@ -3897,60 +3970,6 @@ class SambungKataApp:
         btn_all.pack(side=tk.RIGHT, padx=2)
 
         _render_list()
-
-        # Bottom Action Bar
-        bottom_bar = tk.Frame(self.brutal_win, bg="#1e1e2e", padx=14, pady=8)
-        bottom_bar.pack(fill=tk.X)
-
-        def _on_save_brutal():
-            self.config["brutal_mode_tags"] = list(selected_brutal_tags)
-            save_config(self.config)
-
-            if self.config.get("game_mode") == "brutal":
-                categories = self.config.get("custom_trap_endings", [])
-                for cat in categories:
-                    sfx = cat.get("suffix", "").upper()
-                    cat["enabled"] = (sfx in selected_brutal_tags)
-                self.config["custom_trap_endings"] = categories
-                save_config(self.config)
-                self.solver.set_custom_endings(categories)
-                self._render_custom_category_items()
-                self._render_custom_category_quick_bar()
-                if hasattr(self, "last_detected_word") and self.last_detected_word:
-                    self.update_results(self.last_detected_word)
-
-            self.show_toast(f"✅ Pengaturan Mode Brutal disimpan ({len(selected_brutal_tags)} tag aktif)!")
-            _on_brutal_close()
-
-        btn_save = tk.Button(
-            bottom_bar,
-            text="💾 Simpan & Terapkan",
-            font=("Segoe UI", 9, "bold"),
-            bg="#a6e3a1",
-            fg="#11111b",
-            activebackground="#94e2d5",
-            relief=tk.FLAT,
-            padx=14,
-            pady=4,
-            cursor="hand2",
-            command=_on_save_brutal
-        )
-        btn_save.pack(side=tk.RIGHT, padx=(6, 0))
-
-        btn_cancel = tk.Button(
-            bottom_bar,
-            text="Tutup",
-            font=("Segoe UI", 9),
-            bg="#313244",
-            fg="#cdd6f4",
-            activebackground="#45475a",
-            relief=tk.FLAT,
-            padx=12,
-            pady=4,
-            cursor="hand2",
-            command=_on_brutal_close
-        )
-        btn_cancel.pack(side=tk.RIGHT)
 
     def _render_custom_category_quick_bar(self):
         """Merender tombol toggle untuk tiap kategori custom (Compact, tanpa simbol centang/silang & Auto-Wrap multi-baris presisi)"""
