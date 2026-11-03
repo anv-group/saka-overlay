@@ -219,24 +219,56 @@ class SambungKataApp:
             )
             lbl_grip.pack(side=tk.RIGHT, padx=6)
 
-            resize_data = {}
+            popup_resize_data = {"is_resizing": False, "timer": None, "pending": None}
+
+            def _apply_popup_resize():
+                popup_resize_data["timer"] = None
+                if not popup_resize_data["is_resizing"] or not popup_resize_data["pending"]:
+                    return
+                try:
+                    win.geometry(popup_resize_data["pending"])
+                except Exception:
+                    pass
+
             def _start_resize(event):
-                resize_data["x"] = event.x_root
-                resize_data["y"] = event.y_root
-                resize_data["w"] = win.winfo_width()
-                resize_data["h"] = win.winfo_height()
+                popup_resize_data["is_resizing"] = True
+                popup_resize_data["x"] = event.x_root
+                popup_resize_data["y"] = event.y_root
+                popup_resize_data["w"] = win.winfo_width()
+                popup_resize_data["h"] = win.winfo_height()
 
             def _on_resize(event):
-                dw = event.x_root - resize_data["x"]
-                dh = event.y_root - resize_data["y"]
-                nw = max(min_w, resize_data["w"] + dw)
-                nh = max(min_h, resize_data["h"] + dh)
-                win.geometry(f"{nw}x{nh}")
+                if not popup_resize_data["is_resizing"]:
+                    return
+                dw = event.x_root - popup_resize_data["x"]
+                dh = event.y_root - popup_resize_data["y"]
+                nw = max(min_w, popup_resize_data["w"] + dw)
+                nh = max(min_h, popup_resize_data["h"] + dh)
+                popup_resize_data["pending"] = f"{nw}x{nh}"
+                if popup_resize_data["timer"] is None:
+                    popup_resize_data["timer"] = win.after(16, _apply_popup_resize)
+
+            def _stop_resize(event=None):
+                if not popup_resize_data["is_resizing"]:
+                    return
+                popup_resize_data["is_resizing"] = False
+                if popup_resize_data["timer"]:
+                    win.after_cancel(popup_resize_data["timer"])
+                    popup_resize_data["timer"] = None
+                if popup_resize_data["pending"]:
+                    try:
+                        win.geometry(popup_resize_data["pending"])
+                    except Exception:
+                        pass
+                    popup_resize_data["pending"] = None
 
             lbl_grip.bind("<ButtonPress-1>", _start_resize)
             lbl_grip.bind("<B1-Motion>", _on_resize)
+            lbl_grip.bind("<ButtonRelease-1>", _stop_resize)
             grip_bar.bind("<ButtonPress-1>", _start_resize)
             grip_bar.bind("<B1-Motion>", _on_resize)
+            grip_bar.bind("<ButtonRelease-1>", _stop_resize)
+            win.bind("<ButtonRelease-1>", _stop_resize)
 
         win.bind("<Escape>", lambda e: close_fn())
         return win, lbl_title
@@ -325,20 +357,96 @@ class SambungKataApp:
         self.left_grip = tk.Frame(self.root, bg="#313244", width=4, cursor="size_we")
         self.left_grip.place(x=0, y=0, relheight=1.0, width=4)
 
+        # Unified Smooth Resize State & 60fps Throttling
+        self._is_resizing = False
+        self._resize_timer = None
+        self._pending_geometry = None
+        self._resize_mode = None
         self._lg_data = {}
+        self._resize_data = {}
+
+        def _apply_pending_resize():
+            self._resize_timer = None
+            if not self._is_resizing or not self._pending_geometry:
+                return
+            try:
+                self.root.geometry(self._pending_geometry)
+            except Exception:
+                pass
+
         def _start_left_grip(event):
+            self._is_resizing = True
+            self._resize_mode = "left"
             self._lg_data["x_root"] = event.x_root
             self._lg_data["win_x"] = self.root.winfo_x()
             self._lg_data["win_w"] = self.root.winfo_width()
+            self._lg_data["win_h"] = self.root.winfo_height()
+            self._lg_data["win_y"] = self.root.winfo_y()
 
         def _on_left_grip(event):
-            dx = event.x_root - self._lg_data["x_root"]
-            new_w = max(438, self._lg_data["win_w"] - dx)
-            new_x = self._lg_data["win_x"] + (self._lg_data["win_w"] - new_w)
-            self.root.geometry(f"{new_w}x{self.root.winfo_height()}+{new_x}+{self.root.winfo_y()}")
+            if not self._is_resizing or self._resize_mode != "left":
+                return
+            dx = event.x_root - self._lg_data.get("x_root", event.x_root)
+            new_w = max(438, self._lg_data.get("win_w", 534) - dx)
+            new_x = self._lg_data.get("win_x", 0) + (self._lg_data.get("win_w", 534) - new_w)
+            win_h = self._lg_data.get("win_h", self.root.winfo_height())
+            win_y = self._lg_data.get("win_y", self.root.winfo_y())
+            self._pending_geometry = f"{new_w}x{win_h}+{new_x}+{win_y}"
+            if self._resize_timer is None:
+                self._resize_timer = self.root.after(16, _apply_pending_resize)
+
+        def _start_bottom_resize(event):
+            self._is_resizing = True
+            self._resize_mode = "bottom_right"
+            self._resize_data["x"] = event.x_root
+            self._resize_data["y"] = event.y_root
+            self._resize_data["w"] = self.root.winfo_width()
+            self._resize_data["h"] = self.root.winfo_height()
+
+        def _on_bottom_resize(event):
+            if not self._is_resizing or self._resize_mode != "bottom_right":
+                return
+            dw = event.x_root - self._resize_data.get("x", event.x_root)
+            dh = event.y_root - self._resize_data.get("y", event.y_root)
+            nw = max(438, self._resize_data.get("w", 534) + dw)
+            nh = max(600, self._resize_data.get("h", 800) + dh)
+            self._pending_geometry = f"{nw}x{nh}"
+            if self._resize_timer is None:
+                self._resize_timer = self.root.after(16, _apply_pending_resize)
+
+        def _stop_resize(event=None):
+            if not self._is_resizing:
+                return
+            self._is_resizing = False
+            self._resize_mode = None
+            if self._resize_timer is not None:
+                self.root.after_cancel(self._resize_timer)
+                self._resize_timer = None
+            if self._pending_geometry:
+                try:
+                    self.root.geometry(self._pending_geometry)
+                except Exception:
+                    pass
+                self._pending_geometry = None
+
+            # Auto-reflow tag bar & refresh canvas scrollregion sekali setelah resize tuntas
+            self.root.after(20, self._render_custom_category_quick_bar)
+            if hasattr(self, "canvas") and self.canvas.winfo_exists():
+                try:
+                    self.canvas.itemconfig(self.canvas_window, width=self.canvas.winfo_width())
+                    self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+                except Exception:
+                    pass
+
+            try:
+                self.config["window_geometry"] = self.root.geometry()
+                save_config(self.config)
+            except Exception:
+                pass
 
         self.left_grip.bind("<ButtonPress-1>", _start_left_grip)
         self.left_grip.bind("<B1-Motion>", _on_left_grip)
+        self.left_grip.bind("<ButtonRelease-1>", _stop_resize)
 
         # 1. Baris Atas Compact: Tombol Aksi Utama (Mulai, Tambah Kata, Restart, Mode Santai, Settings ⚙️)
         top_bar = tk.Frame(self.root, bg="#181825", padx=8, pady=4)
@@ -507,11 +615,13 @@ class SambungKataApp:
         self._cats_bar_last_w = 0
         self._cats_bar_timer = None
         def _on_cats_bar_resize(event):
+            if getattr(self, "_is_resizing", False):
+                return
             if abs(event.width - self._cats_bar_last_w) > 6:
                 self._cats_bar_last_w = event.width
                 if self._cats_bar_timer:
                     self.root.after_cancel(self._cats_bar_timer)
-                self._cats_bar_timer = self.root.after(30, self._render_custom_category_quick_bar)
+                self._cats_bar_timer = self.root.after(40, self._render_custom_category_quick_bar)
 
         self.custom_cats_bar.bind("<Configure>", _on_cats_bar_resize)
         self._render_custom_category_quick_bar()
@@ -574,24 +684,13 @@ class SambungKataApp:
         )
         lbl_grip.pack(side=tk.RIGHT, padx=6)
 
-        self._resize_data = {}
-        def _start_resize(event):
-            self._resize_data["x"] = event.x_root
-            self._resize_data["y"] = event.y_root
-            self._resize_data["w"] = self.root.winfo_width()
-            self._resize_data["h"] = self.root.winfo_height()
-
-        def _on_resize(event):
-            dw = event.x_root - self._resize_data["x"]
-            dh = event.y_root - self._resize_data["y"]
-            nw = max(438, self._resize_data["w"] + dw)
-            nh = max(600, self._resize_data["h"] + dh)
-            self.root.geometry(f"{nw}x{nh}")
-
-        lbl_grip.bind("<ButtonPress-1>", _start_resize)
-        lbl_grip.bind("<B1-Motion>", _on_resize)
-        self.grip_bar.bind("<ButtonPress-1>", _start_resize)
-        self.grip_bar.bind("<B1-Motion>", _on_resize)
+        lbl_grip.bind("<ButtonPress-1>", _start_bottom_resize)
+        lbl_grip.bind("<B1-Motion>", _on_bottom_resize)
+        lbl_grip.bind("<ButtonRelease-1>", _stop_resize)
+        self.grip_bar.bind("<ButtonPress-1>", _start_bottom_resize)
+        self.grip_bar.bind("<B1-Motion>", _on_bottom_resize)
+        self.grip_bar.bind("<ButtonRelease-1>", _stop_resize)
+        self.root.bind("<ButtonRelease-1>", _stop_resize)
 
         self.recom_frame = tk.LabelFrame(
             self.root,
@@ -609,24 +708,36 @@ class SambungKataApp:
         self.scrollbar = ttk.Scrollbar(self.recom_frame, orient=tk.VERTICAL, command=self.canvas.yview)
         self.scrollable_frame = tk.Frame(self.canvas, bg="#181825")
 
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-        )
         self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
-        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig(self.canvas_window, width=e.width))
+
+        self._canvas_cfg_timer = None
+        def _on_canvas_configure(e):
+            try:
+                self.canvas.itemconfig(self.canvas_window, width=e.width)
+            except Exception:
+                pass
+
+        def _on_scrollable_configure(e):
+            if getattr(self, "_is_resizing", False):
+                return
+            if self._canvas_cfg_timer:
+                self.root.after_cancel(self._canvas_cfg_timer)
+            self._canvas_cfg_timer = self.root.after(
+                30,
+                lambda: self.canvas.configure(scrollregion=self.canvas.bbox("all")) if hasattr(self, "canvas") and self.canvas.winfo_exists() else None
+            )
+
+        self.canvas.bind("<Configure>", _on_canvas_configure)
+        self.scrollable_frame.bind("<Configure>", _on_scrollable_configure)
 
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Aktifkan scroll roda mouse (MouseWheel) mulus di area rekomendasi kata
-        self.recom_frame.bind("<Enter>", self._bind_mousewheel)
-        self.recom_frame.bind("<Leave>", self._unbind_mousewheel)
-        self.canvas.bind("<Enter>", self._bind_mousewheel)
-        self.canvas.bind("<Leave>", self._unbind_mousewheel)
-        self.scrollable_frame.bind("<Enter>", self._bind_mousewheel)
-        self.scrollable_frame.bind("<Leave>", self._unbind_mousewheel)
+        # Aktifkan scroll roda mouse (MouseWheel) mulus terpusat di root window (tanpa spam enter/leave per card)
+        self.root.bind("<MouseWheel>", self._on_mousewheel)
+        self.root.bind("<Button-4>", self._on_mousewheel)
+        self.root.bind("<Button-5>", self._on_mousewheel)
 
         # Widget Pool untuk kartu kata
         self.word_card_pool = []
@@ -789,7 +900,9 @@ class SambungKataApp:
                 self.lbl_prefix_display.config(text="-", fg="#6c7086")
                 self.lbl_conf.config(text="")
                 for slot in self.word_card_pool:
-                    slot["frame"].pack_forget()
+                    if slot.get("packed", False):
+                        slot["frame"].pack_forget()
+                        slot["packed"] = False
 
     def clear_manual_search(self):
         """Membersihkan kotak pencarian manual dan kembali ke OCR"""
@@ -2177,12 +2290,14 @@ class SambungKataApp:
             return
 
         is_santai = self.mode_santai_var.get()
-        # Muat lebih banyak kata sekaligus (limit=100 kata)
-        results = self.solver.cari_jawaban(prefix_clean, limit=100, mode_santai=is_santai, sort_mode=self.config.get("tier0_sort_mode", "default"))
+        # Muat 50 kata rekomendasi terbaik (Prioritas Tier 0 -> Tier 1 (X) -> Tier 2 (Sulit) -> Tier 3)
+        results = self.solver.cari_jawaban(prefix_clean, limit=50, mode_santai=is_santai, sort_mode=self.config.get("tier0_sort_mode", "default"))
 
         if not results:
             for slot in self.word_card_pool:
-                slot["frame"].pack_forget()
+                if slot.get("packed", False):
+                    slot["frame"].pack_forget()
+                    slot["packed"] = False
             msg_not_found = f"Tidak ditemukan kata berawalan '{prefix_clean}' (Mode Santai: tanpa X/Q/F)." if is_santai else f"Tidak ditemukan kata di kamus berawalan '{prefix_clean}'."
             self.lbl_empty_results.config(text=msg_not_found)
             self.lbl_empty_results.pack(fill=tk.X)
@@ -2190,7 +2305,7 @@ class SambungKataApp:
 
         self.lbl_empty_results.pack_forget()
 
-        # Tampilkan kata menggunakan widget pool berkinerja tinggi (tanpa create/destroy berulang)
+        # Tampilkan kata menggunakan widget pool berkinerja tinggi dengan dirty-checking
         prefix_upper = prefix_clean.upper()
         for idx, item in enumerate(results):
             if idx >= len(self.word_card_pool):
@@ -2199,7 +2314,14 @@ class SambungKataApp:
 
         # Sembunyikan slot kartu yang tidak terpakai
         for idx in range(len(results), len(self.word_card_pool)):
-            self.word_card_pool[idx]["frame"].pack_forget()
+            slot = self.word_card_pool[idx]
+            if slot.get("packed", False):
+                slot["frame"].pack_forget()
+                slot["packed"] = False
+
+        # Reset scroll ke posisi teratas setiap kali kata berganti agar user langsung melihat rekomendasi terbaik
+        if hasattr(self, "canvas") and self.canvas.winfo_exists():
+            self.canvas.yview_moveto(0)
 
     def _on_mousewheel(self, event):
         """Scroll daftar rekomendasi kata atau kategori kustom menggunakan roda mouse secara mulus"""
@@ -2287,22 +2409,19 @@ class SambungKataApp:
         )
         lbl_badge.pack(side=tk.RIGHT, padx=3)
 
-        # Aktifkan scroll roda mouse saat kursor melayang di atas kartu kata
-        card.bind("<Enter>", self._bind_mousewheel)
-        card.bind("<Leave>", self._unbind_mousewheel)
-        lbl_kata.bind("<Enter>", self._bind_mousewheel)
-        lbl_kata.bind("<Leave>", self._unbind_mousewheel)
-        lbl_badge.bind("<Enter>", self._bind_mousewheel)
-        lbl_badge.bind("<Leave>", self._unbind_mousewheel)
-        btn_star.bind("<Enter>", self._bind_mousewheel)
-        btn_star.bind("<Leave>", self._unbind_mousewheel)
-
         slot = {
             "frame": card,
             "lbl_kata": lbl_kata,
             "btn_del": btn_del,
             "btn_star": btn_star,
-            "lbl_badge": lbl_badge
+            "lbl_badge": lbl_badge,
+            "packed": False,
+            "kata": None,
+            "bg": None,
+            "badge_text": None,
+            "badge_bg": None,
+            "badge_fg": None,
+            "is_wl": None
         }
         self.word_card_pool.append(slot)
         return slot
@@ -2350,33 +2469,63 @@ class SambungKataApp:
         is_wl = item.get("is_whitelisted", False) or self.solver.is_whitelisted(kata)
         if is_wl:
             badge_text = "⭐ " + badge_text
+
+        card = slot["frame"]
+        lbl_kata = slot["lbl_kata"]
+        btn_del = slot["btn_del"]
+        btn_star = slot.get("btn_star")
+        lbl_badge = slot["lbl_badge"]
+
+        # 1. Update background warna kartu jika berbeda
+        if slot.get("bg") != card_bg:
+            card.config(bg=card_bg)
+            lbl_kata.config(bg=card_bg)
+            if btn_del:
+                btn_del.config(bg=card_bg)
             if btn_star:
+                btn_star.config(bg=card_bg)
+            slot["bg"] = card_bg
+
+        # 2. Update teks kata, command blacklist & handler klik jika kata berbeda
+        if slot.get("kata") != kata_upper:
+            lbl_kata.config(text=kata_upper)
+            slot["kata"] = kata_upper
+            btn_del.config(command=lambda k=kata: self.on_blacklist_word(k))
+
+            handler = lambda e, s=sisa, w=kata: self.copy_to_clipboard(s, full_word=w)
+            card.bind("<Button-1>", handler)
+            lbl_kata.bind("<Button-1>", handler)
+            lbl_badge.bind("<Button-1>", handler)
+
+        # 3. Update badge teks & warna
+        if (slot.get("badge_text") != badge_text or 
+            slot.get("badge_bg") != badge_bg or 
+            slot.get("badge_fg") != badge_fg):
+            lbl_badge.config(text=badge_text, bg=badge_bg, fg=badge_fg)
+            slot["badge_text"] = badge_text
+            slot["badge_bg"] = badge_bg
+            slot["badge_fg"] = badge_fg
+
+        # 4. Update status whitelist bintang
+        if btn_star and slot.get("is_wl") != is_wl:
+            if is_wl:
                 btn_star.config(
                     text="⭐",
                     fg="#f9e2af",
-                    bg=card_bg,
                     command=lambda k=kata: self.on_toggle_whitelist(k, False)
                 )
-        else:
-            if btn_star:
+            else:
                 btn_star.config(
                     text="☆",
                     fg="#6c7086",
-                    bg=card_bg,
                     command=lambda k=kata: self.on_toggle_whitelist(k, True)
                 )
+            slot["is_wl"] = is_wl
 
-        card.config(bg=card_bg)
-        lbl_kata.config(text=kata_upper, bg=card_bg)
-        lbl_badge.config(text=badge_text, bg=badge_bg, fg=badge_fg)
-        btn_del.config(bg=card_bg, command=lambda k=kata: self.on_blacklist_word(k))
-
-        handler = lambda e, s=sisa, w=kata: self.copy_to_clipboard(s, full_word=w)
-        card.bind("<Button-1>", handler)
-        lbl_kata.bind("<Button-1>", handler)
-        lbl_badge.bind("<Button-1>", handler)
-
-        card.pack(fill=tk.X, padx=3, pady=2)
+        # 5. Pack hanya jika belum ter-pack untuk menghemat layout engine
+        if not slot.get("packed", False):
+            card.pack(fill=tk.X, padx=3, pady=2)
+            slot["packed"] = True
 
     def on_toggle_whitelist(self, kata, enable=True):
         """Memasukkan atau menghapus kata dari whitelist (Terbukti valid & Prioritas Utama)"""

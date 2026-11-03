@@ -303,7 +303,16 @@ Seluruh jendela sekunder / dialog popup di dalam aplikasi mengimplementasikan me
 2. **Interaktivitas & Kenyamanan Pengguna:**
    - **Drag-to-move:** Title bar dan label judul dapat diseret dengan mouse (`<ButtonPress-1>` & `<B1-Motion>`) untuk memindahkan posisi window secara mulus.
    - **Escape-to-Close:** Tombol keyboard `<Escape>` otomatis terikat untuk menutup jendela sekunder seketika.
-   - **Resize Grip (`⋰`):** Pada jendela resizable, grip sudut kanan bawah (`#89b4fa`) memungkinkan penyesuaian ukuran jendela dengan batas minimum (`minsize`) yang aman.
+   - **Resize Grip (`⋰` & `left_grip`):** Pada jendela resizable dan overlay utama, penyesuaian ukuran jendela dapat dilakukan dari tepi kiri (`left_grip`) maupun sudut kanan bawah (`grip_bar`).
+   - **Smooth 60fps Window Resizing & Anti-Ghost Drag:**
+     - Menggunakan sistem throttling 16ms (~60fps) pada `<B1-Motion>` untuk mencegah penumpukan event backlog di antrean pesan Windows/Tkinter.
+     - Terikat listener `<ButtonRelease-1>` pada grip dan root window yang seketika menonaktifkan state `_is_resizing = False` dan membersihkan timer pending. Saat mouse dilepas, window seketika berhenti dan tidak akan pernah terus mengekor/mengikuti gerakan mouse (*never resizes after release*).
+     - Menghentikan kalkulasi layout berulang selama mouse drag (canvas `scrollregion bbox` dan auto-reflow tag kustom di-pause selama drag aktif dan dieksekusi bersih satu kali saat drag selesai).
+   - **High-Performance Dirty-Checking Card Pool (Ultra-Smooth Rendering):**
+     - Kartu rekomendasi kata (limit 50 kata terbaik lintas tier) menerapkan caching properti visual (`kata`, `bg`, `badge_text`, `is_wl`, `packed`).
+     - Tcl/Tk bridge `.config()` hanya dipanggil saat atribut benar-benar berubah, dan `.pack()` hanya dieksekusi saat kartu belum terpasang (menghemat ratusan pemanggilan layout per detik).
+     - Menghapus 800+ binding `<Enter>`/`<Leave>` per kartu kata dan memusatkan scroll roda mouse (`<MouseWheel>`) langsung pada root window, melenyapkan glitch dan freeze saat kursor bergerak melintasi kartu.
+     - Canvas otomatis di-reset ke scroll posisi teratas (`yview_moveto(0)`) setiap kali awalan kata berganti.
    - **Penempatan Cerdas (Adjacent Placement):** Jendela popup otomatis ditempatkan berdampingan di sebelah kiri jendela utama overlay agar tidak saling tumpang tindih atau menghalangi area game Roblox.
 3. **Daftar 10 Jendela Sekunder yang Terstandarisasi:**
    - `gameplay_history_win` (Riwayat Auto-Index Gameplay)
