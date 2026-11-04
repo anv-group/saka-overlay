@@ -9,25 +9,25 @@
     "game_mode": "default",
     "mode_santai": false,
     "brutal_mode_tags": [
-        "AMSI",
-        "KSO",
-        "RHU",
-        "BD",
-        "TL"
-    ],
-    "saved_normal_tags": [
         "NGKAR",
         "TETEH",
         "AESI",
         "AMSI",
+        "IWAK",
+        "TIFA",
         "YUAN",
         "ACY",
         "DYA",
         "KSO",
-        "LEX",
         "NGK",
         "RHU",
         "SEA",
+        "BD",
+        "NS",
+        "TL",
+        "PN"
+    ],
+    "saved_normal_tags": [
         "BD",
         "CY",
         "DJ",
@@ -43,13 +43,16 @@
         "PP",
         "RD",
         "RS",
-        "SV",
         "TL",
         "TY",
         "UF",
         "Q",
         "X",
-        "Z"
+        "Z",
+        "II",
+        "KSI",
+        "DHO",
+        "HOE"
     ],
     "report_hotkey": "F2",
     "ocr_engine": "winocr",
@@ -74,73 +77,85 @@
         {
             "suffix": "NGKAR",
             "name": "Akhiran NGKAR",
-            "enabled": true,
+            "enabled": false,
             "color": "#fab387"
         },
         {
             "suffix": "TETEH",
             "name": "Akhiran TEYEH",
-            "enabled": true,
+            "enabled": false,
             "color": "#a6e3a1"
         },
         {
             "suffix": "AESI",
             "name": "Akhiran AESI",
-            "enabled": true,
+            "enabled": false,
             "color": "#f5c2e7"
         },
         {
             "suffix": "AMSI",
             "name": "Akhiran AMSI",
-            "enabled": true,
+            "enabled": false,
             "color": "#f9e2af"
+        },
+        {
+            "suffix": "IWAK",
+            "name": "Akhiran IWAK",
+            "enabled": false,
+            "color": "#f9e2af"
+        },
+        {
+            "suffix": "TIFA",
+            "name": "Akhiran TIFA",
+            "enabled": false,
+            "color": "#89dceb"
         },
         {
             "suffix": "YUAN",
             "name": "Akhiran YUAN",
-            "enabled": true,
+            "enabled": false,
             "color": "#89dceb"
         },
         {
             "suffix": "ACY",
             "name": "Akhiran ACY",
-            "enabled": true,
+            "enabled": false,
             "color": "#f9e2af"
         },
         {
             "suffix": "DYA",
             "name": "DYA",
-            "enabled": true,
+            "enabled": false,
             "color": "#f5c2e7"
         },
         {
             "suffix": "KSO",
             "name": "Akhiran KSO",
-            "enabled": true,
+            "enabled": false,
             "color": "#a6e3a1"
         },
         {
             "suffix": "LEX",
             "name": "LEX",
-            "enabled": true,
+            "enabled": false,
             "color": "#fab387"
         },
         {
             "suffix": "NGK",
             "name": "Akhiran NGK",
-            "enabled": true,
+            "enabled": false,
             "color": "#f5c2e7"
         },
         {
             "suffix": "RHU",
             "name": "Akhiran RHU",
-            "enabled": true,
+            "enabled": false,
             "color": "#fab387"
         },
         {
             "suffix": "SEA",
             "name": "Akhiran SEA",
-            "enabled": true,
+            "enabled": false,
             "color": "#fab387"
         },
         {
@@ -254,7 +269,7 @@
         {
             "suffix": "SV",
             "name": "Akhiran SV",
-            "enabled": true,
+            "enabled": false,
             "color": "#94e2d5"
         },
         {
@@ -292,24 +307,42 @@
             "name": "Akhiran Z",
             "enabled": true,
             "color": "#cba6f7"
+        },
+        {
+            "suffix": "PN",
+            "name": "Akhiran PN",
+            "enabled": false,
+            "color": "#a6e3a1"
+        },
+        {
+            "suffix": "II",
+            "name": "Akhiran II",
+            "enabled": true,
+            "color": "#fab387"
+        },
+        {
+            "suffix": "KSI",
+            "name": "Akhiran KSI",
+            "enabled": true,
+            "color": "#94e2d5"
+        },
+        {
+            "suffix": "DHO",
+            "name": "Akhiran DHO",
+            "enabled": true,
+            "color": "#cba6f7"
+        },
+        {
+            "suffix": "HOE",
+            "name": "Akhiran HOE",
+            "enabled": true,
+            "color": "#f5c2e7"
         }
     ],
     "auto_copy_top_word": false,
-    "window_geometry": "438x1074+1458+51",
+    "window_geometry": "438x1074+1469+11",
     "santai_auto_disabled_tags": [],
     "saved_default_tags": [
-        "NGKAR",
-        "TETEH",
-        "AESI",
-        "AMSI",
-        "YUAN",
-        "ACY",
-        "DYA",
-        "KSO",
-        "LEX",
-        "NGK",
-        "RHU",
-        "SEA",
         "BD",
         "CY",
         "DJ",
@@ -325,12 +358,15 @@
         "PP",
         "RD",
         "RS",
-        "SV",
         "TL",
         "TY",
         "UF",
         "Q",
         "X",
-        "Z"
+        "Z",
+        "II",
+        "KSI",
+        "DHO",
+        "HOE"
     ]
 }

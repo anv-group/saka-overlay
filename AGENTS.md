@@ -35,7 +35,7 @@ sambung-kata/
 ├── config.json          # Menyimpan area ROI layar, interval scan, dan preferensi pengguna (tracked base)
 ├── config.local.json    # Override konfigurasi lokal pengguna: menyimpan preferensi tag, mode, area ROI (untracked / gitignored, kebal git update)
 ├── logo.svg             # Desain logo vektor asli SAKA Overlay
-├── assets/              # Aset gambar aplikasi (logo.png, logo_cropped.png, icon.ico)
+├── assets/              # Aset gambar aplikasi (logo.png, logo_saka.png, logo.ico, logo.svg)
 ├── blacklist.txt        # Daftar kata yang di-blacklist (kata valid KBBI namun ditolak oleh server Roblox)
 ├── kamus_lengkap.txt    # 147,870+ kata (Hasil Hybrid Merge: KBBI v6 + contek-sambungkata.web.id + istilah Roblox + jebakan X/Z)
 ├── kamus_kbbi.txt       # 112,822 kata murni Kamus Besar Bahasa Indonesia (KBBI VI)

@@ -35,8 +35,12 @@ class SambungKataApp:
 
         # Pasang icon aplikasi (ico & png)
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        icon_ico = os.path.join(base_dir, "assets", "icon.ico")
-        icon_png = os.path.join(base_dir, "assets", "logo_cropped.png")
+        icon_ico = os.path.join(base_dir, "assets", "logo.ico")
+        if not os.path.exists(icon_ico):
+            icon_ico = os.path.join(base_dir, "assets", "icon.ico")
+        icon_png = os.path.join(base_dir, "assets", "logo.png")
+        if not os.path.exists(icon_png):
+            icon_png = os.path.join(base_dir, "assets", "logo_cropped.png")
         if os.path.exists(icon_ico):
             try:
                 self.root.iconbitmap(icon_ico)
@@ -345,8 +349,10 @@ class SambungKataApp:
         if self.dev_mode_var.get():
             self.btn_restart.pack(side=tk.RIGHT, padx=(0, 2), pady=2)
 
-        # Logo SAKA Overlay di titlebar
-        logo_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo_cropped.png")
+        # Logo SAKA Overlay di titlebar (Memprioritaskan logo_saka.png atau logo.png)
+        logo_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo_saka.png")
+        if not os.path.exists(logo_file):
+            logo_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo.png")
         if os.path.exists(logo_file):
             try:
                 from PIL import Image, ImageTk

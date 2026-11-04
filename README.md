@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo_cropped.png" alt="SAKA Overlay Logo" width="220" />
+<img src="assets/logo.png" alt="SAKA Overlay Logo" width="220" />
 
 # SAKA Overlay
 ### 🎮 Asisten Cerdas & Auto Solver Roblox Sambung Kata
