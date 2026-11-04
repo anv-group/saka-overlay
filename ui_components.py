@@ -192,17 +192,18 @@ class MiniTickerBar(tk.Frame):
     """
     Mini status bar permanen ramping yang hanya muncul saat pengguna membuka tab
     selain LIVE (TAGS, KAMUS, SYSTEM) agar tetap dapat melihat deteksi awalan dan kata teratas.
+    Menggunakan visual merah mencolok (LIVE OCR) agar perubahan awalan selalu terdeteksi dengan jelas.
     """
     def __init__(self, parent, on_click=None, **kwargs):
-        super().__init__(parent, bg="#0e1710", highlightthickness=1, highlightbackground=THEME["border"], **kwargs)
+        super().__init__(parent, bg="#1a1114", highlightthickness=1, highlightbackground=THEME["danger"], **kwargs)
         self.on_click = on_click
 
-        # Badge Awalan Aktif
+        # Badge Awalan Aktif (Merah Kontras Tinggi)
         self.lbl_prefix_badge = tk.Label(
             self,
-            text="...",
-            font=("Segoe UI", 9, "bold"),
-            bg=THEME["primary"],
+            text="LIVE",
+            font=("Segoe UI", 8, "bold"),
+            bg=THEME["danger"],
             fg=THEME["text_dark"],
             padx=6,
             pady=1
@@ -214,8 +215,8 @@ class MiniTickerBar(tk.Frame):
             self,
             text="Menunggu OCR...",
             font=("Segoe UI", 9, "bold"),
-            bg="#0e1710",
-            fg=THEME["text_primary"],
+            bg="#1a1114",
+            fg="#ffccd2",
             anchor="w"
         )
         self.lbl_top_word.pack(side=tk.LEFT, fill=tk.X, expand=True, pady=2)
@@ -237,10 +238,10 @@ class MiniTickerBar(tk.Frame):
                 w.bind("<Button-1>", lambda e: self.on_click())
 
     def update_ticker(self, prefix, top_word="", mode_name="DEFAULT", mode_color=None):
-        p_text = prefix.strip().upper() if prefix else "-"
-        self.lbl_prefix_badge.config(text=p_text)
-        w_text = top_word.strip().upper() if top_word else "Tidak ada saran"
-        self.lbl_top_word.config(text=w_text)
+        p_text = prefix.strip().upper() if prefix else "LIVE"
+        self.lbl_prefix_badge.config(text=p_text, bg=THEME["danger"], fg=THEME["text_dark"])
+        w_text = top_word.strip().upper() if top_word else "Menunggu deteksi..."
+        self.lbl_top_word.config(text=w_text, fg="#ffccd2" if top_word else THEME["text_muted"])
         self.lbl_mode_pill.config(text=mode_name.upper())
         if mode_color:
             self.lbl_mode_pill.config(fg=mode_color)

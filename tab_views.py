@@ -414,7 +414,7 @@ class DictionaryTabView(tk.Frame):
             self.after(50, lambda: (self.entry_bl_add.focus_set(), self.entry_bl_add.select_range(0, tk.END)))
         else:
             self.sub_ex_frame.pack(fill=tk.BOTH, expand=True)
-            self.after(50, lambda: (self.entry_ex_search.focus_set(), self.entry_ex_search.select_range(0, tk.END)))
+            self.after(50, lambda: (self.entry_ex_new.focus_set(), self.entry_ex_new.select_range(0, tk.END)))
 
     # 1. WHITELIST VIEW
     def _build_whitelist_view(self):
@@ -584,7 +584,9 @@ class DictionaryTabView(tk.Frame):
             lbl_w = tk.Label(row, text=word.upper(), font=("Segoe UI", 9, "bold"), fg=THEME["danger"], bg=THEME["danger_bg"])
             lbl_w.pack(side=tk.LEFT)
 
-            btn_unbl = tk.Button(row, text="Pulihkan", font=("Segoe UI", 7, "bold"), bg=THEME["bg_card"], fg=THEME["text_primary"], relief=tk.FLAT, bd=0, cursor="hand2", command=lambda kw=word: self._unblock_word(kw))
+            trash_ico = render_vector_icon("trash", size=14, color=THEME["danger"])
+            btn_unbl = tk.Button(row, image=trash_ico, bg=THEME["bg_card"], relief=tk.FLAT, bd=0, cursor="hand2", command=lambda kw=word: self._unblock_word(kw))
+            btn_unbl.image = trash_ico
             btn_unbl.pack(side=tk.RIGHT)
 
             bind_mousewheel_recursive(row, scroll_cb)
@@ -623,7 +625,7 @@ class DictionaryTabView(tk.Frame):
         add_box = tk.Frame(self.sub_ex_frame, bg=THEME["bg_card_alt"], padx=8, pady=4, highlightthickness=1, highlightbackground=THEME["border"])
         add_box.pack(fill=tk.X, padx=8, pady=(0, 4))
 
-        lbl_a = tk.Label(add_box, text="+ Simpan Kata Baru:", font=("Segoe UI", 8), fg=THEME["text_secondary"], bg=THEME["bg_card_alt"])
+        lbl_a = tk.Label(add_box, text="+ Kata Baru:", font=("Segoe UI", 8), fg=THEME["text_secondary"], bg=THEME["bg_card_alt"])
         lbl_a.pack(side=tk.LEFT, padx=(2, 4))
 
         self.ex_new_word_var = tk.StringVar()
@@ -631,7 +633,7 @@ class DictionaryTabView(tk.Frame):
         self.entry_ex_new.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
         self.entry_ex_new.bind("<Return>", self._submit_add_new_word)
 
-        btn_save = tk.Button(add_box, text="+ Simpan ke Kamus", font=("Segoe UI", 8, "bold"), bg=THEME["bg_hover"], fg=THEME["primary"], relief=tk.FLAT, padx=6, pady=1, cursor="hand2", command=self._submit_add_new_word)
+        btn_save = tk.Button(add_box, text="Tambah", font=("Segoe UI", 8, "bold"), bg=THEME["bg_hover"], fg=THEME["primary"], relief=tk.FLAT, padx=6, pady=1, cursor="hand2", command=self._submit_add_new_word)
         btn_save.pack(side=tk.RIGHT)
 
         # Canvas Hasil Pencarian
@@ -886,7 +888,7 @@ class SystemTabView(tk.Frame):
 
         self.lbl_commit_click = tk.Label(
             commit_row,
-            text=f"[{h_hash}] (Klik untuk buka commit)",
+            text=f"#{h_hash}",
             font=("Segoe UI", 8, "underline"),
             fg=THEME["accent_neon"],
             bg=THEME["bg_card"],
@@ -935,7 +937,7 @@ class SystemTabView(tk.Frame):
         btn_row = tk.Frame(card, bg=THEME["bg_card"])
         btn_row.pack(fill=tk.X, pady=(2, 0))
 
-        btn_chk = tk.Button(btn_row, text="Periksa Pembaruan Sekarang", font=("Segoe UI", 8, "bold"), bg=THEME["bg_hover"], fg=THEME["primary"], relief=tk.FLAT, padx=8, pady=3, cursor="hand2", command=self._check_updates_now)
+        btn_chk = tk.Button(btn_row, text="Cek Update", font=("Segoe UI", 8, "bold"), bg=THEME["bg_hover"], fg=THEME["primary"], relief=tk.FLAT, padx=8, pady=3, cursor="hand2", command=self._check_updates_now)
         btn_chk.pack(side=tk.LEFT, padx=(0, 4))
 
         btn_fld = tk.Button(btn_row, text="Buka Folder", font=("Segoe UI", 8), bg=THEME["bg_hover"], fg=THEME["text_primary"], relief=tk.FLAT, padx=8, pady=3, cursor="hand2", command=self._open_app_folder)
@@ -949,7 +951,7 @@ class SystemTabView(tk.Frame):
 
     def _open_commit_url(self, commit_hash):
         if commit_hash and commit_hash != "unknown":
-            url = f"https://github.com/Alden-13/sambung-kata-overlay/commit/{commit_hash}"
+            url = f"https://github.com/anv-group/sambung-kata-overlay/commit/{commit_hash}"
             webbrowser.open(url)
 
     def _on_update_mode_selected(self, event=None):
