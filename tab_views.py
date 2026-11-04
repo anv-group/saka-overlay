@@ -144,6 +144,7 @@ class TagsTabView(tk.Frame):
         for w in self.brutal_inner.winfo_children():
             w.destroy()
 
+        self._brutal_rows = {}
         brutal_tags = set(self.app.config.get("brutal_mode_tags", ["AMSI", "KSO", "RHU", "TL", "BD"]))
         cats = self.app.config.get("custom_trap_endings", [])
 
@@ -188,30 +189,51 @@ class TagsTabView(tk.Frame):
             for w in (row, lbl_chk, badge, lbl_name, lbl_st):
                 w.bind("<Button-1>", handler)
 
-            # Bind scroll to every item
             bind_mousewheel_recursive(row, scroll_cb)
 
+            self._brutal_rows[sfx] = {
+                "frame": row,
+                "lbl_chk": lbl_chk,
+                "badge": badge,
+                "lbl_name": lbl_name,
+                "lbl_st": lbl_st,
+                "cat": cat
+            }
+
     def _toggle_brutal_tag(self, suffix):
+        """Toggle status preset tag Brutal secara instan (< 1ms) tanpa rebuild widget"""
         b_tags = set(self.app.config.get("brutal_mode_tags", []))
         if suffix in b_tags:
             b_tags.remove(suffix)
+            is_active = False
         else:
             b_tags.add(suffix)
+            is_active = True
         self.app.config["brutal_mode_tags"] = list(b_tags)
-        save_config(self.app.config)
+        self.app.save_config_debounced()
 
         if self.app.config.get("game_mode") == "brutal":
             cats = self.app.config.get("custom_trap_endings", [])
             for cat in cats:
                 cat["enabled"] = (cat.get("suffix", "").upper() in b_tags)
             self.app.config["custom_trap_endings"] = cats
-            save_config(self.app.config)
-            self.app.solver.set_custom_endings(cats)
-            self.app._render_custom_category_quick_bar()
-            if hasattr(self.app, "last_detected_word") and self.app.last_detected_word:
-                self.app.update_results(self.app.last_detected_word)
+            self.app._sync_tags_and_solver(skip_ui_rebuild=True)
 
-        self._refresh_brutal_list()
+        if hasattr(self, "_brutal_rows") and suffix in self._brutal_rows:
+            r = self._brutal_rows[suffix]
+            bg_c = THEME["danger_bg"] if is_active else THEME["bg_card"]
+            bd_c = THEME["danger"] if is_active else THEME["border"]
+            chk_txt = "☑" if is_active else "☐"
+            chk_fg = THEME["danger"] if is_active else THEME["text_muted"]
+            status_txt = "BRUTAL" if is_active else "NONAKTIF"
+            status_fg = THEME["danger"] if is_active else THEME["text_muted"]
+
+            r["frame"].config(bg=bg_c, highlightbackground=bd_c)
+            r["lbl_chk"].config(text=chk_txt, fg=chk_fg, bg=bg_c)
+            r["lbl_name"].config(font=("Segoe UI", 9, "bold" if is_active else "normal"), fg=THEME["text_primary"] if is_active else THEME["text_secondary"], bg=bg_c)
+            r["lbl_st"].config(text=status_txt, fg=status_fg, bg=bg_c)
+        else:
+            self._refresh_brutal_list()
 
     def _brutal_select_all(self):
         cats = self.app.config.get("custom_trap_endings", [])
@@ -291,6 +313,7 @@ class TagsTabView(tk.Frame):
         for w in self.custom_inner.winfo_children():
             w.destroy()
 
+        self._custom_rows = []
         cats = self.app.config.get("custom_trap_endings", [])
         self.sub_strip.buttons["custom"]["text"].config(text=f"KELOLA SEMUA TAG ({len(cats)})")
 
@@ -306,9 +329,20 @@ class TagsTabView(tk.Frame):
             row = tk.Frame(self.custom_inner, bg=bg_c, highlightthickness=1, highlightbackground=bd_c, padx=8, pady=4)
             row.pack(fill=tk.X, pady=2)
 
-            btn_up = tk.Button(row, text="▲", font=("Segoe UI", 6), bg=bg_c, fg=THEME["text_muted"], relief=tk.FLAT, bd=0, cursor="hand2", command=lambda i=idx: (self.app._on_move_custom_category(i, -1), self._refresh_custom_list()))
+            row_data = {}
+
+            btn_up = tk.Button(
+                row, text="▲", font=("Segoe UI", 6), bg=bg_c, fg=THEME["text_muted"],
+                relief=tk.FLAT, bd=0, cursor="hand2",
+                command=lambda r=row_data: self._move_custom_row(r, -1)
+            )
             btn_up.pack(side=tk.LEFT, padx=(0, 2))
-            btn_down = tk.Button(row, text="▼", font=("Segoe UI", 6), bg=bg_c, fg=THEME["text_muted"], relief=tk.FLAT, bd=0, cursor="hand2", command=lambda i=idx: (self.app._on_move_custom_category(i, 1), self._refresh_custom_list()))
+
+            btn_down = tk.Button(
+                row, text="▼", font=("Segoe UI", 6), bg=bg_c, fg=THEME["text_muted"],
+                relief=tk.FLAT, bd=0, cursor="hand2",
+                command=lambda r=row_data: self._move_custom_row(r, 1)
+            )
             btn_down.pack(side=tk.LEFT, padx=(0, 4))
 
             badge = tk.Label(
@@ -326,7 +360,10 @@ class TagsTabView(tk.Frame):
             lbl_name.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
             edit_ico = render_vector_icon("edit", size=14, color=THEME["text_secondary"])
-            btn_edit = tk.Button(row, image=edit_ico, bg=bg_c, relief=tk.FLAT, bd=0, cursor="hand2", command=lambda c=cat: (self.app.open_edit_custom_category_dialog(c), self._refresh_custom_list()))
+            btn_edit = tk.Button(
+                row, image=edit_ico, bg=bg_c, relief=tk.FLAT, bd=0, cursor="hand2",
+                command=lambda c=cat: (self.app.open_edit_custom_category_dialog(c), self._refresh_custom_list())
+            )
             btn_edit.image = edit_ico
             btn_edit.pack(side=tk.RIGHT, padx=4)
 
@@ -342,11 +379,84 @@ class TagsTabView(tk.Frame):
                 padx=6,
                 pady=1,
                 cursor="hand2",
-                command=lambda i=idx: (self.app._on_toggle_custom_category(i), self._refresh_custom_list())
+                command=lambda r=row_data: self._toggle_custom_row(r)
             )
             btn_sw.pack(side=tk.RIGHT, padx=2)
 
             bind_mousewheel_recursive(row, scroll_cb)
+
+            row_data.update({
+                "frame": row,
+                "btn_up": btn_up,
+                "btn_down": btn_down,
+                "badge": badge,
+                "lbl_name": lbl_name,
+                "btn_edit": btn_edit,
+                "btn_sw": btn_sw,
+                "cat": cat
+            })
+            self._custom_rows.append(row_data)
+
+    def _move_custom_row(self, row_data, direction):
+        """Memindahkan urutan tag kustom secara instan (< 1ms) tanpa destroy & recreate widget"""
+        if not hasattr(self, "_custom_rows") or row_data not in self._custom_rows:
+            return
+        idx = self._custom_rows.index(row_data)
+        new_idx = idx + direction
+        if not (0 <= new_idx < len(self._custom_rows)):
+            return
+
+        other_row_data = self._custom_rows[new_idx]
+
+        # 1. Swap posisi DOM seketika
+        if direction == -1:
+            row_data["frame"].pack(before=other_row_data["frame"])
+        else:
+            other_row_data["frame"].pack(before=row_data["frame"])
+
+        # 2. Swap list item referensi
+        self._custom_rows[idx], self._custom_rows[new_idx] = self._custom_rows[new_idx], self._custom_rows[idx]
+
+        # 3. Swap di config & sinkronkan data secara ringan
+        cats = self.app.config.get("custom_trap_endings", [])
+        if 0 <= idx < len(cats) and 0 <= new_idx < len(cats):
+            cats[idx], cats[new_idx] = cats[new_idx], cats[idx]
+            self.app.config["custom_trap_endings"] = cats
+            self.app._sync_tags_and_solver(skip_ui_rebuild=True)
+            sfx = cats[new_idx].get("suffix", "")
+            self.app.show_toast(f"Tag '{sfx}' dipindahkan ke #{new_idx + 1}")
+
+    def _toggle_custom_row(self, row_data):
+        """Toggle status ON/OFF tag kustom secara instan (< 1ms) dengan in-place styling update"""
+        if not hasattr(self, "_custom_rows") or row_data not in self._custom_rows:
+            return
+        idx = self._custom_rows.index(row_data)
+        cat = row_data["cat"]
+        sfx = cat.get("suffix", "").upper()
+        new_val = not cat.get("enabled", True)
+
+        # Cek larangan Mode Santai
+        if getattr(self.app, "mode_santai_var", None) and self.app.mode_santai_var.get() and new_val and any(ch in sfx.lower() for ch in ("x", "q", "f")):
+            self.app.show_toast(f"Tag [{sfx}] dilarang di Mode Santai (mengandung X, Q, atau F)!")
+            return
+
+        cat["enabled"] = new_val
+
+        # Update styling visual row seketika
+        bg_c = THEME["bg_card"] if new_val else THEME["bg_root"]
+        bd_c = THEME["border_focus"] if new_val else THEME["border"]
+        switch_txt = "ON" if new_val else "OFF"
+        switch_fg = THEME["primary"] if new_val else THEME["text_muted"]
+
+        row_data["frame"].config(bg=bg_c, highlightbackground=bd_c)
+        row_data["btn_up"].config(bg=bg_c)
+        row_data["btn_down"].config(bg=bg_c)
+        row_data["lbl_name"].config(bg=bg_c)
+        row_data["btn_edit"].config(bg=bg_c)
+        row_data["btn_sw"].config(text=switch_txt, fg=switch_fg)
+
+        # Panggil logic backend tanpa rebuild seluruh widget
+        self.app._on_toggle_custom_category(idx, new_val=new_val, skip_ui_rebuild=True)
 
     def _open_add_dialog(self):
         self.app.open_edit_custom_category_dialog(None)

@@ -184,6 +184,10 @@ class SambungKataApp:
         self.scan_thread = None
         self.last_detected_word = ""
 
+        self._save_config_timer = None
+        self._dirty_quick_bar = False
+        self._dirty_live_results = False
+
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._build_ui()
 
@@ -1059,7 +1063,13 @@ class SambungKataApp:
             if hasattr(self, "mini_ticker") and self.mini_ticker.winfo_exists():
                 self.mini_ticker.pack_forget()
             self.tab_live_container.pack(fill=tk.BOTH, expand=True)
-            self._render_custom_category_quick_bar()
+            if getattr(self, "_dirty_quick_bar", False) or not self.custom_cats_bar.winfo_children():
+                self._render_custom_category_quick_bar()
+                self._dirty_quick_bar = False
+            if getattr(self, "_dirty_live_results", False):
+                if hasattr(self, "last_detected_word") and self.last_detected_word:
+                    self.update_results(self.last_detected_word)
+                self._dirty_live_results = False
         else:
             # Di tab non-LIVE (TAGS, KAMUS, SYSTEM), mini ticker tampil ramping di atas
             if hasattr(self, "mini_ticker") and self.mini_ticker.winfo_exists():
@@ -4239,7 +4249,7 @@ class SambungKataApp:
             info = f" (dari '{full_word.upper()}')" if full_word else ""
             self.show_toast(f"Tersalin sisa kata: '{sisa_text.upper()}'{info} - Tinggal Ctrl+V di Roblox!")
 
-    def _on_toggle_custom_category(self, idx, new_val=None):
+    def _on_toggle_custom_category(self, idx, new_val=None, skip_ui_rebuild=False):
         """Toggle aktif/nonaktif kategori akhiran kustom (mendukung 1 atau 2 argumen)"""
         categories = self.config.get("custom_trap_endings", [])
         if 0 <= idx < len(categories):
@@ -4282,28 +4292,18 @@ class SambungKataApp:
                 self.config["santai_auto_disabled_tags"] = list(auto_disabled)
 
             self.config["custom_trap_endings"] = categories
-            save_config(self.config)
-            self.solver.set_custom_endings(categories)
-            self._render_custom_category_items()
-            self._render_custom_category_quick_bar()
-            if hasattr(self, "last_detected_word") and self.last_detected_word:
-                self.update_results(self.last_detected_word)
+            self._sync_tags_and_solver(skip_ui_rebuild=skip_ui_rebuild)
             status_str = "diaktifkan" if new_val else "dinonaktifkan"
             self.show_toast(f"Tag [{sfx}] {status_str}")
 
-    def _on_move_custom_category(self, idx, direction):
+    def _on_move_custom_category(self, idx, direction, skip_ui_rebuild=False):
         """Memindahkan posisi kategori ke atas (-1) atau ke bawah (+1)"""
         categories = self.config.get("custom_trap_endings", [])
         new_idx = idx + direction
         if 0 <= idx < len(categories) and 0 <= new_idx < len(categories):
             categories[idx], categories[new_idx] = categories[new_idx], categories[idx]
             self.config["custom_trap_endings"] = categories
-            save_config(self.config)
-            self.solver.set_custom_endings(categories)
-            self._render_custom_category_items()
-            self._render_custom_category_quick_bar()
-            if hasattr(self, "last_detected_word") and self.last_detected_word:
-                self.update_results(self.last_detected_word)
+            self._sync_tags_and_solver(skip_ui_rebuild=skip_ui_rebuild)
             sfx = categories[new_idx].get("suffix", "")
             self.show_toast(f"Tag '{sfx}' dipindahkan ke urutan #{new_idx + 1}")
 
@@ -4314,12 +4314,7 @@ class SambungKataApp:
             return
         categories.sort(key=lambda c: c.get("suffix", "").upper())
         self.config["custom_trap_endings"] = categories
-        save_config(self.config)
-        self.solver.set_custom_endings(categories)
-        self._render_custom_category_items()
-        self._render_custom_category_quick_bar()
-        if hasattr(self, "last_detected_word") and self.last_detected_word:
-            self.update_results(self.last_detected_word)
+        self._sync_tags_and_solver(skip_ui_rebuild=False)
         self.show_toast("🔤 Kategori akhiran diurutkan A-Z")
 
     def _on_sort_custom_categories_count(self):
@@ -4329,12 +4324,7 @@ class SambungKataApp:
             return
         categories.sort(key=lambda c: self.solver.count_words_by_suffix(c.get("suffix", "")), reverse=True)
         self.config["custom_trap_endings"] = categories
-        save_config(self.config)
-        self.solver.set_custom_endings(categories)
-        self._render_custom_category_items()
-        self._render_custom_category_quick_bar()
-        if hasattr(self, "last_detected_word") and self.last_detected_word:
-            self.update_results(self.last_detected_word)
+        self._sync_tags_and_solver(skip_ui_rebuild=False)
         self.show_toast("📊 Kategori akhiran diurutkan berdasarkan kata terbanyak")
 
     def _on_sort_custom_categories_length(self, reverse=True):
@@ -4349,12 +4339,7 @@ class SambungKataApp:
             categories.sort(key=lambda c: (len(c.get("suffix", "")), c.get("suffix", "").upper()))
 
         self.config["custom_trap_endings"] = categories
-        save_config(self.config)
-        self.solver.set_custom_endings(categories)
-        self._render_custom_category_items()
-        self._render_custom_category_quick_bar()
-        if hasattr(self, "last_detected_word") and self.last_detected_word:
-            self.update_results(self.last_detected_word)
+        self._sync_tags_and_solver(skip_ui_rebuild=False)
 
         mode_txt = "terpanjang" if reverse else "paling sedikit"
         self.show_toast(f"📏 Kategori akhiran diurutkan huruf {mode_txt}")
@@ -4393,12 +4378,7 @@ class SambungKataApp:
             {"suffix": "NGK", "name": "Akhiran NGK", "enabled": True, "color": "#f5c2e7"}
         ]
         self.config["custom_trap_endings"] = categories
-        save_config(self.config)
-        self.solver.set_custom_endings(categories)
-        self._render_custom_category_items()
-        self._render_custom_category_quick_bar()
-        if hasattr(self, "last_detected_word") and self.last_detected_word:
-            self.update_results(self.last_detected_word)
+        self._sync_tags_and_solver(skip_ui_rebuild=False)
         self.show_toast("↩️ Kategori akhiran direset ke default (NS & NGK)")
 
     def open_edit_custom_category_dialog(self, idx_or_cat):
@@ -6598,10 +6578,42 @@ class SambungKataApp:
 
             menu.tk_popup(event.x_root, event.y_root)
 
+    def save_config_debounced(self, delay_ms=400):
+        """Menjadwalkan penyimpanan konfigurasi ke disk dengan debounce untuk menghindari disk I/O lag"""
+        if hasattr(self, "_save_config_timer") and self._save_config_timer:
+            try:
+                self.root.after_cancel(self._save_config_timer)
+            except Exception:
+                pass
+        self._save_config_timer = self.root.after(delay_ms, self.flush_config_save)
+
+    def flush_config_save(self):
+        """Menyimpan konfigurasi secara langsung ke disk dan mereset timer"""
+        self._save_config_timer = None
+        save_config(self.config)
+
+    def _sync_tags_and_solver(self, skip_ui_rebuild=False):
+        """Menyinkronkan konfigurasi tag ke solver dan menandai dirty flag / render UI secara efisien"""
+        categories = self.config.get("custom_trap_endings", [])
+        self.save_config_debounced()
+        self.solver.set_custom_endings(categories)
+
+        is_live_active = hasattr(self, "top_tab_strip") and getattr(self.top_tab_strip, "active_tab", "") == "live"
+        if is_live_active:
+            self._render_custom_category_quick_bar()
+            if hasattr(self, "last_detected_word") and self.last_detected_word:
+                self.update_results(self.last_detected_word)
+        else:
+            self._dirty_quick_bar = True
+            self._dirty_live_results = True
+
+        if not skip_ui_rebuild:
+            self._render_custom_category_items()
+
     def on_close(self):
         try:
             self.config["window_geometry"] = self.root.geometry()
-            save_config(self.config)
+            self.flush_config_save()
         except Exception:
             pass
         try:
