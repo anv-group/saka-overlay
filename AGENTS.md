@@ -23,7 +23,12 @@
 
 ```
 sambung-kata/
-├── app_gui.py           # GUI Utama (Tkinter Dark Theme, Always-on-top, Hotkey F2)
+├── app_gui.py           # GUI Utama (Tkinter Tactical Cyber Theme, Always-on-top, Hotkey F2)
+├── ui_theme.py          # Palet Warna Tactical Cyber Bamboo & PIL Vector Icon Generator
+├── ui_components.py     # Komponen Modular (TopTabStrip, SubTabStrip, MiniTickerBar, CyberSwitch)
+├── tab_views.py         # Kontainer Tampilan 4 Tab (TAGS, KAMUS, SYSTEM)
+├── docs/
+│   └── REDESIGN_UI_SPEC.md # Spesifikasi Komprehensif Redesign UI
 ├── main.py              # Entry point GUI (menjalankan app_gui.py)
 ├── main_cli.py          # Entry point Terminal / Headless mode
 ├── ocr_engine.py        # Core Vision & OCR: Dual-Engine (Template Matching + RapidOCR)
