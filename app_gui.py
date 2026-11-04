@@ -27,6 +27,7 @@ from region_selector import RegionSelector
 from updater import GitUpdater
 from gameplay_indexer import GameplayIndexer
 from extract_gameplay_recording import extract_gameplay_events
+from ui_theme import THEME, render_vector_icon
 
 class SambungKataApp:
     def __init__(self, root):
@@ -2571,49 +2572,53 @@ class SambungKataApp:
         self.root.unbind_all("<Button-5>")
 
     def _alloc_card_slot(self):
-        card = tk.Frame(self.scrollable_frame, bg="#1e1e2e", padx=6, pady=2, relief=tk.FLAT)
-        lbl_kata = tk.Label(card, text="", font=("Segoe UI", 10, "bold"), fg="#cdd6f4", bg="#1e1e2e")
-        lbl_kata.pack(side=tk.LEFT, padx=3)
-
-        btn_del = tk.Button(
+        card = tk.Frame(self.scrollable_frame, bg=THEME["bg_card"], padx=6, pady=2, relief=tk.FLAT, highlightthickness=1, highlightbackground=THEME["border"])
+        
+        # Bintang Whitelist di sebelah KIRI kartu
+        btn_star = tk.Button(
             card,
-            text="❌",
-            font=("Segoe UI", 8),
-            bg="#1e1e2e",
-            fg="#f38ba8",
-            activebackground="#45475a",
-            activeforeground="#f38ba8",
+            text="☆",
+            font=("Segoe UI", 9),
+            bg=THEME["bg_card"],
+            fg=THEME["text_muted"],
+            activebackground=THEME["bg_hover"],
+            activeforeground=THEME["warning"],
             relief=tk.FLAT,
             bd=0,
             padx=3,
             pady=0,
             cursor="hand2"
         )
-        btn_del.pack(side=tk.RIGHT, padx=(2, 0))
+        btn_star.pack(side=tk.LEFT, padx=(0, 4))
 
-        btn_star = tk.Button(
+        lbl_kata = tk.Label(card, text="", font=("Segoe UI", 10, "bold"), fg=THEME["text_primary"], bg=THEME["bg_card"])
+        lbl_kata.pack(side=tk.LEFT, padx=2)
+
+        # Tombol Silang / Blocklist di sebelah KANAN kartu
+        btn_del = tk.Button(
             card,
-            text="☆",
-            font=("Segoe UI", 8),
-            bg="#1e1e2e",
-            fg="#6c7086",
-            activebackground="#45475a",
-            activeforeground="#f9e2af",
+            text="✕",
+            font=("Segoe UI", 8, "bold"),
+            bg=THEME["bg_card"],
+            fg=THEME["text_muted"],
+            activebackground=THEME["danger_bg"],
+            activeforeground=THEME["danger"],
             relief=tk.FLAT,
             bd=0,
-            padx=2,
+            padx=4,
             pady=0,
             cursor="hand2"
         )
-        btn_star.pack(side=tk.RIGHT, padx=(2, 1))
+        btn_del.pack(side=tk.RIGHT, padx=(2, 0))
 
+        # Badge Kategori (Akhiran TI, Jebakan X, dll) di sebelah kiri tombol Blocklist
         lbl_badge = tk.Label(
             card,
             text="",
             font=("Segoe UI", 8, "bold"),
-            fg="#11111b",
-            bg="#a6e3a1",
-            padx=5,
+            fg=THEME["text_dark"],
+            bg=THEME["primary"],
+            padx=6,
             pady=0
         )
         lbl_badge.pack(side=tk.RIGHT, padx=3)
@@ -2647,37 +2652,29 @@ class SambungKataApp:
             sisa = kata_upper
 
         if tipe == "CUSTOM_TRAP":
-            card_bg = "#313244"
-            badge_bg = item.get("color", "#cba6f7")
-            badge_fg = "#11111b"
-            b_name = item.get("badge_name") or f"AKHIRAN {item.get('suffix', '')}"
-            badge_text = f"🔥 {b_name}"
+            card_bg = THEME["bg_card"]
+            badge_bg = item.get("color", THEME["primary"])
+            badge_fg = THEME["text_dark"]
+            b_name = item.get("badge_name") or f"Akhiran {item.get('suffix', '').upper()}"
+            badge_text = b_name
         elif tipe == "JEBAKAN_X":
-            card_bg = "#45475a"
-            badge_bg = "#f38ba8"
-            badge_fg = "#11111b"
-            badge_text = "💥 JEBAKAN X"
+            card_bg = THEME["bg_card"]
+            badge_bg = THEME["danger"]
+            badge_fg = THEME["text_dark"]
+            badge_text = "Jebakan X"
         elif tipe == "JEBAKAN_SULIT":
-            card_bg = "#313244"
+            card_bg = THEME["bg_card"]
             badge_bg = "#fab387"
-            badge_fg = "#11111b"
+            badge_fg = THEME["text_dark"]
             clean_desc = deskripsi.replace(" (Sulit)", "").replace("(Sulit)", "").strip()
-            badge_text = f"⚡ {clean_desc.upper()}"
+            badge_text = clean_desc.title()
         else:
-            card_bg = "#1e1e2e"
-            badge_bg = "#a6e3a1"
-            badge_fg = "#11111b"
-            badge_text = "🌿 SANTAI" if deskripsi == "Kata Santai" else "🛡️ NORMAL"
-
-        card = slot["frame"]
-        lbl_kata = slot["lbl_kata"]
-        btn_del = slot["btn_del"]
-        btn_star = slot.get("btn_star")
-        lbl_badge = slot["lbl_badge"]
+            card_bg = THEME["bg_card"]
+            badge_bg = THEME["santai"] if deskripsi == "Kata Santai" else THEME["primary"]
+            badge_fg = THEME["text_dark"]
+            badge_text = "Santai" if deskripsi == "Kata Santai" else "Normal"
 
         is_wl = item.get("is_whitelisted", False) or self.solver.is_whitelisted(kata)
-        if is_wl:
-            badge_text = "⭐ " + badge_text
 
         card = slot["frame"]
         lbl_kata = slot["lbl_kata"]
@@ -2685,7 +2682,7 @@ class SambungKataApp:
         btn_star = slot.get("btn_star")
         lbl_badge = slot["lbl_badge"]
 
-        # 1. Update background warna kartu jika berbeda
+        # 1. Update background kartu jika berbeda
         if slot.get("bg") != card_bg:
             card.config(bg=card_bg)
             lbl_kata.config(bg=card_bg)
@@ -2707,33 +2704,33 @@ class SambungKataApp:
             lbl_badge.bind("<Button-1>", handler)
 
         # 3. Update badge teks & warna
-        if (slot.get("badge_text") != badge_text or 
-            slot.get("badge_bg") != badge_bg or 
+        if (slot.get("badge_text") != badge_text or
+            slot.get("badge_bg") != badge_bg or
             slot.get("badge_fg") != badge_fg):
             lbl_badge.config(text=badge_text, bg=badge_bg, fg=badge_fg)
             slot["badge_text"] = badge_text
             slot["badge_bg"] = badge_bg
             slot["badge_fg"] = badge_fg
 
-        # 4. Update status whitelist bintang
+        # 4. Update status whitelist bintang di kiri
         if btn_star and slot.get("is_wl") != is_wl:
             if is_wl:
                 btn_star.config(
-                    text="⭐",
-                    fg="#f9e2af",
+                    text="★",
+                    fg=THEME["warning"],
                     command=lambda k=kata: self.on_toggle_whitelist(k, False)
                 )
             else:
                 btn_star.config(
                     text="☆",
-                    fg="#6c7086",
+                    fg=THEME["text_muted"],
                     command=lambda k=kata: self.on_toggle_whitelist(k, True)
                 )
             slot["is_wl"] = is_wl
 
-        # 5. Pack hanya jika belum ter-pack untuk menghemat layout engine
+        # 5. Pack hanya jika belum ter-pack
         if not slot.get("packed", False):
-            card.pack(fill=tk.X, padx=3, pady=2)
+            card.pack(fill=tk.X, padx=2, pady=1)
             slot["packed"] = True
 
     def on_toggle_whitelist(self, kata, enable=True):
