@@ -122,8 +122,8 @@ Disusun dalam 4 kartu modular *cyber dashboard*:
    - Saklar toggle modern untuk `Always-on-Top` dan `Mode Development` (Tombol `⚡` restart).
 4. **Kartu Informasi Sistem & Pembaruan:**
    - Data Git Aktual: Nama Branch (`redesign-ui`) & Short Hash Commit (`8c469b7`).
-   - Mode Auto-Update: Pilihan interaktif `[ ● Tanya Dulu (Prompt) | ○ Otomatis | ○ Nonaktif ]`.
-   - Branch Selector: Pilihan branch target GitHub (`dev`, `main`, dll.).
+   - Mode Auto-Update: Dropdown ramping bergaya cyber `[ ▼ Tanya Dulu (Prompt) ]` (opsi: *Tanya Dulu (Prompt)*, *Otomatis (Auto)*, *Nonaktif (Disabled)*) agar hemat ruang dan tidak bloated.
+   - Branch Selector: Dropdown pilihan branch target GitHub (`dev`, `main`, dll.).
    - Statistik Kosakata Nyata: Total kosakata aktif (147,870+), jumlah whitelist terdaftar, jumlah blocklist, dan total tag kustom.
    - Tombol `[ 🔄 Periksa Pembaruan Sekarang ]` dan `[ 📁 Buka Folder App ]`.
    - Dialog Pembaruan Cyber Modal: Menampilkan jumlah commit baru dan ringkasan changelog sebelum eksekusi pull.

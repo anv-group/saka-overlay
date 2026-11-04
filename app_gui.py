@@ -28,6 +28,8 @@ from updater import GitUpdater
 from gameplay_indexer import GameplayIndexer
 from extract_gameplay_recording import extract_gameplay_events
 from ui_theme import THEME, render_vector_icon
+from ui_components import TopTabStrip, MiniTickerBar
+from tab_views import TagsTabView, DictionaryTabView, SystemTabView
 
 class SambungKataApp:
     def __init__(self, root):
@@ -305,7 +307,7 @@ class SambungKataApp:
 
     def _build_ui(self):
         # 0. Custom Frameless Titlebar (Dark Theme, Judul Penuh & Hanya Tombol Close ✕)
-        self.custom_title_bar = tk.Frame(self.root, bg="#11111b", height=30)
+        self.custom_title_bar = tk.Frame(self.root, bg=THEME["bg_root"], height=30)
         self.custom_title_bar.pack(fill=tk.X, side=tk.TOP)
 
         # Tombol Close '✕' dipack PERTAMA di sisi kanan agar selalu terjamin di dalam window dan mudah diklik
@@ -407,11 +409,11 @@ class SambungKataApp:
             self.lbl_logo.bind("<B1-Motion>", _on_title_drag)
 
         # Garis pemisah 1px di bawah titlebar
-        sep_title = tk.Frame(self.root, bg="#313244", height=1)
+        sep_title = tk.Frame(self.root, bg=THEME["border"], height=1)
         sep_title.pack(fill=tk.X, side=tk.TOP)
 
         # Resize grip di sisi kiri (karena window di kanan layar, resize paling nyaman dari sisi kiri)
-        self.left_grip = tk.Frame(self.root, bg="#313244", width=4, cursor="size_we")
+        self.left_grip = tk.Frame(self.root, bg=THEME["border"], width=4, cursor="size_we")
         self.left_grip.place(x=0, y=0, relheight=1.0, width=4)
 
         # Unified Smooth Resize State & 60fps Throttling
@@ -505,17 +507,38 @@ class SambungKataApp:
         self.left_grip.bind("<B1-Motion>", _on_left_grip)
         self.left_grip.bind("<ButtonRelease-1>", _stop_resize)
 
-        # 1. Baris Atas Compact: Tombol Aksi Utama (Mulai, Tambah Kata, Restart, Mode Santai, Settings ⚙️)
-        top_bar = tk.Frame(self.root, bg="#181825", padx=8, pady=4)
-        top_bar.pack(fill=tk.X)
+        # 1. TOP TAB STRIP (LIVE, TAGS, KAMUS, SYSTEM) & MINI TICKER BAR
+        tab_defs = [
+            ("live", "LIVE", "zap"),
+            ("tags", "TAGS", "tag"),
+            ("kamus", "KAMUS", "book"),
+            ("system", "SYSTEM", "settings")
+        ]
+        self.top_tab_strip = TopTabStrip(self.root, tab_defs, on_tab_changed=self._on_main_tab_changed)
+        self.top_tab_strip.pack(fill=tk.X, side=tk.TOP)
+
+        # Mini Ticker Bar (Hanya tampil di tab non-LIVE)
+        self.mini_ticker = MiniTickerBar(self.root, on_click=lambda: self.top_tab_strip.select_tab("live"))
+
+        # Main Tab Host Containers
+        self.tab_live_container = tk.Frame(self.root, bg=THEME["bg_root"])
+        self.tab_tags_container = TagsTabView(self.root, self)
+        self.tab_kamus_container = DictionaryTabView(self.root, self)
+        self.tab_system_container = SystemTabView(self.root, self)
+
+        self.tab_live_container.pack(fill=tk.BOTH, expand=True)
+
+        # 2. TAB LIVE: Baris Atas Compact (Mulai, Mode Pill, Sort Mode, Settings)
+        top_bar = tk.Frame(self.tab_live_container, bg=THEME["bg_card"], padx=8, pady=4, highlightthickness=1, highlightbackground=THEME["border"])
+        top_bar.pack(fill=tk.X, padx=8, pady=(4, 2))
 
         self.btn_toggle = tk.Button(
             top_bar,
             text="▶️ Mulai",
             font=("Segoe UI", 9, "bold"),
-            bg="#a6e3a1",
-            fg="#11111b",
-            activebackground="#94e2d5",
+            bg=THEME["primary"],
+            fg=THEME["text_dark"],
+            activebackground=THEME["accent_neon"],
             relief=tk.FLAT,
             padx=10,
             pady=3,
@@ -528,9 +551,9 @@ class SambungKataApp:
             top_bar,
             text="➕ Kata",
             font=("Segoe UI", 9, "bold"),
-            bg="#89b4fa",
-            fg="#11111b",
-            activebackground="#b4befe",
+            bg=THEME["bg_hover"],
+            fg=THEME["text_primary"],
+            activebackground=THEME["border_focus"],
             relief=tk.FLAT,
             padx=8,
             pady=3,
@@ -540,7 +563,7 @@ class SambungKataApp:
         self.btn_add_word.pack(side=tk.LEFT, padx=3)
         self.btn_add_word.bind("<Button-3>", lambda e: self.open_dictionary_browser_window())
 
-        # Mode Permainan: NORMAL vs SANTAI vs BRUTAL (Model compact, 1-klik cycle, klik-kanan menu)
+        # Mode Permainan: NORMAL vs SANTAI vs BRUTAL
         cur_mode_val = self.config.get("game_mode", "santai" if self.config.get("mode_santai", False) else "default")
         if cur_mode_val == "normal":
             cur_mode_val = "default"
@@ -562,7 +585,7 @@ class SambungKataApp:
         self.chk_santai = self.btn_game_mode
         self._update_mode_santai_button()
 
-        # Mode Sortir Button: DEFAULT vs URUT TAG (Langsung di UI Utama)
+        # Mode Sortir Button: DEFAULT vs URUT TAG
         self.btn_sort_mode = tk.Button(
             top_bar,
             text="",
@@ -576,15 +599,15 @@ class SambungKataApp:
         self.btn_sort_mode.pack(side=tk.LEFT, padx=(2, 2))
         self._update_sort_mode_button()
 
-        # Settings Menu (⚙️) di ujung kanan
+        # Settings Menu di ujung kanan
         self.btn_settings = tk.Button(
             top_bar,
             text="⚙️",
             font=("Segoe UI", 9),
-            bg="#181825",
-            fg="#a6adc8",
-            activebackground="#313244",
-            activeforeground="#cdd6f4",
+            bg=THEME["bg_card"],
+            fg=THEME["text_secondary"],
+            activebackground=THEME["bg_hover"],
+            activeforeground=THEME["text_primary"],
             relief=tk.FLAT,
             padx=5,
             pady=2,
@@ -593,17 +616,17 @@ class SambungKataApp:
         )
         self.btn_settings.pack(side=tk.RIGHT, padx=(0, 2))
 
-        # Status label disimpan untuk kompatibilitas tanpa memakan ruang UI (karena sudah ada tombol Mulai/Stop)
         self.status_lbl = tk.Label(self.root)
 
-        # 2. Baris Awalan OCR (Fixed Width di Kiri) & Pencarian Manual (Realtime + Clear Permanen di Kanan)
-        search_prefix_row = tk.Frame(self.root, bg="#1e1e2e", padx=8, pady=3)
+        # 3. TAB LIVE: Baris Awalan OCR & Manual Search
+        search_prefix_row = tk.Frame(self.tab_live_container, bg=THEME["bg_root"], padx=8, pady=3)
         search_prefix_row.pack(fill=tk.X)
 
-        # Box Hasil Deteksi Awalan OCR (Teks Besar & Lebar Terkunci agar tidak menggeser elemen lain)
         self.prefix_badge_frame = tk.Frame(
             search_prefix_row,
-            bg="#181825",
+            bg=THEME["bg_card"],
+            highlightthickness=1,
+            highlightbackground=THEME["border"],
             width=70,
             height=32,
             relief=tk.FLAT
@@ -615,8 +638,8 @@ class SambungKataApp:
             self.prefix_badge_frame,
             text="-",
             font=("Segoe UI", 15, "bold"),
-            fg="#f9e2af",
-            bg="#181825"
+            fg=THEME["primary"],
+            bg=THEME["bg_card"]
         )
         self.lbl_prefix_display.pack(fill=tk.BOTH, expand=True)
 
@@ -624,30 +647,27 @@ class SambungKataApp:
             self.prefix_badge_frame,
             text="",
             font=("Segoe UI", 8),
-            fg="#a6adc8",
-            bg="#181825"
+            fg=THEME["text_secondary"],
+            bg=THEME["bg_card"]
         )
 
-        # Alias kompatibilitas
         self.lbl_detected = self.lbl_prefix_display
         self.lbl_target = self.lbl_prefix_display
 
-        # Kontainer Input Pencarian Manual (Mengisi sisa ruang ke kanan)
-        search_box = tk.Frame(search_prefix_row, bg="#313244", padx=6, pady=2)
+        search_box = tk.Frame(search_prefix_row, bg=THEME["bg_card"], highlightthickness=1, highlightbackground=THEME["border"], padx=6, pady=2)
         search_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        lbl_icon = tk.Label(search_box, text="🔍", font=("Segoe UI", 9), fg="#a6adc8", bg="#313244")
+        lbl_icon = tk.Label(search_box, text="🔍", font=("Segoe UI", 9), fg=THEME["text_muted"], bg=THEME["bg_card"])
         lbl_icon.pack(side=tk.LEFT, padx=(0, 4))
 
-        # Tombol Clear '✕' dipack ke RIGHT terlebih dahulu agar menempel permanen di sisi kanan
         self.btn_clear_search = tk.Button(
             search_box,
             text="✕",
             font=("Segoe UI", 9, "bold"),
-            bg="#313244",
-            fg="#f38ba8",
-            activebackground="#45475a",
-            activeforeground="#f38ba8",
+            bg=THEME["bg_card"],
+            fg=THEME["danger"],
+            activebackground=THEME["bg_hover"],
+            activeforeground=THEME["danger"],
             relief=tk.FLAT,
             bd=0,
             padx=4,
@@ -662,19 +682,18 @@ class SambungKataApp:
             search_box,
             textvariable=self.search_var,
             font=("Segoe UI", 11, "bold"),
-            bg="#313244",
-            fg="#cdd6f4",
-            insertbackground="#cdd6f4",
+            bg=THEME["bg_card"],
+            fg=THEME["text_primary"],
+            insertbackground=THEME["primary"],
             relief=tk.FLAT
         )
         self.entry_manual.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.search_var.trace_add("write", self._on_search_text_changed)
 
-        # 3. Baris Horizontal Quick Toggle Kategori Custom
-        self.custom_cats_bar = tk.Frame(self.root, bg="#1e1e2e")
+        # 4. TAB LIVE: Baris Horizontal Quick Toggle Kategori Custom
+        self.custom_cats_bar = tk.Frame(self.tab_live_container, bg=THEME["bg_root"])
         self.custom_cats_bar.pack(fill=tk.X, padx=8, pady=(1, 2))
 
-        # Dynamic Auto-Reflow saat ukuran window berubah agar tag tidak pernah off-screen
         self._cats_bar_last_w = 0
         self._cats_bar_timer = None
         def _on_cats_bar_resize(event):
@@ -689,28 +708,28 @@ class SambungKataApp:
         self.custom_cats_bar.bind("<Configure>", _on_cats_bar_resize)
         self._render_custom_category_quick_bar()
 
-        # 4. Toast Frame & Warning Keyakinan Rendah
-        self.warning_frame = tk.Frame(self.root, bg="#313244", padx=6, pady=2)
+        # 5. TAB LIVE: Warning & Toast Frame
+        self.warning_frame = tk.Frame(self.tab_live_container, bg=THEME["bg_card"], padx=6, pady=2)
         self.lbl_warning_msg = tk.Label(
             self.warning_frame,
             text="⚠️ Keyakinan Rendah!",
             font=("Segoe UI", 8, "bold"),
-            fg="#fab387",
-            bg="#313244"
+            fg=THEME["warning"],
+            bg=THEME["bg_card"]
         )
         self.lbl_warning_msg.pack(side=tk.LEFT)
-        self.alt_container = tk.Frame(self.warning_frame, bg="#313244")
+        self.alt_container = tk.Frame(self.warning_frame, bg=THEME["bg_card"])
         self.alt_container.pack(side=tk.LEFT, padx=4)
 
-        self.toast_frame = tk.Frame(self.root, bg="#1e1e2e")
+        self.toast_frame = tk.Frame(self.tab_live_container, bg=THEME["bg_root"])
         self.toast_frame.pack(fill=tk.X, padx=8, pady=1)
 
         self.lbl_toast = tk.Label(
             self.toast_frame,
             text="",
             font=("Segoe UI", 8, "italic"),
-            fg="#a6e3a1",
-            bg="#1e1e2e"
+            fg=THEME["primary"],
+            bg=THEME["bg_root"]
         )
         self.lbl_toast.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
@@ -718,10 +737,10 @@ class SambungKataApp:
             self.toast_frame,
             text="↩️ Batalkan",
             font=("Segoe UI", 8, "bold"),
-            bg="#fab387",
-            fg="#11111b",
-            activebackground="#f9e2af",
-            activeforeground="#11111b",
+            bg=THEME["bg_card"],
+            fg=THEME["warning"],
+            activebackground=THEME["bg_hover"],
+            activeforeground=THEME["warning"],
             relief=tk.FLAT,
             padx=6,
             pady=0,
@@ -729,50 +748,24 @@ class SambungKataApp:
         )
         self._toast_timer = None
 
-        # 5. Daftar Rekomendasi Jawaban (Memenuhi sisa seluruh window)
+        # 6. TAB LIVE: Daftar Rekomendasi Jawaban
         is_santai_init = self.config.get("mode_santai", False)
         cur_mode_init = self.config.get("game_mode", "santai" if is_santai_init else "default")
         if cur_mode_init == "normal":
             cur_mode_init = "default"
-        if cur_mode_init == "brutal":
-            recom_title = " Rekomendasi Kata (🔥 BRUTAL) "
-            recom_fg = "#f38ba8"
-        elif cur_mode_init == "santai":
-            recom_title = " Rekomendasi Kata (tanpa X, Q, F) "
-            recom_fg = "#a6e3a1"
-        else:
-            recom_title = " Rekomendasi Kata (DEFAULT) "
-            recom_fg = "#f38ba8"
-        # Resize grip di sudut kanan bawah & tepi bawah window
-        self.grip_bar = tk.Frame(self.root, bg="#11111b", height=16, cursor="size_ns")
-        self.grip_bar.pack(fill=tk.X, side=tk.BOTTOM)
-
-        lbl_grip = tk.Label(
-            self.grip_bar,
-            text="⋰",
-            font=("Segoe UI", 9, "bold"),
-            fg="#89b4fa",
-            bg="#11111b",
-            cursor="size_nw_se"
-        )
-        lbl_grip.pack(side=tk.RIGHT, padx=6)
-
-        lbl_grip.bind("<ButtonPress-1>", _start_bottom_resize)
-        lbl_grip.bind("<B1-Motion>", _on_bottom_resize)
-        lbl_grip.bind("<ButtonRelease-1>", _stop_resize)
-        self.grip_bar.bind("<ButtonPress-1>", _start_bottom_resize)
-        self.grip_bar.bind("<B1-Motion>", _on_bottom_resize)
-        self.grip_bar.bind("<ButtonRelease-1>", _stop_resize)
-        self.root.bind("<ButtonRelease-1>", _stop_resize)
+        recom_title = f" Rekomendasi Kata ({cur_mode_init.upper()}) "
+        recom_fg = THEME["danger"] if cur_mode_init == "brutal" else THEME["primary"]
 
         self.recom_frame = tk.LabelFrame(
-            self.root,
+            self.tab_live_container,
             text=recom_title,
             font=("Segoe UI", 9, "bold"),
             fg=recom_fg,
-            bg="#1e1e2e",
+            bg=THEME["bg_root"],
             padx=4,
-            pady=4
+            pady=4,
+            highlightthickness=1,
+            highlightbackground=THEME["border"]
         )
         self.recom_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=(2, 0))
 
@@ -998,6 +991,35 @@ class SambungKataApp:
                     if slot.get("packed", False):
                         slot["frame"].pack_forget()
                         slot["packed"] = False
+
+    def _on_main_tab_changed(self, tab_id):
+        """Handler perpindahan 4 Tab Utama: LIVE, TAGS, KAMUS, SYSTEM"""
+        # Sembunyikan semua kontainer tab
+        self.tab_live_container.pack_forget()
+        self.tab_tags_container.pack_forget()
+        self.tab_kamus_container.pack_forget()
+        self.tab_system_container.pack_forget()
+
+        if tab_id == "live":
+            # Di tab LIVE, mini ticker bar disembunyikan agar ruang kartu rekomendasi maksimal
+            if hasattr(self, "mini_ticker") and self.mini_ticker.winfo_exists():
+                self.mini_ticker.pack_forget()
+            self.tab_live_container.pack(fill=tk.BOTH, expand=True)
+            self._render_custom_category_quick_bar()
+        else:
+            # Di tab non-LIVE (TAGS, KAMUS, SYSTEM), mini ticker tampil ramping di atas
+            if hasattr(self, "mini_ticker") and self.mini_ticker.winfo_exists():
+                self.mini_ticker.pack(fill=tk.X, padx=8, pady=(2, 0), after=self.top_tab_strip)
+            
+            if tab_id == "tags":
+                self.tab_tags_container.pack(fill=tk.BOTH, expand=True)
+            elif tab_id == "kamus":
+                self.tab_kamus_container.pack(fill=tk.BOTH, expand=True)
+                # Auto-focus ke input tab kamus
+                sub = self.tab_kamus_container.sub_strip.active_tab
+                self.tab_kamus_container._on_sub_tab_changed(sub)
+            elif tab_id == "system":
+                self.tab_system_container.pack(fill=tk.BOTH, expand=True)
 
     def clear_manual_search(self):
         """Membersihkan kotak pencarian manual dan kembali ke OCR"""
@@ -2505,6 +2527,13 @@ class SambungKataApp:
             return
 
         self.lbl_empty_results.pack_forget()
+
+        # Update mini ticker bar untuk tab non-LIVE
+        if hasattr(self, "mini_ticker") and self.mini_ticker.winfo_exists():
+            top_w = results[0]["kata"] if results else ""
+            cur_gm = self.config.get("game_mode", "default")
+            m_col = THEME["danger"] if cur_gm == "brutal" else (THEME["santai"] if cur_gm == "santai" else THEME["primary"])
+            self.mini_ticker.update_ticker(prefix_clean, top_w, cur_gm, m_col)
 
         # Tampilkan kata menggunakan widget pool berkinerja tinggi dengan dirty-checking
         prefix_upper = prefix_clean.upper()

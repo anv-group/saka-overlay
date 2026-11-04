@@ -414,7 +414,7 @@ class DictionaryTabView(tk.Frame):
         w = self.wl_add_var.get().strip().lower()
         if not w:
             return
-        if self.app.solver.add_to_whitelist(w):
+        if self.app.solver.whitelist_word(w):
             self.app.show_toast(f"⭐ '{w.upper()}' masuk Whitelist!")
             self.wl_add_var.set("")
             self._refresh_whitelist()
@@ -428,7 +428,7 @@ class DictionaryTabView(tk.Frame):
             w.destroy()
 
         query = self.wl_search_var.get().strip().lower()
-        wl_words = sorted(list(getattr(self.app.solver, "whitelist", set())))
+        wl_words = sorted(list(self.app.solver.get_whitelisted_words()))
 
         for word in wl_words:
             if query and query not in word:
@@ -446,7 +446,7 @@ class DictionaryTabView(tk.Frame):
             btn_del.pack(side=tk.RIGHT)
 
     def _remove_whitelist(self, kata):
-        self.app.solver.remove_from_whitelist(kata)
+        self.app.solver.unwhitelist_word(kata)
         self.app.show_toast(f"Dicabut dari Whitelist: {kata.upper()}")
         self._refresh_whitelist()
         if hasattr(self.app, "last_detected_word") and self.app.last_detected_word:
@@ -493,7 +493,7 @@ class DictionaryTabView(tk.Frame):
         w = self.bl_add_var.get().strip().lower()
         if not w:
             return
-        if self.app.solver.add_to_blacklist(w):
+        if self.app.solver.blacklist_word(w):
             self.app.show_toast(f"🚫 '{w.upper()}' masuk Blocklist!")
             self.bl_add_var.set("")
             self._refresh_blocklist()
@@ -507,7 +507,7 @@ class DictionaryTabView(tk.Frame):
             w.destroy()
 
         query = self.bl_search_var.get().strip().lower()
-        bl_words = sorted(list(getattr(self.app.solver, "blacklist", set())))
+        bl_words = sorted(list(self.app.solver.get_blacklisted_words()))
 
         for word in bl_words:
             if query and query not in word:
@@ -525,7 +525,7 @@ class DictionaryTabView(tk.Frame):
             btn_unbl.pack(side=tk.RIGHT)
 
     def _unblock_word(self, kata):
-        self.app.solver.remove_from_blacklist(kata)
+        self.app.solver.unblacklist_word(kata)
         self.app.show_toast(f"Dipulihkan dari Blocklist: {kata.upper()}")
         self._refresh_blocklist()
         if hasattr(self.app, "last_detected_word") and self.app.last_detected_word:
@@ -756,8 +756,8 @@ class SystemTabView(tk.Frame):
 
         # Statistik kosakata nyata
         total_k = len(getattr(self.app.solver, "kamus_lengkap", []))
-        total_wl = len(getattr(self.app.solver, "whitelist", []))
-        total_bl = len(getattr(self.app.solver, "blacklist", []))
+        total_wl = len(self.app.solver.get_whitelisted_words())
+        total_bl = len(self.app.solver.get_blacklisted_words())
         total_tag = len(self.app.config.get("custom_trap_endings", []))
 
         lbl_stat = tk.Label(
