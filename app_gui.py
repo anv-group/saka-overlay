@@ -104,19 +104,61 @@ class SambungKataApp:
         self.root.attributes("-topmost", True)
         self.root.configure(bg=THEME["bg_root"], highlightthickness=1, highlightbackground=THEME["border"], highlightcolor=THEME["border"])
 
-        # Global Dark Option styling for ttk.Combobox & tk.Menu
-        self.root.option_add('*TCombobox*Listbox.background', THEME["bg_card"])
-        self.root.option_add('*TCombobox*Listbox.foreground', THEME["text_primary"])
-        self.root.option_add('*TCombobox*Listbox.selectBackground', THEME["primary"])
-        self.root.option_add('*TCombobox*Listbox.selectForeground', THEME["text_dark"])
-        self.root.option_add('*TCombobox*Listbox.font', ('Segoe UI', 9))
-        self.root.option_add('*Menu.background', THEME["bg_card"])
-        self.root.option_add('*Menu.foreground', THEME["text_primary"])
-        self.root.option_add('*Menu.activeBackground', THEME["primary"])
-        self.root.option_add('*Menu.activeForeground', THEME["text_dark"])
-        self.root.option_add('*Menu.borderWidth', 1)
-        self.root.option_add('*Menu.relief', 'flat')
-        self.root.option_add('*Menu.font', ('Segoe UI', 9))
+        # Setup global ttk style using 'clam' to override Windows Vista native white dropdowns
+        self.style = ttk.Style()
+        try:
+            self.style.theme_use("clam")
+        except Exception:
+            pass
+
+        self.style.configure(
+            "TCombobox",
+            fieldbackground=THEME["bg_input"],
+            background=THEME["bg_card"],
+            foreground=THEME["text_primary"],
+            arrowcolor=THEME["primary"],
+            bordercolor=THEME["border"],
+            darkcolor=THEME["bg_root"],
+            lightcolor=THEME["bg_card"],
+            insertcolor=THEME["primary"]
+        )
+        self.style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", THEME["bg_input"]), ("focus", THEME["bg_input"])],
+            foreground=[("readonly", THEME["text_primary"]), ("focus", THEME["text_primary"])],
+            background=[("readonly", THEME["bg_card"])],
+            arrowcolor=[("readonly", THEME["primary"])],
+            bordercolor=[("focus", THEME["primary"])]
+        )
+        self.style.configure(
+            "Vertical.TScrollbar",
+            background=THEME["bg_card"],
+            troughcolor=THEME["bg_root"],
+            bordercolor=THEME["bg_root"],
+            arrowcolor=THEME["text_muted"]
+        )
+
+        # Global Dark Option styling with priority 100 for Listbox & Menu popdowns
+        self.root.option_add('*Listbox.background', THEME["bg_card"], 100)
+        self.root.option_add('*Listbox.foreground', THEME["text_primary"], 100)
+        self.root.option_add('*Listbox.selectBackground', THEME["primary"], 100)
+        self.root.option_add('*Listbox.selectForeground', THEME["text_dark"], 100)
+        self.root.option_add('*Combobox*Listbox.background', THEME["bg_card"], 100)
+        self.root.option_add('*Combobox*Listbox.foreground', THEME["text_primary"], 100)
+        self.root.option_add('*Combobox*Listbox.selectBackground', THEME["primary"], 100)
+        self.root.option_add('*Combobox*Listbox.selectForeground', THEME["text_dark"], 100)
+        self.root.option_add('*TCombobox*Listbox.background', THEME["bg_card"], 100)
+        self.root.option_add('*TCombobox*Listbox.foreground', THEME["text_primary"], 100)
+        self.root.option_add('*TCombobox*Listbox.selectBackground', THEME["primary"], 100)
+        self.root.option_add('*TCombobox*Listbox.selectForeground', THEME["text_dark"], 100)
+        self.root.option_add('*TCombobox*Listbox.font', ('Segoe UI', 9), 100)
+        self.root.option_add('*Menu.background', THEME["bg_card"], 100)
+        self.root.option_add('*Menu.foreground', THEME["text_primary"], 100)
+        self.root.option_add('*Menu.activeBackground', THEME["primary"], 100)
+        self.root.option_add('*Menu.activeForeground', THEME["text_dark"], 100)
+        self.root.option_add('*Menu.borderWidth', 1, 100)
+        self.root.option_add('*Menu.relief', 'flat', 100)
+        self.root.option_add('*Menu.font', ('Segoe UI', 9), 100)
         self._setup_taskbar_presence()
 
         use_kbbi = self.config.get("use_kbbi", True)
@@ -182,6 +224,14 @@ class SambungKataApp:
         win.overrideredirect(True)
         win.attributes("-topmost", True)
         win.configure(bg=THEME["bg_root"], highlightthickness=1, highlightbackground=THEME["border"])
+        win.option_add('*Listbox.background', THEME["bg_card"], 100)
+        win.option_add('*Listbox.foreground', THEME["text_primary"], 100)
+        win.option_add('*Listbox.selectBackground', THEME["primary"], 100)
+        win.option_add('*Listbox.selectForeground', THEME["text_dark"], 100)
+        win.option_add('*Combobox*Listbox.background', THEME["bg_card"], 100)
+        win.option_add('*Combobox*Listbox.foreground', THEME["text_primary"], 100)
+        win.option_add('*Combobox*Listbox.selectBackground', THEME["primary"], 100)
+        win.option_add('*Combobox*Listbox.selectForeground', THEME["text_dark"], 100)
 
         min_w = min_w or max(340, width - 60)
         min_h = min_h or max(300, height - 80)
@@ -4526,32 +4576,41 @@ class SambungKataApp:
             bg=THEME["bg_card"]
         ).pack(side=tk.LEFT)
 
+        ico_folder = render_vector_icon("folder", size=13, color=THEME["text_primary"])
         btn_folder = tk.Button(
             sub_hdr,
-            text="📂 Buka Folder",
+            text=" Buka Folder",
+            image=ico_folder,
+            compound="left",
             font=("Segoe UI", 8),
             bg=THEME["border"],
             fg=THEME["text_primary"],
             activebackground=THEME["bg_hover"],
             relief=tk.FLAT,
-            padx=6,
-            pady=1,
+            bd=0,
+            padx=8,
+            pady=2,
             cursor="hand2",
             command=self._koreksi_open_folder
         )
+        btn_folder.image = ico_folder
         btn_folder.pack(side=tk.RIGHT)
 
         # Sumber Selection Bar (Kurang Tepat vs Tidak Dikenali)
         source_frame = tk.Frame(self.koreksi_win, bg=THEME["bg_card_alt"], padx=10, pady=6)
         source_frame.pack(fill=tk.X)
 
+        ico_src = render_vector_icon("tag", size=13, color=THEME["text_secondary"])
         lbl_sumber = tk.Label(
             source_frame,
-            text="📁 Sumber:",
-            font=("Segoe UI", 9, "bold"),
-            fg=THEME["text_primary"],
+            text=" Sumber:",
+            image=ico_src,
+            compound="left",
+            font=("Segoe UI", 8, "bold"),
+            fg=THEME["text_secondary"],
             bg=THEME["bg_card_alt"]
         )
+        lbl_sumber.image = ico_src
         lbl_sumber.pack(side=tk.LEFT, padx=(0, 4))
 
         count_kt, count_td = self._get_uncorrected_counts()
@@ -4563,9 +4622,12 @@ class SambungKataApp:
         has_uncorrected = (count_kt > 0 or count_td > 0)
         self._koreksi_only_uncorrected = tk.BooleanVar(value=has_uncorrected)
 
+        ico_flag = render_vector_icon("flag", size=12, color=THEME["danger"])
         self.rb_kt = tk.Radiobutton(
             source_frame,
-            text=f"🚩 Kurang Tepat ({count_kt})",
+            text=f" Kurang Tepat ({count_kt})",
+            image=ico_flag,
+            compound="left",
             variable=self._koreksi_source,
             value="kurang_tepat",
             font=("Segoe UI", 8, "bold"),
@@ -4573,14 +4635,18 @@ class SambungKataApp:
             bg=THEME["bg_card_alt"],
             selectcolor=THEME["border"],
             activebackground=THEME["bg_card_alt"],
-            activeforeground="#eba0ac",
+            activeforeground=THEME["danger"],
             command=self._koreksi_reload_items
         )
+        self.rb_kt.image = ico_flag
         self.rb_kt.pack(side=tk.LEFT, padx=2)
 
+        ico_zap = render_vector_icon("zap", size=12, color=THEME["warning"])
         self.rb_td = tk.Radiobutton(
             source_frame,
-            text=f"⚠️ Tidak Dikenali ({count_td})",
+            text=f" Tidak Dikenali ({count_td})",
+            image=ico_zap,
+            compound="left",
             variable=self._koreksi_source,
             value="tidak_dikenali",
             font=("Segoe UI", 8, "bold"),
@@ -4591,6 +4657,7 @@ class SambungKataApp:
             activeforeground=THEME["warning"],
             command=self._koreksi_reload_items
         )
+        self.rb_td.image = ico_zap
         self.rb_td.pack(side=tk.LEFT, padx=2)
 
         self.rb_all = tk.Radiobutton(
@@ -4686,13 +4753,17 @@ class SambungKataApp:
         input_frame = tk.Frame(self.koreksi_win, bg=THEME["border"], padx=12, pady=8)
         input_frame.pack(fill=tk.X, padx=12, pady=6)
 
+        ico_edit = render_vector_icon("edit", size=13, color=THEME["warning"])
         lbl_input_prompt = tk.Label(
             input_frame,
-            text="✏️ Awalan yang Seharusnya (Benar):",
-            font=("Segoe UI", 10, "bold"),
+            text=" Awalan yang Seharusnya (Benar):",
+            image=ico_edit,
+            compound="left",
+            font=("Segoe UI", 9, "bold"),
             fg=THEME["warning"],
             bg=THEME["border"]
         )
+        lbl_input_prompt.image = ico_edit
         lbl_input_prompt.pack(anchor=tk.W)
 
         action_row = tk.Frame(input_frame, bg=THEME["border"])
@@ -4710,65 +4781,85 @@ class SambungKataApp:
         self.entry_koreksi_text.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6), ipady=3)
         self.entry_koreksi_text.bind("<Return>", lambda e: self._koreksi_save_current())
 
+        ico_check = render_vector_icon("check", size=13, color=THEME["bg_root"])
         btn_save = tk.Button(
             action_row,
-            text="💾 Simpan (Enter)",
+            text=" Simpan (Enter)",
+            image=ico_check,
+            compound="left",
             font=("Segoe UI", 9, "bold"),
             bg=THEME["primary"],
             fg=THEME["bg_root"],
             activebackground=THEME["accent_neon"],
             relief=tk.FLAT,
+            bd=0,
             padx=10,
             pady=3,
             cursor="hand2",
             command=self._koreksi_save_current
         )
+        btn_save.image = ico_check
         btn_save.pack(side=tk.RIGHT)
 
         # Navigation & Bottom Bar
         nav_frame = tk.Frame(self.koreksi_win, bg=THEME["bg_card"], padx=12, pady=6)
         nav_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
+        ico_prev = render_vector_icon("arrow_back", size=12, color=THEME["text_primary"])
         self.btn_koreksi_prev = tk.Button(
             nav_frame,
-            text="◀️ Sebelumnya (←)",
+            text=" Sebelumnya (←)",
+            image=ico_prev,
+            compound="left",
             font=("Segoe UI", 8),
             bg=THEME["border"],
             fg=THEME["text_primary"],
             activebackground=THEME["bg_hover"],
             relief=tk.FLAT,
+            bd=0,
             padx=8,
             pady=2,
             command=self._koreksi_prev
         )
+        self.btn_koreksi_prev.image = ico_prev
         self.btn_koreksi_prev.pack(side=tk.LEFT)
 
+        ico_next = render_vector_icon("arrow_forward", size=12, color=THEME["text_primary"])
         self.btn_koreksi_next = tk.Button(
             nav_frame,
-            text="Berikutnya ▶️ (→)",
+            text=" Berikutnya (→)",
+            image=ico_next,
+            compound="left",
             font=("Segoe UI", 8),
             bg=THEME["border"],
             fg=THEME["text_primary"],
             activebackground=THEME["bg_hover"],
             relief=tk.FLAT,
+            bd=0,
             padx=8,
             pady=2,
             command=self._koreksi_next
         )
+        self.btn_koreksi_next.image = ico_next
         self.btn_koreksi_next.pack(side=tk.LEFT, padx=4)
 
+        ico_trash = render_vector_icon("trash", size=13, color=THEME["bg_root"])
         btn_delete = tk.Button(
             nav_frame,
-            text="🗑️ Hapus Sampel (Del)",
-            font=("Segoe UI", 8),
+            text=" Hapus Sampel (Del)",
+            image=ico_trash,
+            compound="left",
+            font=("Segoe UI", 8, "bold"),
             bg=THEME["danger"],
             fg=THEME["bg_root"],
             activebackground=THEME["danger_bg"],
             relief=tk.FLAT,
+            bd=0,
             padx=8,
             pady=2,
             command=self._koreksi_delete_current
         )
+        btn_delete.image = ico_trash
         btn_delete.pack(side=tk.RIGHT)
 
         # Shortcut Del / Delete untuk hapus sampel seketika tanpa konfirmasi
@@ -4842,8 +4933,8 @@ class SambungKataApp:
     def _koreksi_reload_items(self):
         count_kt, count_td = self._get_uncorrected_counts()
         if hasattr(self, "rb_kt") and self.rb_kt.winfo_exists():
-            self.rb_kt.config(text=f"🚩 Kurang Tepat ({count_kt})")
-            self.rb_td.config(text=f"⚠️ Tidak Dikenali ({count_td})")
+            self.rb_kt.config(text=f" Kurang Tepat ({count_kt})")
+            self.rb_td.config(text=f" Tidak Dikenali ({count_td})")
 
         source = getattr(self, "_koreksi_source", None)
         src_val = source.get() if source else "kurang_tepat"
@@ -4937,14 +5028,14 @@ class SambungKataApp:
         except Exception as e:
             self.lbl_koreksi_img.config(image="", text=f"Gagal memuat gambar: {e}", fg="#f38ba8")
 
-        src_badge = "🚩 [F2 Kurang Tepat]" if item["source"] == "kurang_tepat" else "⚠️ [Auto Tidak Dikenali]"
+        src_badge = "[Kurang Tepat]" if item["source"] == "kurang_tepat" else "[Tidak Dikenali]"
         self.lbl_koreksi_fname.config(text=f"{src_badge} {item['filename']}")
         self.lbl_koreksi_detail.config(text=f"Terdeteksi: '{item['label']}' | Keyakinan: {item['conf']}")
 
         if item["is_corrected"]:
-            self.lbl_koreksi_status.config(text=f"✅ Sudah Dikoreksi: '{item['seh']}'", fg="#a6e3a1")
+            self.lbl_koreksi_status.config(text=f"Sudah Dikoreksi: '{item['seh']}'", fg=THEME["primary"])
         else:
-            self.lbl_koreksi_status.config(text="⚠️ Belum Dikoreksi", fg="#fab387")
+            self.lbl_koreksi_status.config(text="Belum Dikoreksi", fg=THEME["warning"])
 
         total = len(self._koreksi_items)
         if total > 1:
@@ -5359,7 +5450,7 @@ class SambungKataApp:
         current_branch = res.get("current_branch", self.updater.get_current_branch())
         is_branch_switch = res.get("is_branch_switch", (current_branch != branch))
 
-        upd_title = "🔀 Beralih Branch" if (has_update and is_branch_switch) else ("🚀 Pembaruan Tersedia" if has_update else "⚙️ Pengaturan & Info Pembaruan")
+        upd_title = "Beralih Branch" if (has_update and is_branch_switch) else ("Pembaruan Tersedia" if has_update else "Pengaturan & Info Pembaruan")
         self.update_win, _ = self._create_clean_toplevel(
             upd_title, 480, 620, min_w=440, min_h=520
         )
@@ -5447,19 +5538,24 @@ class SambungKataApp:
 
         combo_branch.bind("<<ComboboxSelected>>", _on_branch_change_action)
 
+        ico_branch = render_vector_icon("refresh", size=12, color=THEME["bg_root"])
         btn_chk_br = tk.Button(
             branch_box,
-            text="Ganti Branch",
+            text=" Ganti Branch",
+            image=ico_branch,
+            compound="left",
             font=("Segoe UI", 8, "bold"),
-            bg="#89b4fa",
+            bg=THEME["accent_neon"],
             fg=THEME["bg_root"],
             activebackground=THEME["bg_hover"],
             relief=tk.FLAT,
-            padx=6,
-            pady=1,
+            bd=0,
+            padx=8,
+            pady=2,
             cursor="hand2",
             command=_on_branch_change_action
         )
+        btn_chk_br.image = ico_branch
         btn_chk_br.pack(side=tk.RIGHT)
 
         # 3. Status / Info Subtitle
@@ -5519,7 +5615,7 @@ class SambungKataApp:
 
             tk.Label(
                 current_box,
-                text="📌 INFORMASI COMMIT AKTIF",
+                text="INFORMASI COMMIT AKTIF",
                 font=("Segoe UI", 8, "bold"),
                 fg=THEME["accent_neon"],
                 bg=THEME["bg_card"]
@@ -5604,23 +5700,28 @@ class SambungKataApp:
         lbl_update_status.pack(fill=tk.X, pady=(0, 4))
 
         if has_update:
-            btn_text = f"🔀 Beralih ke '{branch}' & Update" if is_branch_switch else "🚀 Perbarui Sekarang"
+            btn_text = f" Beralih ke '{branch}' & Update" if is_branch_switch else " Perbarui Sekarang"
+            ico_dl = render_vector_icon("cloud_download", size=14, color=THEME["bg_root"])
             btn_apply = tk.Button(
                 btn_frame,
                 text=btn_text,
+                image=ico_dl,
+                compound="left",
                 font=("Segoe UI", 10, "bold"),
                 bg=THEME["primary"],
                 fg=THEME["bg_root"],
                 activebackground=THEME["accent_neon"],
                 relief=tk.FLAT,
+                bd=0,
                 padx=14,
                 pady=5,
                 cursor="hand2"
             )
+            btn_apply.image = ico_dl
             btn_apply.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
 
             def _apply_click():
-                btn_apply.config(state=tk.DISABLED, text="⏳ Memproses Pembaruan...")
+                btn_apply.config(state=tk.DISABLED, text="Memproses Pembaruan...")
                 lbl_update_status.config(text=f"Sedang mengunduh / beralih ke '{branch}'...")
 
                 def _apply_worker():
@@ -5630,7 +5731,7 @@ class SambungKataApp:
                         if success:
                             self.config["updater_branch"] = branch
                             save_config(self.config)
-                            lbl_update_status.config(text=f"✅ {msg}", fg=THEME["primary"])
+                            lbl_update_status.config(text=f"{msg}", fg=THEME["primary"])
                             restart = messagebox.askyesno(
                                 "Pembaruan Berhasil",
                                 f"{msg}\n\nApakah Anda ingin me-restart aplikasi sekarang agar perubahan aktif?",
@@ -5643,8 +5744,8 @@ class SambungKataApp:
                                 self.show_toast("✅ Pembaruan selesai. Silakan restart aplikasi nanti.")
                                 self.update_win.destroy()
                         else:
-                            btn_apply.config(state=tk.NORMAL, text="🔄 Coba Lagi")
-                            lbl_update_status.config(text=f"❌ Gagal: {msg}", fg=THEME["danger"])
+                            btn_apply.config(state=tk.NORMAL, text="Coba Lagi")
+                            lbl_update_status.config(text=f"Gagal: {msg}", fg=THEME["danger"])
 
                     self.root.after(0, _apply_done)
 
@@ -5666,19 +5767,24 @@ class SambungKataApp:
             )
             btn_dismiss.pack(side=tk.RIGHT)
         else:
+            ico_ref = render_vector_icon("refresh", size=13, color=THEME["bg_root"])
             btn_recheck = tk.Button(
                 btn_frame,
-                text="🔄 Periksa Lagi",
+                text=" Periksa Lagi",
+                image=ico_ref,
+                compound="left",
                 font=("Segoe UI", 9, "bold"),
-                bg="#89b4fa",
+                bg=THEME["primary"],
                 fg=THEME["bg_root"],
-                activebackground=THEME["bg_hover"],
+                activebackground=THEME["accent_neon"],
                 relief=tk.FLAT,
+                bd=0,
                 padx=12,
                 pady=4,
                 cursor="hand2",
                 command=lambda: [self.update_win.destroy(), self.check_for_updates(target_branch=branch, manual=True)]
             )
+            btn_recheck.image = ico_ref
             btn_recheck.pack(side=tk.LEFT)
 
             btn_close = tk.Button(
@@ -5689,23 +5795,10 @@ class SambungKataApp:
                 fg=THEME["text_primary"],
                 activebackground=THEME["bg_hover"],
                 relief=tk.FLAT,
+                bd=0,
                 padx=14,
                 pady=4,
-                command=self.update_win.destroy
-            )
-            btn_close.pack(side=tk.RIGHT)
-            btn_recheck.pack(side=tk.LEFT)
-
-            btn_close = tk.Button(
-                btn_frame,
-                text="Tutup",
-                font=("Segoe UI", 9),
-                bg=THEME["border"],
-                fg=THEME["text_primary"],
-                activebackground=THEME["bg_hover"],
-                relief=tk.FLAT,
-                padx=14,
-                pady=4,
+                cursor="hand2",
                 command=self.update_win.destroy
             )
             btn_close.pack(side=tk.RIGHT)
