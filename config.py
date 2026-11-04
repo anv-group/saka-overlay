@@ -80,8 +80,26 @@ def save_config(cfg):
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=4)
 
-        # Simpan preferensi lokal (kebal git pull / update GitHub)
-        local_keys = ["dev_mode"]
+        # Simpan preferensi lokal pengguna ke config.local.json (kebal git pull / update GitHub / checkout)
+        local_keys = [
+            "dev_mode",
+            "game_mode",
+            "mode_santai",
+            "brutal_mode_tags",
+            "saved_normal_tags",
+            "saved_default_tags",
+            "santai_auto_disabled_tags",
+            "tier0_sort_mode",
+            "custom_trap_endings",
+            "screen_area",
+            "gameplay_area",
+            "scan_interval_sec",
+            "auto_copy_top_word",
+            "use_kbbi",
+            "use_contek",
+            "window_geometry",
+            "report_hotkey"
+        ]
         local_cfg = {}
         if os.path.exists(LOCAL_CONFIG_FILE):
             try:

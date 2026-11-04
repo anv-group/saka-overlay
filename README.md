@@ -1,6 +1,13 @@
-# 🎮 SAKA Overlay - Roblox Sambung Kata Assistant & Auto Solver
+<div align="center">
+
+<img src="assets/logo_cropped.png" alt="SAKA Overlay Logo" width="220" />
+
+# SAKA Overlay
+### 🎮 Asisten Cerdas & Auto Solver Roblox Sambung Kata
 
 [![CI & Regression Tests](https://github.com/anv-group/sambung-kata-overlay/actions/workflows/test.yml/badge.svg)](https://github.com/anv-group/sambung-kata-overlay/actions/workflows/test.yml)
+
+</div>
 
 **SAKA Overlay** (dari kata **SAmbung KAta** + **Overlay**) adalah asisten cerdas pendamping bermain game **Roblox Sambung Kata** ([Mainkan di Roblox](https://www.roblox.com/games/130342654546662/Sambung-Kata)).
 

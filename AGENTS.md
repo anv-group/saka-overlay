@@ -33,7 +33,9 @@ sambung-kata/
 ├── region_selector.py   # DPI-aware transparent overlay untuk seleksi ROI di monitor 1920x1200
 ├── config.py            # Utilitas load/save konfigurasi JSON
 ├── config.json          # Menyimpan area ROI layar, interval scan, dan preferensi pengguna (tracked base)
-├── config.local.json    # Override konfigurasi lokal pengguna (untracked / gitignored, kebal git update)
+├── config.local.json    # Override konfigurasi lokal pengguna: menyimpan preferensi tag, mode, area ROI (untracked / gitignored, kebal git update)
+├── logo.svg             # Desain logo vektor asli SAKA Overlay
+├── assets/              # Aset gambar aplikasi (logo.png, logo_cropped.png, icon.ico)
 ├── blacklist.txt        # Daftar kata yang di-blacklist (kata valid KBBI namun ditolak oleh server Roblox)
 ├── kamus_lengkap.txt    # 147,870+ kata (Hasil Hybrid Merge: KBBI v6 + contek-sambungkata.web.id + istilah Roblox + jebakan X/Z)
 ├── kamus_kbbi.txt       # 112,822 kata murni Kamus Besar Bahasa Indonesia (KBBI VI)
@@ -180,7 +182,11 @@ Ketika pengguna sedang bermain atau melakukan *spectate*, terkadang OCR membaca 
           - **Perbaikan Scroll Mousewheel Mulus:** Mousewheel terikat secara menyeluruh (`_bind_scroll_recursive` dan routing terisolasi `self.brutal_canvas`) ke seluruh kontainer, canvas, frame inner, scrollbar, dan setiap widget baris, sehingga scrolling roda mouse selalu bekerja mulus tanpa dead spot.
           - **Ukuran Window Lebih Lega & Pin Tombol Bawah (580x720):** Dimensi jendela diperbesar menjadi 580x720 (minimum 500x520) dan dilengkapi *screen boundary clamping* agar tidak pernah terpotong ke bawah monitor. Bilah tombol aksi bawah ("💾 Simpan & Terapkan" dan "Tutup") di-pin permanen di dasar jendela (`side=tk.BOTTOM`) sehingga selalu tampak jelas dan tidak pernah terdorong keluar oleh daftar tag.
           - **Auto-Save saat Jendela Ditutup:** Dilengkapi deteksi perubahan otomatis saat pengguna menutup jendela (via tombol silang ✕, shortcut `Escape`, atau tombol "Tutup"). Jika terdapat perubahan seleksi tag, konfigurasi otomatis disimpan dan diterapkan sehingga tidak ada pengaturan yang hilang secara tidak sengaja.
-       - **Isolasi Profil Tag Cerdas:** Tag aktif di Mode Default disimpan ke `saved_default_tags` (dan `saved_normal_tags`). Saat beralih ke Mode Brutal, tag disetel sesuai daftar `brutal_mode_tags`. Men-toggle tag pada quick-bar saat di Mode Brutal otomatis menyinkronkan daftar Brutal, dan saat kembali ke Mode Default, daftar tag default pengguna dipulihkan secara utuh tanpa tercampur.
+       - **Isolasi Profil Tag Cerdas & Kebal Git Update (`config.local.json`):**
+          - Tag aktif di Mode Default disimpan ke `saved_default_tags` (dan `saved_normal_tags`).
+          - Saat beralih ke Mode Brutal, tag disetel sesuai daftar `brutal_mode_tags`.
+          - Men-toggle tag pada quick-bar saat di Mode Brutal maupun Default otomatis menyinkronkan daftar masing-masing mode.
+          - **Perlindungan Total via `config.local.json`:** Seluruh preferensi tag kustom (`custom_trap_endings`), tag brutal (`brutal_mode_tags`), dan tag default (`saved_default_tags`) secara otomatis disimpan ke `config.local.json` (terdaftar di `.gitignore`). Hal ini menjamin preferensi pengguna 100% aman dan tidak akan pernah ter-reset kembali meskipun repository di-pull, di-checkout, atau di-update dari GitHub.
 2. **Validasi Vokal**:
    - Setiap kata wajib memiliki minimal 1 huruf vokal (`A, I, U, E, O`) untuk menyaring singkatan atau akronim aneh yang tidak diterima oleh kamus game Roblox.
 3. **Kamus Lengkap (`kamus_lengkap.txt`)**:

@@ -33,6 +33,23 @@ class SambungKataApp:
         self.root = root
         self.root.title("SAKA Overlay")
 
+        # Pasang icon aplikasi (ico & png)
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        icon_ico = os.path.join(base_dir, "assets", "icon.ico")
+        icon_png = os.path.join(base_dir, "assets", "logo_cropped.png")
+        if os.path.exists(icon_ico):
+            try:
+                self.root.iconbitmap(icon_ico)
+            except Exception:
+                pass
+        if os.path.exists(icon_png):
+            try:
+                from PIL import Image, ImageTk
+                self._app_icon_img = ImageTk.PhotoImage(Image.open(icon_png))
+                self.root.iconphoto(True, self._app_icon_img)
+            except Exception:
+                pass
+
         self.config = load_config()
         if self.config.get("game_mode") == "normal":
             self.config["game_mode"] = "default"
@@ -328,6 +345,28 @@ class SambungKataApp:
         if self.dev_mode_var.get():
             self.btn_restart.pack(side=tk.RIGHT, padx=(0, 2), pady=2)
 
+        # Logo SAKA Overlay di titlebar
+        logo_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo_cropped.png")
+        if os.path.exists(logo_file):
+            try:
+                from PIL import Image, ImageTk
+                im_logo = Image.open(logo_file)
+                h_target = 18
+                w_target = int(im_logo.width * (h_target / im_logo.height))
+                logo_resized = im_logo.resize((w_target, h_target), Image.Resampling.LANCZOS)
+                self._titlebar_logo_img = ImageTk.PhotoImage(logo_resized)
+                self.lbl_logo = tk.Label(
+                    self.custom_title_bar,
+                    image=self._titlebar_logo_img,
+                    bg="#11111b",
+                    cursor="arrow"
+                )
+                self.lbl_logo.pack(side=tk.LEFT, padx=(8, 4), pady=3)
+            except Exception:
+                self.lbl_logo = None
+        else:
+            self.lbl_logo = None
+
         self.lbl_title_bar = tk.Label(
             self.custom_title_bar,
             text="SAKA Overlay",
@@ -336,7 +375,7 @@ class SambungKataApp:
             bg="#11111b",
             anchor="w"
         )
-        self.lbl_title_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(10, 4), pady=4)
+        self.lbl_title_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(2, 4), pady=4)
 
         self.btn_title_close.bind("<Enter>", lambda e: self.btn_title_close.config(bg="#f38ba8", fg="#11111b"))
         self.btn_title_close.bind("<Leave>", lambda e: self.btn_title_close.config(bg="#11111b", fg="#cdd6f4"))
@@ -356,6 +395,9 @@ class SambungKataApp:
         self.custom_title_bar.bind("<B1-Motion>", _on_title_drag)
         self.lbl_title_bar.bind("<ButtonPress-1>", _start_title_drag)
         self.lbl_title_bar.bind("<B1-Motion>", _on_title_drag)
+        if getattr(self, "lbl_logo", None) and self.lbl_logo.winfo_exists():
+            self.lbl_logo.bind("<ButtonPress-1>", _start_title_drag)
+            self.lbl_logo.bind("<B1-Motion>", _on_title_drag)
 
         # Garis pemisah 1px di bawah titlebar
         sep_title = tk.Frame(self.root, bg="#313244", height=1)
@@ -4523,6 +4565,17 @@ class SambungKataApp:
             "color": chosen_color
         })
 
+        cur_mode = self.config.get("game_mode", "default")
+        if cur_mode == "brutal":
+            b_tags = set(self.config.get("brutal_mode_tags", []))
+            b_tags.add(sfx)
+            self.config["brutal_mode_tags"] = list(b_tags)
+        else:
+            d_tags = set(self.config.get("saved_default_tags", self.config.get("saved_normal_tags", [])))
+            d_tags.add(sfx)
+            self.config["saved_default_tags"] = list(d_tags)
+            self.config["saved_normal_tags"] = list(d_tags)
+
         self.config["custom_trap_endings"] = categories
         save_config(self.config)
         self.solver.set_custom_endings(categories)
@@ -4562,14 +4615,16 @@ class SambungKataApp:
                 else:
                     brutal_tags.discard(sfx)
                 self.config["brutal_mode_tags"] = list(brutal_tags)
-            elif cur_mode == "normal":
-                normal_tags = set(self.config.get("saved_normal_tags", []))
-                if normal_tags:
-                    if new_val:
-                        normal_tags.add(sfx)
-                    else:
-                        normal_tags.discard(sfx)
-                    self.config["saved_normal_tags"] = list(normal_tags)
+            elif cur_mode in ("default", "normal"):
+                default_tags = set(self.config.get("saved_default_tags", self.config.get("saved_normal_tags", [])))
+                if not default_tags:
+                    default_tags = {c.get("suffix", "").upper() for c in categories if c.get("enabled", True)}
+                if new_val:
+                    default_tags.add(sfx)
+                else:
+                    default_tags.discard(sfx)
+                self.config["saved_default_tags"] = list(default_tags)
+                self.config["saved_normal_tags"] = list(default_tags)
 
             # Jika pengguna sengaja menonaktifkan tag saat di Mode Santai, hapus dari daftar auto-restore
             auto_disabled = set(self.config.get("santai_auto_disabled_tags", []))
@@ -4600,6 +4655,10 @@ class SambungKataApp:
             normal_tags = set(self.config.get("saved_normal_tags", []))
             normal_tags.discard(sfx)
             self.config["saved_normal_tags"] = list(normal_tags)
+
+            default_tags = set(self.config.get("saved_default_tags", []))
+            default_tags.discard(sfx)
+            self.config["saved_default_tags"] = list(default_tags)
 
             self.config["custom_trap_endings"] = categories
             save_config(self.config)
