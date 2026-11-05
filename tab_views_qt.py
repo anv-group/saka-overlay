@@ -527,8 +527,9 @@ class QtLiveTabView(QWidget):
         btn_ico.setIcon(get_qicon("tag", size=13, color=THEME["text_secondary"]))
         btn_ico.setFixedSize(26, 26)
         btn_ico.setCursor(Qt.PointingHandCursor)
+        btn_ico.setToolTip("Tambah Tag Baru")
         btn_ico.setStyleSheet(f"background: {THEME['bg_card']}; border: 1px solid {THEME['border']}; border-radius: 4px;")
-        btn_ico.clicked.connect(self.app.open_tags_tab)
+        btn_ico.clicked.connect(self.app.open_add_tag_dialog)
         self.tag_bar_layout.addWidget(btn_ico)
 
         for cat in categories:

@@ -645,6 +645,7 @@ class SambungKataQtApp(QMainWindow):
         btn_box.addWidget(btn_save)
         d_layout.addLayout(btn_box)
 
+        QTimer.singleShot(50, e_sfx.setFocus)
         dlg.exec()
 
     def open_region_selector(self):
