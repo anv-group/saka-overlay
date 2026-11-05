@@ -33,7 +33,8 @@ DEFAULT_CONFIG = {
     },
     "auto_blacklist_invalid": True,  # Otomatis blacklist kata yang ditolak game Roblox
     "auto_learn_valid": True,  # Otomatis simpan kata valid yang belum ada di kamus
-    "tier0_sort_mode": "default",  # "default" (Panjang 4-7 & Abjad) atau "tag_order" (Sesuai Urutan Tag Kustom)
+    "tier0_sort_mode": "default",
+    "two_tone_text": True,  # "default" (Panjang 4-7 & Abjad) atau "tag_order" (Sesuai Urutan Tag Kustom)
     "dev_mode": False,  # Mode Pengembang (Menampilkan tombol ⚡ Restart & fitur debug). Default OFF di git.
     "custom_trap_endings": [  # Kategori custom akhiran jebakan super (prioritas di atas X)
         {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"},

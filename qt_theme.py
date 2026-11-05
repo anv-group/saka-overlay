@@ -90,6 +90,12 @@ QWidget {{
     outline: none;
 }}
 
+/* Typography & Labels - Strict Zero Border on text */
+QLabel {{
+    border: none;
+    background: transparent;
+}}
+
 /* Scrollbars */
 QScrollBar:vertical {{
     background: {THEME["bg_root"]};

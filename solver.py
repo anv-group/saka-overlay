@@ -651,8 +651,14 @@ class SambungKataSolver:
             if w_len < min_len or w_len > max_len:
                 continue
 
-            # Filter Sumber (Semua, KBBI Saja, Contek Saja, KBBI + Contek)
-            if source_filter == "kbbi_only":
+            # Filter Sumber (Semua, KBBI, Contek, KBBI Saja, Contek Saja, KBBI + Contek)
+            if source_filter == "kbbi":
+                if w not in self.kbbi_set:
+                    continue
+            elif source_filter == "contek":
+                if w not in self.contek_set:
+                    continue
+            elif source_filter == "kbbi_only":
                 if not (w in self.kbbi_set and w not in self.contek_set):
                     continue
             elif source_filter == "contek_only":

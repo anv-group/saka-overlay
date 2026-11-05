@@ -68,6 +68,9 @@ class SambungKataQtApp(QMainWindow):
 
         # 1. Load Backend Engines
         self.config = load_config()
+        if "saved_default_tags" not in self.config:
+            cats = self.config.get("custom_trap_endings", [])
+            self.config["saved_default_tags"] = [c.get("suffix", "").upper() for c in cats if c.get("enabled", True)]
         self.solver = SambungKataSolver(
             dictionary_path=os.path.join(base_dir, "kamus_lengkap.txt"),
             blacklist_path=os.path.join(base_dir, "blacklist.txt"),
@@ -84,6 +87,7 @@ class SambungKataQtApp(QMainWindow):
 
         # State Variables
         self.last_detected_word = ""
+        self.last_detected_conf = 100
         self.is_scanning = False
         self._save_timer = None
         self._dirty_live = False
@@ -120,23 +124,33 @@ class SambungKataQtApp(QMainWindow):
 
         self.main_layout.addWidget(self.stack, 1)
 
-        # Toast Message Bar
-        self.toast_frame = QFrame()
-        self.toast_frame.setFixedHeight(28)
-        self.toast_frame.setStyleSheet(f"background-color: {THEME['border_focus']}; border-top: 1px solid {THEME['primary']};")
+        # Toast Message Bar (Floating Overlay HUD - Zero layout shift!)
+        self.toast_frame = QFrame(self)
+        self.toast_frame.setFixedHeight(30)
+        self.toast_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: rgba(20, 28, 21, 0.95);
+                border: 1px solid {THEME['primary']};
+                border-radius: 15px;
+            }}
+        """)
         tf_layout = QHBoxLayout(self.toast_frame)
-        tf_layout.setContentsMargins(10, 0, 10, 0)
+        tf_layout.setContentsMargins(14, 0, 14, 0)
         self.lbl_toast = QLabel("")
-        self.lbl_toast.setStyleSheet(f"color: {THEME['text_primary']}; font-size: 11px; font-weight: 500;")
+        self.lbl_toast.setAlignment(Qt.AlignCenter)
+        self.lbl_toast.setStyleSheet(f"color: {THEME['primary']}; font-size: 11px; font-weight: bold; border: none; background: transparent;")
         tf_layout.addWidget(self.lbl_toast)
         self.toast_frame.hide()
-        self.main_layout.addWidget(self.toast_frame)
 
         # 3. Connect Signals
         self.tab_live.start_stop_clicked.connect(self.toggle_scan)
         self.tab_live.mode_changed.connect(self.set_game_mode)
         self.tab_live.search_text_changed.connect(self.on_manual_search)
         self.tab_live.sort_mode_toggled.connect(self.toggle_tier0_sort)
+        self.tab_live.flag_clicked.connect(self._on_f2_hotkey)
+        self.tab_live.add_word_clicked.connect(lambda: self.open_quick_add_dialog("kamus"))
+        self.tab_live.add_whitelist_clicked.connect(lambda: self.open_quick_add_dialog("whitelist"))
+        self.tab_live.add_blocklist_clicked.connect(lambda: self.open_quick_add_dialog("blocklist"))
 
         # Initial populate
         self.tab_live.refresh_quick_tags(self.config.get("custom_trap_endings", []))
@@ -169,18 +183,36 @@ class SambungKataQtApp(QMainWindow):
     def _on_scan_result(self, res_data: dict):
         text = res_data.get("text", "").strip()
         conf = res_data.get("confidence", 1.0)
-        if text and text != self.last_detected_word:
-            self.last_detected_word = text
-            self.update_results(text, int(conf * 100))
+        conf_pct = int(conf * 100)
+        self.last_detected_word = text
+        self.last_detected_conf = conf_pct
+
+        # Update tampilan OCR di HUD Live
+        self.tab_live.update_ocr_display(text, conf_pct)
+
+        # Cek apakah pemain sedang melakukan manual search
+        manual_q = self.tab_live.edit_search.text().strip()
+        if manual_q:
+            # Manual query selalu OVERPOWER OCR! Jangan timpa hasil rekomendasi.
+            return
+
+        if text:
+            self.update_results(text, conf_pct)
+        else:
+            self.update_results("", conf_pct)
 
     def on_manual_search(self, query: str):
         q = "".join([c for c in query.upper() if c.isalpha()])
         if q:
+            # Input manual aktif: Overpower OCR seketika!
+            self.tab_live.set_manual_override_active(True)
             self.update_results(q, 100)
-        elif self.last_detected_word:
-            self.update_results(self.last_detected_word, 100)
         else:
-            self.tab_live.update_results("", [], 100)
+            self.tab_live.set_manual_override_active(False)
+            if self.last_detected_word:
+                self.update_results(self.last_detected_word, self.last_detected_conf)
+            else:
+                self.tab_live.update_results("", [], 100)
 
     def update_results(self, prefix: str, conf_pct: int = 100):
         if not prefix:
@@ -223,6 +255,9 @@ class SambungKataQtApp(QMainWindow):
         else:
             self.mini_ticker.show()
 
+        if tab_id == "kamus":
+            QTimer.singleShot(60, self.tab_kamus.focus_active_search)
+
     def open_tags_tab(self):
         self.top_strip.select_tab("tags")
 
@@ -257,8 +292,26 @@ class SambungKataQtApp(QMainWindow):
             cat["enabled"] = new_val
             self.config["custom_trap_endings"] = cats
             self.solver.set_custom_endings(cats)
+
+            # Sync active profile
+            cur_m = self.config.get("game_mode", "default")
+            if cur_m == "default":
+                self.config["saved_default_tags"] = [c.get("suffix", "").upper() for c in cats if c.get("enabled", True)]
+            elif cur_m == "brutal":
+                self.config["brutal_mode_tags"] = [c.get("suffix", "").upper() for c in cats if c.get("enabled", True)]
+
             self.save_config_debounced()
-            self.tab_tags.refresh_custom_list()
+
+            # In-place row update (Preserve exact scroll position without jumps!)
+            if idx < self.tab_tags.layout_custom_items.count():
+                row_w = self.tab_tags.layout_custom_items.itemAt(idx).widget()
+                if row_w and hasattr(row_w, "set_enabled_state"):
+                    row_w.set_enabled_state(new_val)
+                else:
+                    self.tab_tags.refresh_custom_list()
+            else:
+                self.tab_tags.refresh_custom_list()
+
             self.tab_live.refresh_quick_tags(cats)
             if self.last_detected_word:
                 self.update_results(self.last_detected_word)
@@ -274,7 +327,8 @@ class SambungKataQtApp(QMainWindow):
 
     def toggle_brutal_tag(self, suffix: str):
         b_tags = set(self.config.get("brutal_mode_tags", []))
-        if suffix in b_tags:
+        is_active = (suffix in b_tags)
+        if is_active:
             b_tags.remove(suffix)
         else:
             b_tags.add(suffix)
@@ -291,29 +345,76 @@ class SambungKataQtApp(QMainWindow):
             if self.last_detected_word:
                 self.update_results(self.last_detected_word)
 
-        self.tab_tags.refresh_brutal_list()
+        # In-place card update (Zero scroll jump!)
+        cats = self.config.get("custom_trap_endings", [])
+        for i in range(self.tab_tags.layout_brutal_items.count()):
+            card_w = self.tab_tags.layout_brutal_items.itemAt(i).widget()
+            if card_w and getattr(card_w, "sfx", "") == suffix:
+                card_w.set_active_state(not is_active)
+                break
+        active_count = sum(1 for c in cats if c.get("suffix", "").upper() in b_tags)
+        self.tab_tags.lbl_brutal_count.setText(f"({active_count} / {len(cats)} Aktif)")
 
     def set_game_mode(self, mode: str):
-        self.config["game_mode"] = mode
-        self.save_config_debounced()
+        cur_mode = self.config.get("game_mode", "default")
+        if mode == cur_mode:
+            return
 
         cats = self.config.get("custom_trap_endings", [])
-        if mode == "santai":
-            disabled = []
-            for c in cats:
-                if any(ch in c.get("suffix", "").lower() for ch in ("x", "q", "f")):
-                    if c.get("enabled", True):
-                        c["enabled"] = False
-                        disabled.append(c.get("suffix", "").upper())
-            self.config["santai_auto_disabled_tags"] = disabled
-        elif mode == "brutal":
+
+        # 1. Simpan snapshot tag aktif dari mode saat ini SEBELUM berpindah
+        if cur_mode == "default":
+            self.config["saved_default_tags"] = [c.get("suffix", "").upper() for c in cats if c.get("enabled", True)]
+        elif cur_mode == "brutal":
+            self.config["brutal_mode_tags"] = [c.get("suffix", "").upper() for c in cats if c.get("enabled", True)]
+
+        # 2. Terapkan konfigurasi tag untuk mode baru
+        if mode == "brutal":
+            self.config["santai_auto_disabled_tags"] = []
             b_tags = set(self.config.get("brutal_mode_tags", ["AMSI", "KSO", "RHU", "TL", "BD"]))
             for c in cats:
                 c["enabled"] = (c.get("suffix", "").upper() in b_tags)
 
+        elif mode == "santai":
+            # Jika sebelumnya dari brutal, pulihkan tag default terlebih dahulu
+            if cur_mode == "brutal":
+                saved_def = set(self.config.get("saved_default_tags", []))
+                if saved_def:
+                    for c in cats:
+                        c["enabled"] = (c.get("suffix", "").upper() in saved_def)
+
+            disabled = []
+            for c in cats:
+                sfx = c.get("suffix", "").upper()
+                if any(ch in sfx.lower() for ch in ("x", "q", "f")):
+                    if c.get("enabled", True):
+                        c["enabled"] = False
+                        disabled.append(sfx)
+            self.config["santai_auto_disabled_tags"] = disabled
+
+        else:  # mode == "default"
+            if cur_mode == "santai":
+                auto_disabled = set(self.config.get("santai_auto_disabled_tags", []))
+                for c in cats:
+                    if c.get("suffix", "").upper() in auto_disabled:
+                        c["enabled"] = True
+                self.config["santai_auto_disabled_tags"] = []
+            elif cur_mode == "brutal":
+                saved_def = set(self.config.get("saved_default_tags", []))
+                if saved_def:
+                    for c in cats:
+                        c["enabled"] = (c.get("suffix", "").upper() in saved_def)
+
+        self.config["game_mode"] = mode
         self.config["custom_trap_endings"] = cats
         self.solver.set_custom_endings(cats)
+        self.save_config_debounced()
+
         self.tab_live.refresh_quick_tags(cats)
+        self.tab_live.mode_pills.set_mode(mode)
+        self.tab_tags.refresh_custom_list()
+        self.tab_tags.refresh_brutal_list()
+
         if self.last_detected_word:
             self.update_results(self.last_detected_word)
         self.show_toast(f"Mode permainan diubah ke {mode.upper()}")
@@ -323,10 +424,38 @@ class SambungKataQtApp(QMainWindow):
         nxt = "tag_order" if curr == "default" else "default"
         self.config["tier0_sort_mode"] = nxt
         self.save_config_debounced()
-        self.tab_live.btn_sort.setText(f" {nxt.upper()}")
+        self.tab_live.update_sort_button(nxt)
         if self.last_detected_word:
             self.update_results(self.last_detected_word)
-        self.show_toast(f"Mode sortir Tier 0: {nxt.upper()}")
+        self.show_toast(f"Metode sortir: {nxt.upper()}")
+
+    def set_two_tone_text(self, enabled: bool):
+        self.config["two_tone_text"] = enabled
+        self.save_config_debounced()
+        self.tab_live.set_two_tone_enabled(enabled)
+        # Refresh tampilan
+        if self.last_detected_word:
+            self.update_results(self.last_detected_word, self.last_detected_conf)
+        st = "diaktifkan" if enabled else "dinonaktifkan"
+        self.show_toast(f"Two-Tone Text {st}")
+
+    def open_quick_add_dialog(self, mode: str = "whitelist"):
+        from tab_views_qt import QtQuickAddDialog
+        dlg = QtQuickAddDialog(self, mode=mode, parent=self)
+        dlg.exec()
+
+    def on_add_word_quick(self, word: str):
+        if not word:
+            return False, "Kata kosong"
+        ok, msg = self.solver.add_word(word)
+        if ok:
+            self.show_toast(f"'{word.upper()}' berhasil ditambahkan ke Kamus! ")
+            if self.last_detected_word:
+                self.update_results(self.last_detected_word)
+            self.tab_kamus.refresh_whitelist()
+        else:
+            self.show_toast(f"Gagal: {msg}")
+        return ok, msg
 
     # --- Whitelist & Blocklist Action Handlers ---
     def on_toggle_whitelist(self, word: str):
@@ -361,45 +490,161 @@ class SambungKataQtApp(QMainWindow):
     def open_add_tag_dialog(self):
         self.open_edit_tag_dialog(None)
 
+    def set_brutal_tags_batch(self, b_tags: list):
+        b_set = set(b_tags)
+        self.config["brutal_mode_tags"] = b_tags
+        self.save_config_debounced()
+
+        if self.config.get("game_mode") == "brutal":
+            cats = self.config.get("custom_trap_endings", [])
+            for c in cats:
+                c["enabled"] = (c.get("suffix", "").upper() in b_set)
+            self.config["custom_trap_endings"] = cats
+            self.solver.set_custom_endings(cats)
+            self.tab_live.refresh_quick_tags(cats)
+            if self.last_detected_word:
+                self.update_results(self.last_detected_word)
+
+        # In-place batch update
+        cats = self.config.get("custom_trap_endings", [])
+        for i in range(self.tab_tags.layout_brutal_items.count()):
+            card_w = self.tab_tags.layout_brutal_items.itemAt(i).widget()
+            if card_w and hasattr(card_w, "sfx"):
+                card_w.set_active_state(card_w.sfx in b_set)
+        active_count = sum(1 for c in cats if c.get("suffix", "").upper() in b_set)
+        self.tab_tags.lbl_brutal_count.setText(f"({active_count} / {len(cats)} Aktif)")
+
+    def on_delete_tag(self, idx: int):
+        cats = self.config.get("custom_trap_endings", [])
+        if 0 <= idx < len(cats):
+            sfx = cats[idx].get("suffix", "").upper()
+            reply = QMessageBox.question(
+                self, "Hapus Tag",
+                f"Apakah Anda yakin ingin menghapus tag akhiran '{sfx}'?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                cats.pop(idx)
+                self.config["custom_trap_endings"] = cats
+                self.solver.set_custom_endings(cats)
+                self.save_config_debounced()
+                self.tab_tags.refresh_custom_list()
+                self.tab_live.refresh_quick_tags(cats)
+                if self.last_detected_word:
+                    self.update_results(self.last_detected_word)
+                self.show_toast(f"Tag '{sfx}' berhasil dihapus")
+
+    def on_reorder_tag(self, src_idx: int, target_idx: int):
+        cats = self.config.get("custom_trap_endings", [])
+        if 0 <= src_idx < len(cats) and 0 <= target_idx < len(cats):
+            item = cats.pop(src_idx)
+            cats.insert(target_idx, item)
+            self.config["custom_trap_endings"] = cats
+            self.solver.set_custom_endings(cats)
+            self.save_config_debounced()
+            self.tab_tags.refresh_custom_list()
+            self.tab_live.refresh_quick_tags(cats)
+            if self.last_detected_word:
+                self.update_results(self.last_detected_word)
+            self.show_toast(f"Tag '{item.get('suffix')}' dipindahkan ke #{target_idx + 1}")
+
     def open_edit_tag_dialog(self, tag_data: dict = None):
         dlg = QDialog(self)
         dlg.setWindowTitle("Edit Tag Akhiran" if tag_data else "Tambah Tag Baru")
-        dlg.setFixedSize(320, 200)
+        dlg.setFixedSize(300, 140)
+        dlg.setStyleSheet(f"""
+            QDialog {{
+                background-color: {THEME["bg_root"]};
+                border: 1px solid {THEME["border_focus"]};
+                border-radius: 8px;
+            }}
+            QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """)
         d_layout = QVBoxLayout(dlg)
-        d_layout.setContentsMargins(14, 14, 14, 14)
+        d_layout.setContentsMargins(16, 14, 16, 14)
         d_layout.setSpacing(10)
 
-        d_layout.addWidget(QLabel("Huruf Akhiran (Suffix):"))
+        lbl = QLabel("Huruf Akhiran (Suffix):")
+        lbl.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {THEME['text_primary']};")
+        d_layout.addWidget(lbl)
+
         e_sfx = QLineEdit(tag_data.get("suffix", "") if tag_data else "")
+        e_sfx.setPlaceholderText("Misal: AMSI, KSO, NS...")
+        e_sfx.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {THEME["bg_card"]};
+                color: {THEME["text_primary"]};
+                font-size: 13px;
+                font-weight: bold;
+                border: 1px solid {THEME["border_focus"]};
+                border-radius: 4px;
+                padding: 4px 8px;
+            }}
+            QLineEdit:focus {{
+                border-color: {THEME["primary"]};
+            }}
+        """)
         d_layout.addWidget(e_sfx)
 
-        d_layout.addWidget(QLabel("Nama / Label Tag:"))
-        e_name = QLineEdit(tag_data.get("name", "") if tag_data else "")
-        d_layout.addWidget(e_name)
+        btn_box = QHBoxLayout()
+        btn_box.addStretch(1)
+
+        btn_cancel = QPushButton("Batal")
+        btn_cancel.setCursor(Qt.PointingHandCursor)
+        btn_cancel.setFixedHeight(28)
+        btn_cancel.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME["bg_card"]};
+                color: {THEME["text_secondary"]};
+                border: 1px solid {THEME["border"]};
+                border-radius: 4px;
+                padding: 2px 12px;
+            }}
+        """)
+        btn_cancel.clicked.connect(dlg.reject)
+        btn_box.addWidget(btn_cancel)
 
         btn_save = QPushButton("Simpan")
-        btn_save.setStyleSheet(f"background-color: {THEME['primary']}; color: {THEME['text_dark']}; font-weight: bold;")
+        btn_save.setCursor(Qt.PointingHandCursor)
+        btn_save.setFixedHeight(28)
+        btn_save.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME["primary"]};
+                color: {THEME["text_dark"]};
+                font-weight: bold;
+                border: none;
+                border-radius: 4px;
+                padding: 2px 14px;
+            }}
+        """)
 
         def _do_save():
             sfx = e_sfx.text().strip().upper()
-            name = e_name.text().strip() or f"Akhiran {sfx}"
             if not sfx:
                 return
             cats = self.config.get("custom_trap_endings", [])
             if tag_data:
                 tag_data["suffix"] = sfx
-                tag_data["name"] = name
             else:
-                cats.append({"suffix": sfx, "name": name, "enabled": True, "color": THEME["primary"]})
+                palette = ["#cba6f7", "#f5c2e7", "#89dceb", "#a6e3a1", "#fab387", "#f38ba8"]
+                chosen_color = palette[len(cats) % len(palette)]
+                cats.append({"suffix": sfx, "enabled": True, "color": chosen_color})
             self.config["custom_trap_endings"] = cats
             self.solver.set_custom_endings(cats)
             self.save_config_debounced()
             self.tab_tags.refresh_custom_list()
             self.tab_live.refresh_quick_tags(cats)
             dlg.accept()
+            self.show_toast(f"Tag '{sfx}' berhasil disimpan!")
 
         btn_save.clicked.connect(_do_save)
-        d_layout.addWidget(btn_save)
+        e_sfx.returnPressed.connect(_do_save)
+        btn_box.addWidget(btn_save)
+        d_layout.addLayout(btn_box)
+
         dlg.exec()
 
     def open_region_selector(self):
@@ -425,7 +670,7 @@ class SambungKataQtApp(QMainWindow):
         try:
             saved = self.ocr.save_false_detection(self.last_detected_word)
             if saved:
-                self.show_toast(f"🚩 Sampel F2 tersimpan: {os.path.basename(saved)}")
+                self.show_toast(f"Sampel F2 tersimpan: {os.path.basename(saved)}")
         except Exception as e:
             pass
 
@@ -435,16 +680,17 @@ class SambungKataQtApp(QMainWindow):
         cats.sort(key=lambda c: c.get("suffix", "").upper())
         self._after_sort_tags(cats, "A-Z")
 
-    def on_sort_custom_categories_count(self):
+    def on_sort_custom_categories_count(self, reverse=True):
         cats = self.config.get("custom_trap_endings", [])
-        cats.sort(key=lambda c: self.solver.count_words_by_suffix(c.get("suffix", "")), reverse=True)
-        self._after_sort_tags(cats, "kata terbanyak")
+        cats.sort(key=lambda c: self.solver.count_words_by_suffix(c.get("suffix", "")), reverse=reverse)
+        txt = "Kata Terbanyak" if reverse else "Kata Terdikit"
+        self._after_sort_tags(cats, txt)
 
     def on_sort_custom_categories_length(self, reverse=True):
         cats = self.config.get("custom_trap_endings", [])
         cats.sort(key=lambda c: (len(c.get("suffix", "")), c.get("suffix", "").upper()), reverse=reverse)
-        txt = "terpanjang" if reverse else "tersedikit"
-        self._after_sort_tags(cats, f"huruf {txt}")
+        txt = "Huruf Terpanjang" if reverse else "Huruf Terpendek"
+        self._after_sort_tags(cats, txt)
 
     def _after_sort_tags(self, cats, desc):
         self.config["custom_trap_endings"] = cats
@@ -456,10 +702,26 @@ class SambungKataQtApp(QMainWindow):
             self.update_results(self.last_detected_word)
         self.show_toast(f"Tag diurutkan berdasarkan {desc}")
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "toast_frame") and self.toast_frame.isVisible():
+            w = self.toast_frame.width()
+            h = self.toast_frame.height()
+            x = (self.width() - w) // 2
+            y = self.height() - h - 16
+            self.toast_frame.setGeometry(x, y, w, h)
+
     # --- Toast & Config Helpers ---
     def show_toast(self, message: str, duration_ms: int = 2500):
         self.lbl_toast.setText(message)
+        self.lbl_toast.adjustSize()
+        w = max(180, self.lbl_toast.sizeHint().width() + 36)
+        h = 30
+        x = (self.width() - w) // 2
+        y = self.height() - h - 16
+        self.toast_frame.setGeometry(x, y, w, h)
         self.toast_frame.show()
+        self.toast_frame.raise_()
         QTimer.singleShot(duration_ms, self.toast_frame.hide)
 
     def save_config_debounced(self, delay_ms: int = 400):
