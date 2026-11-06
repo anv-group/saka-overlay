@@ -1,10 +1,12 @@
+import os
 import webbrowser
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
-    QScrollArea, QFrame, QComboBox, QSizePolicy, QMessageBox, QCheckBox, QDialog, QMenu
+    QScrollArea, QFrame, QComboBox, QSizePolicy, QMessageBox, QCheckBox, QDialog, QMenu,
+    QButtonGroup, QRadioButton
 )
-from PySide6.QtGui import QDrag
-from PySide6.QtCore import Qt, Signal, QTimer, QPoint, QMimeData
+from PySide6.QtGui import QDrag, QPixmap, QKeySequence, QShortcut
+from PySide6.QtCore import Qt, Signal, QTimer, QPoint, QMimeData, QEvent
 from qt_theme import THEME, get_qicon
 from qt_components import QtSubTabStrip, QtSegmentedPills
 
@@ -372,7 +374,7 @@ class QtLiveTabView(QWidget):
         right_box.addLayout(info_row)
 
         self.edit_search = QLineEdit()
-        self.edit_search.setPlaceholderText("Ketik awalan manual (overpower OCR)...")
+        self.edit_search.setPlaceholderText("Ketik manual")
         self.edit_search.setClearButtonEnabled(True)
         self.edit_search.setFixedHeight(26)
         self.edit_search.setStyleSheet(f"""
@@ -2388,16 +2390,520 @@ class QtDictionaryTabView(QWidget):
 
 
 # --- Tab 4: SYSTEM Tab View ---
+
+# --- Dialog Pendataan Koreksi Sampel OCR ---
+class QtKoreksiDialog(QDialog):
+    """
+    Dialog Pendataan dan Koreksi Sampel Deteksi OCR (sample/kurang_tepat & sample/tidak_dikenali)
+    Mendukung penamaan file otomatis _seharusnya_<BENAR>, shortcut Enter untuk simpan & lanjut,
+    shortcut Del untuk hapus instan, dan panah navigasi.
+    """
+    def __init__(self, app, parent=None):
+        super().__init__(parent or (app.window() if app else None))
+        self.app = app
+        self.setWindowTitle("Pendataan Koreksi Sampel")
+        self.resize(500, 640)
+        self.setMinimumSize(440, 520)
+        self.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: {THEME["bg_root"]};
+                color: {THEME["text_primary"]};
+            }}
+            QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """)
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.kurang_tepat_dir = os.path.join(base_dir, "sample", "kurang_tepat")
+        self.unknown_dir = os.path.join(base_dir, "sample", "tidak_dikenali")
+
+        self.source_mode = "kurang_tepat"
+        self.only_uncorrected = True
+        self.items = []
+        self.current_idx = 0
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
+
+        # Header bar
+        hdr = QHBoxLayout()
+        lbl_h = QLabel("Koreksi visual sampel pembacaan OCR")
+        lbl_h.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
+        hdr.addWidget(lbl_h)
+        hdr.addStretch(1)
+
+        btn_folder = QPushButton(" Buka Folder")
+        btn_folder.setIcon(get_qicon("folder", size=12, color=THEME["text_primary"]))
+        btn_folder.setCursor(Qt.PointingHandCursor)
+        btn_folder.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['bg_card']};
+                color: {THEME['text_primary']};
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 2px 10px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['bg_hover']};
+            }}
+        """)
+        btn_folder.clicked.connect(self._open_folder)
+        hdr.addWidget(btn_folder)
+        layout.addLayout(hdr)
+
+        # Source Selection Bar
+        src_bar = QFrame()
+        src_bar.setStyleSheet(f"background-color: {THEME['bg_card']}; border: 1px solid {THEME['border']}; border-radius: 6px;")
+        sb_layout = QHBoxLayout(src_bar)
+        sb_layout.setContentsMargins(10, 6, 10, 6)
+        sb_layout.setSpacing(10)
+
+        self.btn_grp = QButtonGroup(self)
+        self.rb_kt = QRadioButton("Kurang Tepat")
+        self.rb_td = QRadioButton("Tidak Dikenali")
+        self.rb_all = QRadioButton("Semua")
+        self.rb_kt.setChecked(True)
+
+        for i, (rb, sm) in enumerate([(self.rb_kt, "kurang_tepat"), (self.rb_td, "tidak_dikenali"), (self.rb_all, "all")]):
+            rb.setStyleSheet(f"""
+                QRadioButton {{
+                    color: {THEME['text_primary']};
+                    font-size: 11px;
+                    font-weight: bold;
+                    spacing: 6px;
+                }}
+                QRadioButton::indicator {{
+                    width: 14px;
+                    height: 14px;
+                }}
+            """)
+            self.btn_grp.addButton(rb, i)
+            sb_layout.addWidget(rb)
+
+        self.btn_grp.idClicked.connect(self._on_source_changed)
+        sb_layout.addStretch(1)
+        layout.addWidget(src_bar)
+
+        # Filter bar
+        flt_bar = QHBoxLayout()
+        self.chk_uncorrected = QCheckBox("Hanya tampilkan yang belum dikoreksi")
+        self.chk_uncorrected.setChecked(True)
+        self.chk_uncorrected.setCursor(Qt.PointingHandCursor)
+        self.chk_uncorrected.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
+        self.chk_uncorrected.toggled.connect(self._on_filter_toggled)
+        flt_bar.addWidget(self.chk_uncorrected)
+        flt_bar.addStretch(1)
+
+        self.lbl_progress = QLabel("- / -")
+        self.lbl_progress.setStyleSheet(f"color: {THEME['primary']}; font-size: 12px; font-weight: bold;")
+        flt_bar.addWidget(self.lbl_progress)
+        layout.addLayout(flt_bar)
+
+        # Image preview container
+        self.img_box = QFrame()
+        self.img_box.setStyleSheet(f"background-color: {THEME['bg_root']}; border: 1px solid {THEME['border']}; border-radius: 6px;")
+        ib_layout = QVBoxLayout(self.img_box)
+        ib_layout.setContentsMargins(12, 12, 12, 12)
+        self.lbl_img = QLabel("Tidak ada gambar")
+        self.lbl_img.setAlignment(Qt.AlignCenter)
+        self.lbl_img.setStyleSheet(f"color: {THEME['text_muted']}; font-size: 12px; font-style: italic;")
+        ib_layout.addWidget(self.lbl_img)
+        layout.addWidget(self.img_box, 1)
+
+        # Info Box
+        info_box = QFrame()
+        info_box.setStyleSheet(f"background-color: {THEME['bg_card']}; border: 1px solid {THEME['border']}; border-radius: 6px;")
+        inf_l = QVBoxLayout(info_box)
+        inf_l.setContentsMargins(10, 8, 10, 8)
+        inf_l.setSpacing(4)
+
+        self.lbl_fname = QLabel("File: -")
+        self.lbl_fname.setStyleSheet(f"color: {THEME['text_muted']}; font-size: 10px;")
+        inf_l.addWidget(self.lbl_fname)
+
+        self.lbl_detail = QLabel("Terdeteksi: - | Akurasi: -")
+        self.lbl_detail.setStyleSheet(f"color: {THEME['text_primary']}; font-size: 12px; font-weight: bold;")
+        inf_l.addWidget(self.lbl_detail)
+
+        self.lbl_status = QLabel("Status: -")
+        self.lbl_status.setStyleSheet(f"color: {THEME['warning']}; font-size: 11px;")
+        inf_l.addWidget(self.lbl_status)
+        layout.addWidget(info_box)
+
+        # Input Frame
+        in_frame = QFrame()
+        in_frame.setStyleSheet(f"background-color: {THEME['bg_card']}; border: 1px solid {THEME['border_focus']}; border-radius: 6px;")
+        in_l = QVBoxLayout(in_frame)
+        in_l.setContentsMargins(10, 8, 10, 8)
+        in_l.setSpacing(6)
+
+        lbl_p = QLabel("Awalan yang Seharusnya (Benar):")
+        lbl_p.setStyleSheet(f"color: {THEME['warning']}; font-size: 11px; font-weight: bold;")
+        in_l.addWidget(lbl_p)
+
+        act_r = QHBoxLayout()
+        self.edit_text = QLineEdit()
+        self.edit_text.setPlaceholderText("Ketik awalan yang benar lalu tekan Enter...")
+        self.edit_text.setAlignment(Qt.AlignCenter)
+        self.edit_text.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {THEME['bg_root']};
+                color: {THEME['text_primary']};
+                font-size: 14px;
+                font-weight: bold;
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 4px;
+            }}
+            QLineEdit:focus {{
+                border-color: {THEME['primary']};
+            }}
+        """)
+        self.edit_text.textChanged.connect(lambda t: self.edit_text.setText(t.upper()) if t != t.upper() else None)
+        self.edit_text.returnPressed.connect(self._save_current)
+        act_r.addWidget(self.edit_text, 1)
+
+        btn_save = QPushButton(" Simpan (Enter)")
+        btn_save.setIcon(get_qicon("check", size=13, color=THEME["text_dark"]))
+        btn_save.setCursor(Qt.PointingHandCursor)
+        btn_save.setFixedHeight(30)
+        btn_save.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['primary']};
+                color: {THEME['text_dark']};
+                font-size: 11px;
+                font-weight: bold;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 12px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['accent_neon']};
+            }}
+        """)
+        btn_save.clicked.connect(self._save_current)
+        act_r.addWidget(btn_save)
+        in_l.addLayout(act_r)
+        layout.addWidget(in_frame)
+
+        # Navigation & Delete Bar
+        nav_r = QHBoxLayout()
+        self.btn_prev = QPushButton("◀ Sebelumnya (←)")
+        self.btn_prev.setCursor(Qt.PointingHandCursor)
+        self.btn_prev.setStyleSheet(f"background-color: {THEME['bg_card']}; color: {THEME['text_primary']}; border: 1px solid {THEME['border']}; border-radius: 4px; padding: 4px 10px; font-size: 11px;")
+        self.btn_prev.clicked.connect(self._prev)
+        nav_r.addWidget(self.btn_prev)
+
+        self.btn_next = QPushButton("Berikutnya ▶ (→)")
+        self.btn_next.setCursor(Qt.PointingHandCursor)
+        self.btn_next.setStyleSheet(f"background-color: {THEME['bg_card']}; color: {THEME['text_primary']}; border: 1px solid {THEME['border']}; border-radius: 4px; padding: 4px 10px; font-size: 11px;")
+        self.btn_next.clicked.connect(self._next)
+        nav_r.addWidget(self.btn_next)
+
+        nav_r.addStretch(1)
+
+        self.btn_del = QPushButton(" Hapus (Del)")
+        self.btn_del.setIcon(get_qicon("trash", size=12, color=THEME["danger"]))
+        self.btn_del.setCursor(Qt.PointingHandCursor)
+        self.btn_del.setToolTip("Hapus sampel ini secara instan (Shortcut: Del)")
+        self.btn_del.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['danger_bg']};
+                color: {THEME['danger']};
+                font-size: 11px;
+                font-weight: bold;
+                border: 1px solid {THEME['danger']};
+                border-radius: 4px;
+                padding: 4px 10px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['danger']};
+                color: #ffffff;
+            }}
+        """)
+        self.btn_del.clicked.connect(self._delete_current)
+        nav_r.addWidget(self.btn_del)
+        layout.addLayout(nav_r)
+
+        # Install event filter pada QLineEdit agar Del, Panah Kiri/Kanan langsung bernavigasi
+        self.edit_text.installEventFilter(self)
+
+        # Global Window Shortcuts untuk Navigasi & Hapus
+        self.sc_del = QShortcut(QKeySequence(Qt.Key_Delete), self)
+        self.sc_del.activated.connect(self._delete_current)
+
+        self.sc_left = QShortcut(QKeySequence(Qt.Key_Left), self)
+        self.sc_left.activated.connect(self._prev)
+
+        self.sc_right = QShortcut(QKeySequence(Qt.Key_Right), self)
+        self.sc_right.activated.connect(self._next)
+
+        self.sc_up = QShortcut(QKeySequence(Qt.Key_Up), self)
+        self.sc_up.activated.connect(self._prev)
+
+        self.sc_down = QShortcut(QKeySequence(Qt.Key_Down), self)
+        self.sc_down.activated.connect(self._next)
+
+        # Load initial
+        self._reload_items()
+        QTimer.singleShot(60, self.edit_text.setFocus)
+
+    def _open_folder(self):
+        target = self.kurang_tepat_dir if self.source_mode == "kurang_tepat" else self.unknown_dir
+        if not os.path.exists(target):
+            os.makedirs(target, exist_ok=True)
+        try:
+            os.startfile(target)
+        except Exception:
+            pass
+
+    def _on_source_changed(self, idx):
+        modes = ["kurang_tepat", "tidak_dikenali", "all"]
+        self.source_mode = modes[idx] if idx < len(modes) else "kurang_tepat"
+        self._reload_items()
+
+    def _on_filter_toggled(self, checked):
+        self.only_uncorrected = checked
+        self._reload_items()
+
+    def _parse_file(self, fpath, src):
+        fname = os.path.basename(fpath)
+        parts = fname.replace(".png", "").split("_")
+        if len(parts) >= 4:
+            ts = f"{parts[0]}_{parts[1]}"
+            conf = parts[-1]
+            if "seharusnya" in parts:
+                idx = parts.index("seharusnya")
+                label = "_".join(parts[2:idx])
+                seh = "_".join(parts[idx+1:-1])
+                is_corrected = True
+            else:
+                label = "_".join(parts[2:-1])
+                seh = ""
+                is_corrected = False
+            return {
+                "ts": ts,
+                "label": label,
+                "seh": seh,
+                "conf": conf,
+                "is_corrected": is_corrected,
+                "filename": fname,
+                "fpath": fpath,
+                "source": src
+            }
+        return None
+
+    def _reload_items(self):
+        parsed = []
+        if self.source_mode in ("kurang_tepat", "all") and os.path.exists(self.kurang_tepat_dir):
+            for f in sorted(os.listdir(self.kurang_tepat_dir)):
+                if f.endswith(".png"):
+                    p = self._parse_file(os.path.join(self.kurang_tepat_dir, f), "kurang_tepat")
+                    if p:
+                        parsed.append(p)
+
+        if self.source_mode in ("tidak_dikenali", "all") and os.path.exists(self.unknown_dir):
+            for f in sorted(os.listdir(self.unknown_dir)):
+                fpath = os.path.join(self.unknown_dir, f)
+                if f.endswith(".png") and os.path.isfile(fpath):
+                    p = self._parse_file(fpath, "tidak_dikenali")
+                    if p:
+                        parsed.append(p)
+
+        if self.only_uncorrected:
+            self.items = [p for p in parsed if not p["is_corrected"]]
+        else:
+            self.items = parsed
+
+        cnt_kt = len([p for p in parsed if p["source"] == "kurang_tepat" and (not self.only_uncorrected or not p["is_corrected"])])
+        cnt_td = len([p for p in parsed if p["source"] == "tidak_dikenali" and (not self.only_uncorrected or not p["is_corrected"])])
+        self.rb_kt.setText(f"Kurang Tepat ({cnt_kt})")
+        self.rb_td.setText(f"Tidak Dikenali ({cnt_td})")
+        self.rb_all.setText(f"Semua ({len(self.items)})")
+
+        self.current_idx = min(self.current_idx, max(0, len(self.items) - 1))
+        self._display_current()
+
+    def _display_current(self):
+        if not self.items:
+            self.lbl_progress.setText("0 / 0")
+            self.lbl_img.setPixmap(QPixmap())
+            self.lbl_img.setText("Tidak ada sampel yang perlu dikoreksi.")
+            self.lbl_fname.setText("File: -")
+            self.lbl_detail.setText("Terdeteksi: - | Akurasi: -")
+            self.lbl_status.setText("Status: -")
+            self.edit_text.clear()
+            self.btn_prev.setEnabled(False)
+            self.btn_next.setEnabled(False)
+            self.btn_del.setEnabled(False)
+            return
+
+        item = self.items[self.current_idx]
+        self.lbl_progress.setText(f"{self.current_idx + 1} / {len(self.items)}")
+        self.lbl_fname.setText(f"File: {item['filename']}")
+        self.lbl_detail.setText(f"Terdeteksi: '{item['label']}' | Keyakinan: {item['conf']}")
+
+        if item["is_corrected"]:
+            self.lbl_status.setText(f"✅ Sudah dikoreksi: '{item['seh']}'")
+            self.lbl_status.setStyleSheet(f"color: {THEME['primary']}; font-size: 11px;")
+            self.edit_text.setText(item["seh"])
+            self.edit_text.selectAll()
+        else:
+            self.lbl_status.setText("⚠️ Belum dikoreksi")
+            self.lbl_status.setStyleSheet(f"color: {THEME['warning']}; font-size: 11px;")
+            self.edit_text.clear()
+
+        pix = QPixmap(item["fpath"])
+        if not pix.isNull():
+            target_w = min(400, max(240, pix.width() * 3))
+            self.lbl_img.setPixmap(pix.scaledToWidth(target_w, Qt.SmoothTransformation))
+            self.lbl_img.setText("")
+        else:
+            self.lbl_img.setText("Gagal memuat gambar")
+
+        self.btn_prev.setEnabled(self.current_idx > 0)
+        self.btn_next.setEnabled(self.current_idx < len(self.items) - 1)
+        self.btn_del.setEnabled(True)
+        self.edit_text.setFocus()
+
+    def _save_current(self):
+        if not self.items or self.current_idx >= len(self.items):
+            return
+        correct_text = self.edit_text.text().strip().upper()
+        if not correct_text:
+            return
+
+        item = self.items[self.current_idx]
+        old_path = item["fpath"]
+        folder = os.path.dirname(old_path)
+        new_fname = f"{item['ts']}_{item['label']}_seharusnya_{correct_text}_{item['conf']}.png"
+        new_path = os.path.join(folder, new_fname)
+
+        try:
+            if old_path != new_path:
+                os.rename(old_path, new_path)
+            if self.app:
+                self.app.show_toast(f"Tersimpan: '{correct_text}'")
+            if hasattr(self.app, "tab_system") and hasattr(self.app.tab_system, "refresh_counts"):
+                self.app.tab_system.refresh_counts()
+            self._reload_items()
+            if self.current_idx < len(self.items):
+                self._display_current()
+        except Exception as e:
+            QMessageBox.warning(self, "Gagal Menyimpan", f"Gagal mengubah nama file: {e}")
+
+    def _delete_current(self):
+        if not self.items or self.current_idx >= len(self.items):
+            return
+        item = self.items[self.current_idx]
+        try:
+            if os.path.exists(item["fpath"]):
+                os.remove(item["fpath"])
+            if self.app:
+                self.app.show_toast("Sampel dihapus")
+            if hasattr(self.app, "tab_system") and hasattr(self.app.tab_system, "refresh_counts"):
+                self.app.tab_system.refresh_counts()
+            self._reload_items()
+        except Exception as e:
+            QMessageBox.warning(self, "Gagal Menghapus", f"Gagal menghapus file: {e}")
+
+    def _prev(self):
+        if self.current_idx > 0:
+            self.current_idx -= 1
+            self._display_current()
+
+    def _next(self):
+        if self.current_idx < len(self.items) - 1:
+            self.current_idx += 1
+            self._display_current()
+
+    def eventFilter(self, obj, event):
+        if obj == self.edit_text and event.type() == QEvent.KeyPress:
+            key = event.key()
+            if key == Qt.Key_Delete:
+                self._delete_current()
+                return True
+            elif key in (Qt.Key_Left, Qt.Key_Up, Qt.Key_PageUp):
+                self._prev()
+                return True
+            elif key in (Qt.Key_Right, Qt.Key_Down, Qt.Key_PageDown):
+                self._next()
+                return True
+            elif key == Qt.Key_Escape:
+                self.close()
+                return True
+        return super().eventFilter(obj, event)
+
+    def keyPressEvent(self, event):
+        key = event.key()
+        if key == Qt.Key_Delete:
+            self._delete_current()
+            event.accept()
+        elif key in (Qt.Key_Left, Qt.Key_Up, Qt.Key_PageUp):
+            self._prev()
+            event.accept()
+        elif key in (Qt.Key_Right, Qt.Key_Down, Qt.Key_PageDown):
+            self._next()
+            event.accept()
+        elif key == Qt.Key_Escape:
+            self.close()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
+
+# --- Tab 4: SYSTEM Tab View ---
 class QtSystemTabView(QWidget):
     def __init__(self, app, parent=None):
         super().__init__(parent)
         self.app = app
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
+        # Scroll Area for System Tab to ensure all settings fit smoothly
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll.viewport().installEventFilter(self)
+        self.scroll.setStyleSheet(f"""
+            QScrollArea {{
+                background: transparent;
+                border: none;
+            }}
+            QScrollBar:vertical {{
+                background-color: {THEME['bg_root']};
+                width: 6px;
+                border-radius: 3px;
+                margin: 0px;
+            }}
+            QScrollBar::handle:vertical {{
+                background-color: {THEME['border']};
+                border-radius: 3px;
+                min-height: 24px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background-color: {THEME['primary']};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+        """)
+
+        self.container = QWidget()
+        self.container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        layout = QVBoxLayout(self.container)
+        layout.setContentsMargins(10, 8, 10, 16)
         layout.setSpacing(10)
 
-        # 1. Scanner Settings Frame
+        # 1. Scanner Settings Frame (Vision & OCR)
         sc_box = QFrame()
         sc_box.setObjectName("ScBox")
         sc_box.setStyleSheet(f"""
@@ -2415,24 +2921,35 @@ class QtSystemTabView(QWidget):
         sc_layout.setContentsMargins(12, 10, 12, 10)
         sc_layout.setSpacing(8)
 
-        lbl_sc = QLabel("PENGATURAN SCANNER OCR")
+        lbl_sc = QLabel("SCANNER")
         lbl_sc.setStyleSheet(f"color: {THEME['primary']}; font-weight: bold; font-size: 11px;")
         sc_layout.addWidget(lbl_sc)
 
         sp_row = QHBoxLayout()
-        sp_row.addWidget(QLabel("Kecepatan Scan:"))
+        lbl_sp_title = QLabel("Kecepatan:")
+        lbl_sp_title.setStyleSheet(f"color: {THEME['text_primary']}; font-size: 12px;")
+        sp_row.addWidget(lbl_sp_title)
+
         self.combo_speed = QComboBox()
+        self.combo_speed.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.combo_speed.setMinimumWidth(0)
         self.combo_speed.addItems([
-            "40ms (Ultra Instan)",
-            "80ms (Cepat / Rekomendasi)",
-            "120ms (Standar)",
-            "200ms (Santai / Hemat CPU)"
+            "Agresif (40ms)",
+            "Cepat (80ms)",
+            "Sedang (120ms)",
+            "Santai (200ms)"
         ])
+        current_spd = self.app.config.get("scan_interval_sec", 0.08)
+        speeds = [0.04, 0.08, 0.12, 0.20]
+        if current_spd in speeds:
+            self.combo_speed.setCurrentIndex(speeds.index(current_spd))
+        else:
+            self.combo_speed.setCurrentIndex(1)
         self.combo_speed.currentIndexChanged.connect(self._on_speed_changed)
         sp_row.addWidget(self.combo_speed, 1)
         sc_layout.addLayout(sp_row)
 
-        btn_roi = QPushButton(" Atur Area Layar (Region Selector)")
+        btn_roi = QPushButton(" Atur Area Scanner")
         btn_roi.setIcon(get_qicon("settings", size=13, color=THEME["text_primary"]))
         btn_roi.setCursor(Qt.PointingHandCursor)
         btn_roi.setStyleSheet(f"""
@@ -2453,7 +2970,7 @@ class QtSystemTabView(QWidget):
 
         layout.addWidget(sc_box)
 
-        # 2. Tampilan & Ergonomi (Two-Tone Text)
+        # 2. Tampilan, Ergonomi & Mode Dev Frame
         ui_box = QFrame()
         ui_box.setObjectName("UiBox")
         ui_box.setStyleSheet(f"""
@@ -2469,13 +2986,13 @@ class QtSystemTabView(QWidget):
         """)
         ui_layout = QVBoxLayout(ui_box)
         ui_layout.setContentsMargins(12, 10, 12, 10)
-        ui_layout.setSpacing(6)
+        ui_layout.setSpacing(8)
 
-        lbl_ui = QLabel("TAMPILAN & ERGONOMI")
+        lbl_ui = QLabel("TAMPILAN")
         lbl_ui.setStyleSheet(f"color: {THEME['primary']}; font-weight: bold; font-size: 11px;")
         ui_layout.addWidget(lbl_ui)
 
-        self.chk_twotone = QCheckBox("Pewarnaan Dua Nada (Two-Tone Text)")
+        self.chk_twotone = QCheckBox("Pewarnaan Dua Nada")
         self.chk_twotone.setChecked(self.app.config.get("two_tone_text", True))
         self.chk_twotone.setCursor(Qt.PointingHandCursor)
         self.chk_twotone.setStyleSheet(f"""
@@ -2505,9 +3022,109 @@ class QtSystemTabView(QWidget):
         lbl_hint.setWordWrap(True)
         ui_layout.addWidget(lbl_hint)
 
+        # Checkbox Mode Development
+        self.chk_dev_mode = QCheckBox("Mode Pengembang")
+        self.chk_dev_mode.setChecked(self.app.config.get("dev_mode", False))
+        self.chk_dev_mode.setCursor(Qt.PointingHandCursor)
+        self.chk_dev_mode.setStyleSheet(f"""
+            QCheckBox {{
+                color: {THEME['warning']};
+                font-size: 12px;
+                font-weight: 600;
+                spacing: 8px;
+            }}
+            QCheckBox::indicator {{
+                width: 16px;
+                height: 16px;
+                border: 1px solid {THEME['border']};
+                border-radius: 3px;
+                background-color: {THEME['bg_root']};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {THEME['warning']};
+                border-color: {THEME['warning']};
+            }}
+        """)
+        self.chk_dev_mode.toggled.connect(self.app.set_dev_mode)
+        ui_layout.addWidget(self.chk_dev_mode)
+
+        lbl_dev_hint = QLabel("Menampilkan tombol ⚡ Restart di titlebar untuk memulai ulang aplikasi secara instan. Shortcut: Ctrl+Shift+D.")
+        lbl_dev_hint.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
+        lbl_dev_hint.setWordWrap(True)
+        ui_layout.addWidget(lbl_dev_hint)
+
         layout.addWidget(ui_box)
 
-        # 3. Git & Version Info Frame
+        # 3. Pendataan Koreksi Sampel Frame (F2)
+        kor_box = QFrame()
+        kor_box.setObjectName("KorBox")
+        kor_box.setStyleSheet(f"""
+            #KorBox {{
+                background-color: {THEME['bg_card']};
+                border: 1px solid {THEME['border']};
+                border-radius: 6px;
+            }}
+            #KorBox QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """)
+        kor_layout = QVBoxLayout(kor_box)
+        kor_layout.setContentsMargins(12, 10, 12, 10)
+        kor_layout.setSpacing(8)
+
+        lbl_kor = QLabel("SAMPEL")
+        lbl_kor.setStyleSheet(f"color: {THEME['warning']}; font-weight: bold; font-size: 11px;")
+        kor_layout.addWidget(lbl_kor)
+
+        self.lbl_koreksi_counts = QLabel("Memuat data sampel...")
+        self.lbl_koreksi_counts.setWordWrap(True)
+        self.lbl_koreksi_counts.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px; font-weight: 500;")
+        kor_layout.addWidget(self.lbl_koreksi_counts)
+
+        self.btn_open_kor = QPushButton(" Buka Pendataan Koreksi")
+        self.btn_open_kor.setIcon(get_qicon("edit", size=13, color=THEME["text_dark"]))
+        self.btn_open_kor.setCursor(Qt.PointingHandCursor)
+        self.btn_open_kor.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['warning']};
+                color: {THEME['text_dark']};
+                font-weight: bold;
+                font-size: 11px;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+            }}
+            QPushButton:hover {{
+                background-color: #fab387;
+            }}
+        """)
+        self.btn_open_kor.clicked.connect(self.app.open_koreksi_dialog)
+        kor_layout.addWidget(self.btn_open_kor)
+
+        self.btn_open_fld = QPushButton(" Buka Folder Sampel")
+        self.btn_open_fld.setIcon(get_qicon("folder", size=13, color=THEME["text_primary"]))
+        self.btn_open_fld.setCursor(Qt.PointingHandCursor)
+        self.btn_open_fld.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['bg_hover']};
+                color: {THEME['text_primary']};
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-size: 11px;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                border-color: {THEME['border_focus']};
+            }}
+        """)
+        self.btn_open_fld.clicked.connect(self.app.open_sample_folder)
+        kor_layout.addWidget(self.btn_open_fld)
+
+        layout.addWidget(kor_box)
+
+        # 4. Git & Version Info Frame with Branch Switcher!
         git_box = QFrame()
         git_box.setObjectName("GitBox")
         git_box.setStyleSheet(f"""
@@ -2525,16 +3142,69 @@ class QtSystemTabView(QWidget):
         git_layout.setContentsMargins(12, 10, 12, 10)
         git_layout.setSpacing(8)
 
-        lbl_git = QLabel("INFORMASI VERSI & PEMBARUAN")
+        lbl_git = QLabel("VERSI")
         lbl_git.setStyleSheet(f"color: {THEME['accent_cyan']}; font-weight: bold; font-size: 11px;")
         git_layout.addWidget(lbl_git)
 
+        # 1. Baris Informasi Branch Aktif
+        curr_b = self.app.updater.get_current_branch()
+        b_info_row = QHBoxLayout()
+        lbl_b_title = QLabel("Branch Aktif:")
+        lbl_b_title.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
+        b_info_row.addWidget(lbl_b_title)
+
+        self.lbl_branch_status = QLabel(curr_b)
+        self.lbl_branch_status.setStyleSheet(f"color: {THEME['primary']}; font-size: 12px; font-weight: bold;")
+        b_info_row.addWidget(self.lbl_branch_status)
+        b_info_row.addStretch(1)
+        git_layout.addLayout(b_info_row)
+
+        # 2. Baris Pengganti Branch Terpisah
         br_row = QHBoxLayout()
-        br_row.addWidget(QLabel("Branch:"))
-        self.lbl_branch = QLabel(self.app.updater.get_current_branch())
-        self.lbl_branch.setStyleSheet(f"color: {THEME['primary']}; font-weight: bold;")
-        br_row.addWidget(self.lbl_branch)
-        br_row.addStretch(1)
+        lbl_sw = QLabel("Ganti:")
+        lbl_sw.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
+        br_row.addWidget(lbl_sw)
+
+        self.combo_branch = QComboBox()
+        self.combo_branch.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.combo_branch.setMinimumWidth(0)
+        avail_branches = self.app.updater.get_available_branches()
+        if curr_b not in avail_branches:
+            avail_branches.append(curr_b)
+        self.combo_branch.addItems(avail_branches)
+        if curr_b in avail_branches:
+            self.combo_branch.setCurrentIndex(avail_branches.index(curr_b))
+        self.combo_branch.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {THEME['bg_root']};
+                color: {THEME['text_primary']};
+                font-size: 11px;
+                font-weight: 500;
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 2px 8px;
+            }}
+        """)
+        br_row.addWidget(self.combo_branch, 1)
+
+        btn_switch_br = QPushButton("Ganti")
+        btn_switch_br.setCursor(Qt.PointingHandCursor)
+        btn_switch_br.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['bg_hover']};
+                color: {THEME['text_primary']};
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 3px 12px;
+                font-size: 11px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                border-color: {THEME['primary']};
+            }}
+        """)
+        btn_switch_br.clicked.connect(lambda: self.app.switch_updater_branch(self.combo_branch.currentText()))
+        br_row.addWidget(btn_switch_br)
         git_layout.addLayout(br_row)
 
         curr_commit = self.app.updater.get_current_commit()
@@ -2544,6 +3214,7 @@ class QtSystemTabView(QWidget):
         self.lbl_commit = QLabel(f"#{self.commit_hash}")
         self.lbl_commit.setCursor(Qt.PointingHandCursor)
         self.lbl_commit.setStyleSheet(f"color: {THEME['primary']}; text-decoration: underline; font-weight: bold;")
+        self.lbl_commit.setToolTip("Klik untuk membuka commit di GitHub")
         self.lbl_commit.mousePressEvent = lambda e: self._open_commit_link()
         c_row.addWidget(self.lbl_commit)
         c_row.addStretch(1)
@@ -2570,6 +3241,41 @@ class QtSystemTabView(QWidget):
 
         layout.addWidget(git_box)
         layout.addStretch(1)
+
+        self.scroll.setWidget(self.container)
+        main_layout.addWidget(self.scroll)
+
+        self.refresh_counts()
+
+    def eventFilter(self, obj, event):
+        if hasattr(self, "scroll") and obj == self.scroll.viewport() and event.type() == QEvent.Resize:
+            if hasattr(self, "container"):
+                self.container.setFixedWidth(event.size().width())
+        return super().eventFilter(obj, event)
+
+    def refresh_counts(self):
+        folder_kt = os.path.abspath("sample/kurang_tepat")
+        folder_td = os.path.abspath("sample/tidak_dikenali")
+        cnt_kt = len([f for f in os.listdir(folder_kt) if f.endswith(".png") and "seharusnya" not in f]) if os.path.exists(folder_kt) else 0
+        cnt_td = len([f for f in os.listdir(folder_td) if f.endswith(".png") and "seharusnya" not in f and os.path.isfile(os.path.join(folder_td, f))]) if os.path.exists(folder_td) else 0
+        if hasattr(self, "lbl_koreksi_counts"):
+            self.lbl_koreksi_counts.setText(f"🚩 Kurang Tepat: {cnt_kt} belum dikoreksi\n⚠️ Tidak Dikenali: {cnt_td} belum dikoreksi")
+
+    def refresh_git_info(self):
+        curr_b = self.app.updater.get_current_branch()
+        if hasattr(self, "lbl_branch_status"):
+            self.lbl_branch_status.setText(curr_b)
+        if hasattr(self, "combo_branch"):
+            avail = self.app.updater.get_available_branches()
+            if curr_b not in avail:
+                avail.append(curr_b)
+            self.combo_branch.clear()
+            self.combo_branch.addItems(avail)
+            self.combo_branch.setCurrentIndex(avail.index(curr_b))
+        curr_commit = self.app.updater.get_current_commit()
+        self.commit_hash = curr_commit.get("hash", "Unknown")
+        if hasattr(self, "lbl_commit"):
+            self.lbl_commit.setText(f"#{self.commit_hash}")
 
     def _open_commit_link(self):
         url = f"https://github.com/anv-group/sambung-kata-overlay/commit/{self.commit_hash}"
