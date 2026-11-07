@@ -359,6 +359,8 @@ Untuk menghemat kuota komputasi GitHub Actions dan mempercepat siklus developmen
 2. **Branch `main` (Production & Release):**
    - Hanya menerima kode stabil hasil merge.
    - Setiap kali terjadi push atau merge ke `main`, GitHub Actions (`test.yml`) otomatis menjalankan rangkaian pengujian lengkap: OCR Benchmark (92 sampel), Solver & Custom Traps Unit Tests, dan Gameplay Indexer Sequence Tests di runner Windows.
+3. **Aturan Frekuensi Commit (Atomic Small Commits):**
+   - **Wajib Commit Setiap Perubahan Kecil:** Setiap kali menyelesaikan sebuah unit perubahan, perbaikan bug, refactor, atau penyesuaian UI kecil, lakukan **`git commit`** seketika dengan pesan conventional commit yang jelas (`feat`, `fix`, `refactor`, `style`, `perf`). Jangan menumpuk banyak perubahan terpisah menjadi satu commit besar yang bercampur aduk.
 
 ---
 
