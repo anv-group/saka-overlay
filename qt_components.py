@@ -167,55 +167,170 @@ class QtSubTabStrip(QWidget):
 
 class QtMiniTickerBar(QFrame):
     """
-    Mini Ticker Bar di tab non-LIVE.
-    Menampilkan status realtime OCR dan awalan aktif dengan satu klik kembali ke LIVE.
+    Mini Ticker Bar di tab non-LIVE (Tactical Cyber Live OCR & Manual Status Bar).
+    - Mode Live OCR: Tema Merah (Danger).
+    - Mode Manual Override: Tema Biru (Accent Cyan).
+    - State Menunggu: [LIVE] / [MANUAL] solid badge (inverted dark text) + "Menunggu OCR...".
+    - State Terdeteksi: [<PREFIX>] solid badge + <KATA> rekomendasi + mentok kanan <TAG BADGE>.
+    - Klik di mana saja untuk kembali ke Tab LIVE.
     """
     clicked = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("MiniTickerBar")
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet(f"""
-            QFrame {{
-                background-color: {THEME["bg_card"]};
-                border-bottom: 1px solid {THEME["border"]};
-                padding: 2px 8px;
-            }}
-            QFrame:hover {{
-                background-color: {THEME["bg_hover"]};
-            }}
-        """)
+        self.setFixedHeight(32)
+        self.setToolTip("Klik untuk kembali ke Tab LIVE")
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 4, 10, 4)
-        layout.setSpacing(6)
+        layout.setContentsMargins(10, 0, 10, 0)
+        layout.setSpacing(8)
 
-        self.dot_lbl = QLabel("●")
-        self.dot_lbl.setStyleSheet(f"color: {THEME['primary']}; font-size: 10px;")
-        layout.addWidget(self.dot_lbl)
+        # 1. Badge Kiri (Kotak Solid [LIVE], [MANUAL], atau [AWALAN])
+        self.badge_status = QLabel("LIVE")
+        self.badge_status.setFixedHeight(20)
+        self.badge_status.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.badge_status)
 
-        self.lbl_text = QLabel("LIVE OCR AKTIF: Menunggu deteksi awalan kata...")
-        self.lbl_text.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px; font-weight: 500;")
-        layout.addWidget(self.lbl_text, 1)
+        # 2. Teks Utama (Status Menunggu atau Kata Rekomendasi)
+        self.lbl_text = QLabel("Menunggu OCR...")
+        self.lbl_text.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        layout.addWidget(self.lbl_text)
 
-        btn_go = QLabel("➔ BUKA LIVE")
-        btn_go.setStyleSheet(f"color: {THEME['primary']}; font-size: 10px; font-weight: bold;")
-        layout.addWidget(btn_go)
+        # 3. Spacer agar tag mentok di kanan
+        layout.addStretch(1)
+
+        # 4. Badge Tag Kata Rekomendasi (Mentok Paling Kanan)
+        self.badge_tag = QLabel("")
+        self.badge_tag.setFixedHeight(20)
+        self.badge_tag.setAlignment(Qt.AlignCenter)
+        self.badge_tag.hide()
+        layout.addWidget(self.badge_tag)
+
+        self._is_manual = False
+        self._apply_theme(is_manual=False)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
 
-    def update_ticker(self, prefix: str, top_word: str = ""):
-        if prefix:
-            if top_word:
-                self.lbl_text.setText(f"LIVE: Awalan [{prefix}] ➔ Rekomendasi: {top_word}")
-            else:
-                self.lbl_text.setText(f"LIVE: Awalan [{prefix}] terdeteksi")
-            self.lbl_text.setStyleSheet(f"color: {THEME['primary']}; font-size: 11px; font-weight: bold;")
+    def _apply_theme(self, is_manual: bool):
+        self._is_manual = is_manual
+        if is_manual:
+            # Tema Biru / Tactical Cyan (Manual Override)
+            bg_bar = "#0b1520"
+            border_bar = "#162f46"
+            hover_bar = "#13273a"
         else:
-            self.lbl_text.setText("LIVE OCR AKTIF: Menunggu deteksi awalan kata...")
-            self.lbl_text.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px; font-weight: 500;")
+            # Tema Merah (Live OCR)
+            bg_bar = "#180e10"
+            border_bar = "#351519"
+            hover_bar = "#261317"
+
+        self.setStyleSheet(f"""
+            #MiniTickerBar {{
+                background-color: {bg_bar};
+                border-bottom: 1px solid {border_bar};
+            }}
+            #MiniTickerBar:hover {{
+                background-color: {hover_bar};
+            }}
+            #MiniTickerBar QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """)
+
+    def update_ticker(self, prefix: str, top_item: dict = None, is_manual: bool = False, two_tone: bool = True):
+        self._apply_theme(is_manual)
+
+        # Background warna inverted untuk text di dalam badge
+        bg_inverted = "#0b1520" if is_manual else "#180e10"
+        badge_bg = THEME["accent_cyan"] if is_manual else THEME["danger"]
+        badge_text_color = bg_inverted
+
+        if not prefix:
+            # State Menunggu
+            badge_label = "MANUAL" if is_manual else "LIVE"
+            self.badge_status.setText(badge_label)
+            self.badge_status.setStyleSheet(f"""
+                background-color: {badge_bg};
+                color: {badge_text_color};
+                font-weight: bold;
+                font-size: 10px;
+                padding: 2px 7px;
+                border-radius: 3px;
+                border: none;
+            """)
+
+            waiting_text = "Menunggu input manual..." if is_manual else "Menunggu OCR..."
+            text_color = "#7dd3fc" if is_manual else "#fca5a5"
+            self.lbl_text.setText(waiting_text)
+            self.lbl_text.setStyleSheet(f"color: {text_color}; font-size: 11px; font-weight: 500; border: none; background: transparent;")
+
+            self.badge_tag.hide()
+            return
+
+        # State Terdeteksi: [AWALAN] KATA
+        self.badge_status.setText(prefix.upper())
+        self.badge_status.setStyleSheet(f"""
+            background-color: {badge_bg};
+            color: {badge_text_color};
+            font-weight: bold;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            border: none;
+        """)
+
+        if top_item:
+            kata = top_item.get("kata", "").upper()
+            tipe = top_item.get("tipe", "NORMAL")
+            deskripsi = top_item.get("deskripsi", "")
+
+            # Two-Tone atau Bold
+            p_upper = prefix.upper()
+            if two_tone and p_upper and kata.startswith(p_upper):
+                p_len = len(p_upper)
+                p_part = kata[:p_len]
+                rest_part = kata[p_len:]
+                self.lbl_text.setText(
+                    f"<span style='color: {THEME['text_muted']}; font-weight: 500;'>{p_part}</span>"
+                    f"<span style='color: {THEME['text_primary']}; font-weight: bold; font-size: 12px;'>{rest_part}</span>"
+                )
+            else:
+                self.lbl_text.setText(f"<span style='color: {THEME['text_primary']}; font-weight: bold; font-size: 12px;'>{kata}</span>")
+
+            self.lbl_text.setStyleSheet("border: none; background: transparent;")
+
+            # Tag Badge di Ujung Kanan
+            if tipe == "CUSTOM_TRAP":
+                b_name = top_item.get("badge_name") or f"Akhiran {top_item.get('suffix', '').upper()}"
+                bg = top_item.get("color", THEME["primary"])
+                self.badge_tag.setText(b_name)
+                self.badge_tag.setStyleSheet(f"background-color: {bg}; color: {THEME['text_dark']}; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; border: none;")
+                self.badge_tag.show()
+            elif tipe == "JEBAKAN_X":
+                self.badge_tag.setText("Jebakan X")
+                self.badge_tag.setStyleSheet(f"background-color: {THEME['danger']}; color: {THEME['text_dark']}; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; border: none;")
+                self.badge_tag.show()
+            elif tipe == "JEBAKAN_SULIT":
+                clean_desc = deskripsi.replace(" (Sulit)", "").replace("(Sulit)", "").strip()
+                self.badge_tag.setText(clean_desc.title())
+                self.badge_tag.setStyleSheet(f"background-color: #fab387; color: {THEME['text_dark']}; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; border: none;")
+                self.badge_tag.show()
+            else:
+                is_santai = (deskripsi == "Kata Santai")
+                self.badge_tag.setText("Santai" if is_santai else "Normal")
+                bg = "#a6e3a1" if is_santai else THEME["border_focus"]
+                color = THEME['text_dark'] if is_santai else THEME['text_primary']
+                self.badge_tag.setStyleSheet(f"background-color: {bg}; color: {color}; font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 3px; border: none;")
+                self.badge_tag.show()
+        else:
+            self.lbl_text.setText("<span style='color: #6c7086; font-style: italic; font-size: 11px;'>(Tidak ada rekomendasi)</span>")
+            self.lbl_text.setStyleSheet("border: none; background: transparent;")
+            self.badge_tag.hide()
 
 
 class QtSegmentedPills(QWidget):

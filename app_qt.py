@@ -89,6 +89,7 @@ class SambungKataQtApp(QMainWindow):
         self.last_detected_word = ""
         self.last_detected_conf = 100
         self.is_scanning = False
+        self.manual_override_active = False
         self._save_timer = None
         self._dirty_live = False
 
@@ -119,6 +120,7 @@ class SambungKataQtApp(QMainWindow):
         # Mini Ticker Bar
         self.mini_ticker = QtMiniTickerBar()
         self.mini_ticker.clicked.connect(lambda: self.top_strip.select_tab("live"))
+        self.mini_ticker.update_ticker("", None, is_manual=False)
         self.mini_ticker.hide()
         self.main_layout.addWidget(self.mini_ticker)
 
@@ -183,16 +185,28 @@ class SambungKataQtApp(QMainWindow):
         self._init_window_geometry()
 
     # --- Scanning & Vision Control ---
+    def update_ticker_visibility(self):
+        if self.top_strip.active_tab == "live":
+            self.mini_ticker.hide()
+        else:
+            # Tampilkan hanya jika scanner sedang MULAI atau saat MANUAL OVERRIDE aktif
+            if self.is_scanning or self.manual_override_active:
+                self.mini_ticker.show()
+            else:
+                self.mini_ticker.hide()
+
     def toggle_scan(self):
         if not self.is_scanning:
             self.is_scanning = True
             self.tab_live.set_scanning_state(True)
             self.scan_worker.start()
+            self.update_ticker_visibility()
             self.show_toast("Live OCR Scanner dimulai")
         else:
             self.is_scanning = False
             self.tab_live.set_scanning_state(False)
             self.scan_worker.stop()
+            self.update_ticker_visibility()
             self.show_toast("Live OCR Scanner dihentikan")
 
     def _on_scan_result(self, res_data: dict):
@@ -220,19 +234,24 @@ class SambungKataQtApp(QMainWindow):
         q = "".join([c for c in query.upper() if c.isalpha()])
         if q:
             # Input manual aktif: Overpower OCR seketika!
+            self.manual_override_active = True
             self.tab_live.set_manual_override_active(True)
             self.update_results(q, 100)
+            self.update_ticker_visibility()
         else:
+            self.manual_override_active = False
             self.tab_live.set_manual_override_active(False)
             if self.last_detected_word:
                 self.update_results(self.last_detected_word, self.last_detected_conf)
             else:
                 self.tab_live.update_results("", [], 100)
+                self.mini_ticker.update_ticker("", None, is_manual=False)
+            self.update_ticker_visibility()
 
     def update_results(self, prefix: str, conf_pct: int = 100):
         if not prefix:
             self.tab_live.update_results("", [], 100)
-            self.mini_ticker.update_ticker("", "")
+            self.mini_ticker.update_ticker("", None, is_manual=self.manual_override_active)
             return
 
         cur_mode = self.config.get("game_mode", "default")
@@ -247,8 +266,9 @@ class SambungKataQtApp(QMainWindow):
             sort_mode=sort_m
         )
 
-        top_word = words[0]["kata"] if words else ""
-        self.mini_ticker.update_ticker(prefix, top_word)
+        top_item = words[0] if words else None
+        two_tone = self.config.get("two_tone_text", True)
+        self.mini_ticker.update_ticker(prefix, top_item, is_manual=self.manual_override_active, two_tone=two_tone)
 
         if self.top_strip.active_tab == "live":
             self.tab_live.update_results(prefix, words, conf_pct)
@@ -261,14 +281,13 @@ class SambungKataQtApp(QMainWindow):
         idx = tab_map.get(tab_id, 0)
         self.stack.setCurrentIndex(idx)
 
+        self.update_ticker_visibility()
+
         if tab_id == "live":
-            self.mini_ticker.hide()
             if self._dirty_live:
                 if self.last_detected_word:
                     self.update_results(self.last_detected_word, 100)
                 self._dirty_live = False
-        else:
-            self.mini_ticker.show()
 
         if tab_id == "kamus":
             QTimer.singleShot(60, self.tab_kamus.focus_active_search)
