@@ -2979,7 +2979,7 @@ class QtSystemTabView(QWidget):
                 border: 1px solid {THEME['border']};
                 border-radius: 6px;
             }}
-            #UiBox QLabel {{
+            #UiBox QLabel, #UiBox QCheckBox {{
                 border: none;
                 background: transparent;
             }}
@@ -2997,6 +2997,7 @@ class QtSystemTabView(QWidget):
         self.chk_twotone.setCursor(Qt.PointingHandCursor)
         self.chk_twotone.setStyleSheet(f"""
             QCheckBox {{
+                background: transparent;
                 color: {THEME['text_primary']};
                 font-size: 12px;
                 font-weight: 600;
@@ -3028,6 +3029,7 @@ class QtSystemTabView(QWidget):
         self.chk_dev_mode.setCursor(Qt.PointingHandCursor)
         self.chk_dev_mode.setStyleSheet(f"""
             QCheckBox {{
+                background: transparent;
                 color: {THEME['warning']};
                 font-size: 12px;
                 font-weight: 600;

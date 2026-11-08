@@ -91,7 +91,7 @@ QWidget {{
 }}
 
 /* Typography & Labels - Strict Zero Border on text */
-QLabel {{
+QLabel, QCheckBox, QRadioButton {{
     border: none;
     background: transparent;
 }}
