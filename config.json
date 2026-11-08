@@ -245,7 +245,7 @@
         {
             "suffix": "OI",
             "name": "Akhiran OI",
-            "enabled": true,
+            "enabled": false,
             "color": "#f5c2e7"
         },
         {
@@ -347,8 +347,8 @@
     ],
     "auto_copy_top_word": false,
     "window_geometry": {
-        "x": 1136,
-        "y": 20,
+        "x": 1147,
+        "y": 25,
         "width": 380,
         "height": 872
     },
@@ -364,7 +364,6 @@
         "PP",
         "PN",
         "OO",
-        "OI",
         "MR",
         "MP",
         "LY",
