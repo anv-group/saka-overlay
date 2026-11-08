@@ -472,6 +472,23 @@ class QtCustomTitleBar(QWidget):
         self.btn_restart.hide()  # Hidden by default until dev_mode enabled
         layout.addWidget(self.btn_restart)
 
+        # Pin Button (Always-on-Top)
+        self.btn_pin = QPushButton()
+        self.btn_pin.setFixedSize(30, 32)
+        self.btn_pin.setCursor(Qt.PointingHandCursor)
+        self.btn_pin.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                border: none;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME["bg_hover"]};
+            }}
+        """)
+        self.btn_pin.clicked.connect(self.win.toggle_always_on_top)
+        layout.addWidget(self.btn_pin)
+        self.set_pinned(True)
+
         # Minimize Button
         self.btn_min = QPushButton()
         self.btn_min.setIcon(get_qicon("minus", size=13, color=THEME["text_secondary"]))
@@ -515,6 +532,15 @@ class QtCustomTitleBar(QWidget):
 
     def set_dev_mode(self, enabled: bool):
         self.btn_restart.setVisible(enabled)
+
+    def set_pinned(self, pinned: bool):
+        self.is_pinned = pinned
+        if pinned:
+            self.btn_pin.setIcon(get_qicon("pin", size=14, color=THEME["primary"]))
+            self.btn_pin.setToolTip("Lepas Pin (Always-on-Top Aktif)")
+        else:
+            self.btn_pin.setIcon(get_qicon("pin", size=14, color=THEME["text_muted"]))
+            self.btn_pin.setToolTip("Sematkan di Atas (Always-on-Top Nonaktif)")
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
