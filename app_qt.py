@@ -7,12 +7,13 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QStackedWidget, QDialog, QLineEdit,
     QColorDialog, QMessageBox, QFrame
 )
-from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize, QRect
+from PySide6.QtGui import QIcon, QPixmap, QCursor, QKeySequence, QShortcut
+from ctypes import wintypes
 
 from qt_theme import THEME, GLOBAL_QSS, get_qicon
-from qt_components import QtTopTabStrip, QtMiniTickerBar
-from tab_views_qt import QtLiveTabView, QtTagsTabView, QtDictionaryTabView, QtSystemTabView
+from qt_components import QtTopTabStrip, QtMiniTickerBar, QtCustomTitleBar
+from tab_views_qt import QtLiveTabView, QtTagsTabView, QtDictionaryTabView, QtSystemTabView, QtKoreksiDialog
 
 from config import load_config, save_config
 from solver import SambungKataSolver
@@ -56,9 +57,8 @@ class SambungKataQtApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SAKA Overlay")
-        self.resize(440, 720)
         self.setMinimumSize(380, 500)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
 
         # Pasang Icon Window
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -94,10 +94,22 @@ class SambungKataQtApp(QMainWindow):
 
         # 2. Setup Central Widget & Layout
         central = QWidget()
+        central.setMouseTracking(True)
         self.setCentralWidget(central)
         self.main_layout = QVBoxLayout(central)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
+
+        # Custom Frameless Titlebar dengan Logo Horizontal
+        self.dev_mode = self.config.get("dev_mode", False)
+        logo_path = os.path.join(base_dir, "assets", "logo_horizontal.png")
+        self.title_bar = QtCustomTitleBar(self, logo_path, on_restart_func=self.restart_app)
+        self.title_bar.set_dev_mode(self.dev_mode)
+        self.main_layout.addWidget(self.title_bar)
+
+        # Shortcut Ctrl+Shift+D untuk Mode Dev
+        self.sc_dev = QShortcut(QKeySequence("Ctrl+Shift+D"), self)
+        self.sc_dev.activated.connect(self.toggle_dev_mode)
 
         # Top Navigation Strip
         self.top_strip = QtTopTabStrip()
@@ -166,6 +178,9 @@ class SambungKataQtApp(QMainWindow):
             keyboard.add_hotkey("F2", self._on_f2_hotkey)
         except Exception:
             pass
+
+        # Posisikan window di sisi kanan layar (Default Right-Docked) & Muat Geometri Tersimpan
+        self._init_window_geometry()
 
     # --- Scanning & Vision Control ---
     def toggle_scan(self):
@@ -649,29 +664,171 @@ class SambungKataQtApp(QMainWindow):
         dlg.exec()
 
     def open_region_selector(self):
-        from region_selector import RegionSelector
+        from region_selector_qt import QtRegionSelector
         def _on_selected(area):
             if area:
                 self.config["screen_area"] = area
                 self.ocr.set_screen_area(area)
                 self.save_config_debounced()
-                self.show_toast("Area ROI berhasil disimpan!")
-        rs = RegionSelector(on_selected_callback=_on_selected)
-        rs.start()
+                self.show_toast(f"Area Scanner disimpan: {area['width']}x{area['height']} px")
+        self._region_selector = QtRegionSelector(on_selected_callback=_on_selected, title="KLIK & DRAG MOUSE UNTUK MEMILIH AREA SCANNER")
+        self._region_selector.show()
+
+    # --- Mode Dev & Window Management ---
+    def set_dev_mode(self, enabled: bool):
+        self.dev_mode = enabled
+        self.config["dev_mode"] = enabled
+        self.save_config_debounced()
+        if hasattr(self, "title_bar"):
+            self.title_bar.set_dev_mode(enabled)
+        if hasattr(self, "tab_system") and hasattr(self.tab_system, "chk_dev_mode"):
+            if self.tab_system.chk_dev_mode.isChecked() != enabled:
+                self.tab_system.chk_dev_mode.setChecked(enabled)
+        status_str = "AKTIF" if enabled else "NONAKTIF"
+        self.show_toast(f"Mode Development: {status_str}")
+
+    def toggle_dev_mode(self):
+        self.set_dev_mode(not self.dev_mode)
+
+    def restart_app(self):
+        self.show_toast("Memulai ulang aplikasi...")
+        self.updater.restart_app()
+
+    # --- Pendataan Koreksi Sampel (F2) ---
+    def open_koreksi_dialog(self):
+        dlg = QtKoreksiDialog(self, parent=self)
+        dlg.exec()
+
+    def open_sample_folder(self):
+        folder = os.path.abspath("sample")
+        if not os.path.exists(folder):
+            os.makedirs(folder, exist_ok=True)
+        try:
+            os.startfile(folder)
+        except Exception:
+            pass
+
+    # --- Git Updater & Branch Switcher ---
+    def switch_updater_branch(self, target_branch: str):
+        curr = self.updater.get_current_branch()
+        if target_branch == curr:
+            self.show_toast(f"Sudah berada di branch '{curr}'")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Ganti Branch Git",
+            f"Beralih dari branch '{curr}' ke branch '{target_branch}'?\n\n"
+            f"Aplikasi akan melakukan checkout dan mengunduh pembaruan terbaru dari branch '{target_branch}'.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        self.show_toast(f"Beralih ke branch '{target_branch}'...")
+        res = self.updater.apply_update(target_branch=target_branch)
+        if res.get("success"):
+            self.config["updater_branch"] = target_branch
+            self.save_config_debounced()
+            msg = res.get("message", "Branch berhasil diganti.")
+            restart_reply = QMessageBox.question(
+                self,
+                "Pembaruan Berhasil",
+                f"{msg}\n\nIngin me-restart aplikasi sekarang agar perubahan aktif?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if restart_reply == QMessageBox.Yes:
+                self.restart_app()
+            else:
+                self.tab_system.refresh_git_info()
+        else:
+            QMessageBox.critical(self, "Gagal Ganti Branch", f"Error: {res.get('message', 'Terjadi kesalahan')}")
 
     def check_updates(self):
-        self.show_toast("Sedang memeriksa pembaruan...")
-        res = self.updater.check_for_updates()
+        curr_branch = self.updater.get_current_branch()
+        target_branch = getattr(self.tab_system, "combo_branch", None)
+        tb = target_branch.currentText().strip() if target_branch else curr_branch
+
+        self.show_toast(f"Memeriksa update di branch '{tb}'...")
+        res = self.updater.check_for_updates(target_branch=tb)
+        if not res.get("success"):
+            QMessageBox.warning(self, "Cek Update", f"Gagal: {res.get('message', 'Tidak ada koneksi internet')}")
+            return
+
         if res.get("has_update"):
-            QMessageBox.information(self, "Pembaruan", f"Pembaruan tersedia! {res.get('behind_by', 1)} commit baru.")
+            behind = res.get("behind_by", 1)
+            commits = res.get("commits", [])
+            commit_text = "\n".join([f"• {c['hash'][:7]}: {c['message']}" for c in commits[:5]])
+            if len(commits) > 5:
+                commit_text += f"\n... dan {len(commits) - 5} commit lainnya."
+
+            reply = QMessageBox.question(
+                self,
+                "Pembaruan Tersedia",
+                f"Tersedia {behind} pembaruan commit baru di branch '{tb}':\n\n{commit_text}\n\nUnduh dan terapkan sekarang?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if reply == QMessageBox.Yes:
+                self.show_toast("Menerapkan pembaruan...")
+                up_res = self.updater.apply_update(target_branch=tb)
+                if up_res.get("success"):
+                    r_rep = QMessageBox.question(
+                        self,
+                        "Berhasil Diperbarui",
+                        f"{up_res.get('message')}\n\nRestart aplikasi sekarang?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.Yes
+                    )
+                    if r_rep == QMessageBox.Yes:
+                        self.restart_app()
+                else:
+                    QMessageBox.critical(self, "Gagal Update", up_res.get("message", "Error"))
         else:
-            QMessageBox.information(self, "Pembaruan", "Aplikasi Anda sudah versi terbaru!")
+            QMessageBox.information(self, "Pembaruan", f"Aplikasi Anda sudah versi terbaru di branch '{tb}'!")
+
+    # --- Native Windows Frameless Resizing (WM_NCHITTEST) ---
+    def nativeEvent(self, event_type, message):
+        """
+        Menangani resize window frameless di Windows via kernel WM_NCHITTEST.
+        Bekerja di level window manager OS sebelum child widget, menjamin kursor
+        tidak pernah 'nyangkut' dan resize berjalan sangat mulus (60 FPS).
+        """
+        if sys.platform == "win32" and event_type == "windows_generic_MSG":
+            msg = wintypes.MSG.from_address(message.__int__())
+            if msg.message == 0x0084:  # WM_NCHITTEST
+                pos = self.mapFromGlobal(QCursor.pos())
+                lx = pos.x()
+                ly = pos.y()
+                w = self.width()
+                h = self.height()
+                b = 8  # Area deteksi tepi 8 piksel
+
+                # Sudut bawah
+                if ly >= h - b:
+                    if lx <= b:
+                        return True, 16  # HTBOTTOMLEFT
+                    elif lx >= w - b:
+                        return True, 17  # HTBOTTOMRIGHT
+                    else:
+                        return True, 15  # HTBOTTOM
+                # Tepi samping kiri & kanan
+                elif lx <= b:
+                    return True, 10  # HTLEFT
+                elif lx >= w - b:
+                    return True, 11  # HTRIGHT
+
+        return super().nativeEvent(event_type, message)
 
     def _on_f2_hotkey(self):
         try:
             saved = self.ocr.save_false_detection(self.last_detected_word)
             if saved:
                 self.show_toast(f"Sampel F2 tersimpan: {os.path.basename(saved)}")
+                if hasattr(self, "tab_system") and hasattr(self.tab_system, "refresh_counts"):
+                    self.tab_system.refresh_counts()
         except Exception as e:
             pass
 
@@ -703,6 +860,42 @@ class SambungKataQtApp(QMainWindow):
             self.update_results(self.last_detected_word)
         self.show_toast(f"Tag diurutkan berdasarkan {desc}")
 
+    # --- Window Geometry & Persistence ---
+    def _init_window_geometry(self):
+        target_w = 476
+        target_h = 953
+        screen = QApplication.primaryScreen()
+        if screen:
+            avail = screen.availableGeometry()
+            target_h = min(target_h, max(500, avail.height() - 40))
+            # Posisikan default di sebelah kanan layar (20px dari tepi kanan)
+            target_x = max(10, avail.right() - target_w - 20 + 1)
+            target_y = avail.top() + max(10, (avail.height() - target_h) // 2)
+
+            saved_geom = self.config.get("window_geometry")
+            if saved_geom and isinstance(saved_geom, dict):
+                gx = saved_geom.get("x", target_x)
+                gy = saved_geom.get("y", target_y)
+                gw = saved_geom.get("width", target_w)
+                gh = saved_geom.get("height", target_h)
+
+                gw = max(380, min(gw, avail.width() - 20))
+                gh = max(500, min(gh, avail.height() - 20))
+                if gx + gw > avail.right() + 10 or gx < avail.left() - 10:
+                    gx = max(10, avail.right() - gw - 20 + 1)
+                if gy + gh > avail.bottom() + 10 or gy < avail.top() - 10:
+                    gy = max(10, avail.top() + 15)
+
+                self.setGeometry(gx, gy, gw, gh)
+            else:
+                self.setGeometry(target_x, target_y, target_w, target_h)
+        else:
+            self.resize(target_w, target_h)
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        self._save_window_geom()
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if hasattr(self, "toast_frame") and self.toast_frame.isVisible():
@@ -711,6 +904,19 @@ class SambungKataQtApp(QMainWindow):
             x = (self.width() - w) // 2
             y = self.height() - h - 16
             self.toast_frame.setGeometry(x, y, w, h)
+        self._save_window_geom()
+
+    def _save_window_geom(self):
+        geom = self.geometry()
+        if self.isMinimized() or geom.width() < 100 or geom.height() < 100:
+            return
+        self.config["window_geometry"] = {
+            "x": geom.x(),
+            "y": geom.y(),
+            "width": geom.width(),
+            "height": geom.height()
+        }
+        self.save_config_debounced(delay_ms=800)
 
     # --- Toast & Config Helpers ---
     def show_toast(self, message: str, duration_ms: int = 2500):

@@ -1,3 +1,5 @@
+import os
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QFrame
 )
@@ -295,3 +297,121 @@ class QtSegmentedPills(QWidget):
                         color: {THEME["text_primary"]};
                     }}
                 """)
+
+class QtCustomTitleBar(QWidget):
+    """
+    Custom Frameless Window Titlebar dengan Logo Horizontal SAKA Overlay,
+    Tombol Restart (Mode Dev), Minimize, dan Close.
+    """
+    def __init__(self, parent_window, logo_path, on_restart_func=None):
+        super().__init__(parent_window)
+        self.win = parent_window
+        self.on_restart = on_restart_func
+        self.setFixedHeight(32)
+        self.setObjectName("CustomTitleBar")
+        self.setStyleSheet(f"""
+            #CustomTitleBar {{
+                background-color: {THEME["bg_root"]};
+                border-bottom: 1px solid {THEME["border"]};
+            }}
+            #CustomTitleBar QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 0, 0, 0)
+        layout.setSpacing(6)
+
+        # Logo horizontal (177x28 -> scaled to height 20)
+        self.lbl_logo = QLabel()
+        if os.path.exists(logo_path):
+            pix = QPixmap(logo_path)
+            if not pix.isNull():
+                self.lbl_logo.setPixmap(pix.scaledToHeight(20, Qt.SmoothTransformation))
+        layout.addWidget(self.lbl_logo)
+
+        layout.addStretch(1)
+
+        # Restart Button (Dev Mode)
+        self.btn_restart = QPushButton("⚡")
+        self.btn_restart.setFixedSize(30, 32)
+        self.btn_restart.setCursor(Qt.PointingHandCursor)
+        self.btn_restart.setToolTip("Restart Aplikasi (Mode Dev)")
+        self.btn_restart.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {THEME["warning"]};
+                font-size: 13px;
+                font-weight: bold;
+                border: none;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME["bg_card"]};
+                color: #fab387;
+            }}
+        """)
+        if on_restart_func:
+            self.btn_restart.clicked.connect(on_restart_func)
+        self.btn_restart.hide()  # Hidden by default until dev_mode enabled
+        layout.addWidget(self.btn_restart)
+
+        # Minimize Button
+        self.btn_min = QPushButton()
+        self.btn_min.setIcon(get_qicon("minus", size=13, color=THEME["text_secondary"]))
+        self.btn_min.setFixedSize(32, 32)
+        self.btn_min.setCursor(Qt.PointingHandCursor)
+        self.btn_min.setToolTip("Minimize Window")
+        self.btn_min.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                border: none;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME["bg_hover"]};
+            }}
+        """)
+        self.btn_min.clicked.connect(self.win.showMinimized)
+        layout.addWidget(self.btn_min)
+
+        # Close Button
+        self.btn_close = QPushButton("✕")
+        self.btn_close.setFixedSize(38, 32)
+        self.btn_close.setCursor(Qt.PointingHandCursor)
+        self.btn_close.setToolTip("Tutup Aplikasi")
+        self.btn_close.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {THEME["text_secondary"]};
+                font-size: 12px;
+                font-weight: bold;
+                border: none;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME["danger"]};
+                color: #ffffff;
+            }}
+        """)
+        self.btn_close.clicked.connect(self.win.close)
+        layout.addWidget(self.btn_close)
+
+        self._drag_pos = None
+
+    def set_dev_mode(self, enabled: bool):
+        self.btn_restart.setVisible(enabled)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint() - self.win.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and self._drag_pos is not None:
+            self.win.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+        event.accept()
+

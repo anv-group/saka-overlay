@@ -5,7 +5,7 @@
         "width": 149,
         "height": 81
     },
-    "scan_interval_sec": 0.12,
+    "scan_interval_sec": 0.04,
     "game_mode": "default",
     "mode_santai": false,
     "brutal_mode_tags": [
@@ -346,7 +346,12 @@
         }
     ],
     "auto_copy_top_word": false,
-    "window_geometry": "438x1074+1449+41",
+    "window_geometry": {
+        "x": 1136,
+        "y": 20,
+        "width": 380,
+        "height": 872
+    },
     "santai_auto_disabled_tags": [],
     "saved_default_tags": [
         "NS",
@@ -375,5 +380,6 @@
         "X",
         "Q"
     ],
-    "dict_filter_exclusive": false
+    "dict_filter_exclusive": false,
+    "last_dict_sub_tab": "whitelist"
 }
