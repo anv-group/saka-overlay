@@ -58,16 +58,22 @@ class SambungKataQtApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("SAKA Overlay")
         self.setMinimumSize(380, 500)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+
+        # 1. Load Backend Engines & Configuration
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.config = load_config()
+        self.always_on_top = self.config.get("always_on_top", True)
+
+        flags = Qt.FramelessWindowHint
+        if self.always_on_top:
+            flags |= Qt.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
 
         # Pasang Icon Window
-        base_dir = os.path.dirname(os.path.abspath(__file__))
         ico_path = os.path.join(base_dir, "assets", "logo.ico")
         if os.path.exists(ico_path):
             self.setWindowIcon(QIcon(ico_path))
 
-        # 1. Load Backend Engines
-        self.config = load_config()
         if "saved_default_tags" not in self.config:
             cats = self.config.get("custom_trap_endings", [])
             self.config["saved_default_tags"] = [c.get("suffix", "").upper() for c in cats if c.get("enabled", True)]
@@ -106,6 +112,7 @@ class SambungKataQtApp(QMainWindow):
         logo_path = os.path.join(base_dir, "assets", "logo_horizontal.png")
         self.title_bar = QtCustomTitleBar(self, logo_path, on_restart_func=self.restart_app)
         self.title_bar.set_dev_mode(self.dev_mode)
+        self.title_bar.set_pinned(self.always_on_top)
         self.main_layout.addWidget(self.title_bar)
 
         # Shortcut Ctrl+Shift+D untuk Mode Dev
@@ -694,6 +701,23 @@ class SambungKataQtApp(QMainWindow):
         self._region_selector.show()
 
     # --- Mode Dev & Window Management ---
+    def set_always_on_top(self, enabled: bool):
+        self.always_on_top = enabled
+        self.config["always_on_top"] = enabled
+        self.save_config_debounced()
+        self.setWindowFlag(Qt.WindowStaysOnTopHint, enabled)
+        self.show()
+        if hasattr(self, "title_bar"):
+            self.title_bar.set_pinned(enabled)
+        if hasattr(self, "tab_system") and hasattr(self.tab_system, "chk_ontop"):
+            if self.tab_system.chk_ontop.isChecked() != enabled:
+                self.tab_system.chk_ontop.setChecked(enabled)
+        status_str = "AKTIF" if enabled else "NONAKTIF"
+        self.show_toast(f"Always-on-Top: {status_str}")
+
+    def toggle_always_on_top(self):
+        self.set_always_on_top(not self.always_on_top)
+
     def set_dev_mode(self, enabled: bool):
         self.dev_mode = enabled
         self.config["dev_mode"] = enabled

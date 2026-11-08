@@ -380,5 +380,6 @@
         "Q"
     ],
     "dict_filter_exclusive": false,
-    "last_dict_sub_tab": "whitelist"
+    "last_dict_sub_tab": "whitelist",
+    "always_on_top": true
 }

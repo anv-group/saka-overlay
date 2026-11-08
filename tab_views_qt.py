@@ -2992,6 +2992,38 @@ class QtSystemTabView(QWidget):
         lbl_ui.setStyleSheet(f"color: {THEME['primary']}; font-weight: bold; font-size: 11px;")
         ui_layout.addWidget(lbl_ui)
 
+        # Checkbox Always-on-Top (Pin Window)
+        self.chk_ontop = QCheckBox("Selalu di Atas (Always on Top)")
+        self.chk_ontop.setChecked(getattr(self.app, "always_on_top", True))
+        self.chk_ontop.setCursor(Qt.PointingHandCursor)
+        self.chk_ontop.setStyleSheet(f"""
+            QCheckBox {{
+                background: transparent;
+                color: {THEME['text_primary']};
+                font-size: 12px;
+                font-weight: 600;
+                spacing: 8px;
+            }}
+            QCheckBox::indicator {{
+                width: 16px;
+                height: 16px;
+                border: 1px solid {THEME['border']};
+                border-radius: 3px;
+                background-color: {THEME['bg_root']};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {THEME['primary']};
+                border-color: {THEME['primary']};
+            }}
+        """)
+        self.chk_ontop.toggled.connect(self.app.set_always_on_top)
+        ui_layout.addWidget(self.chk_ontop)
+
+        lbl_ontop_hint = QLabel("Pertahankan jendela overlay selalu melayang di atas Roblox dan aplikasi lainnya.")
+        lbl_ontop_hint.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
+        lbl_ontop_hint.setWordWrap(True)
+        ui_layout.addWidget(lbl_ontop_hint)
+
         self.chk_twotone = QCheckBox("Pewarnaan Dua Nada")
         self.chk_twotone.setChecked(self.app.config.get("two_tone_text", True))
         self.chk_twotone.setCursor(Qt.PointingHandCursor)
