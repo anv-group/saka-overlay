@@ -3062,7 +3062,7 @@ class QtSystemTabView(QWidget):
         self.chk_dev_mode.setStyleSheet(f"""
             QCheckBox {{
                 background: transparent;
-                color: {THEME['warning']};
+                color: {THEME['primary']};
                 font-size: 12px;
                 font-weight: 600;
                 spacing: 8px;
@@ -3075,8 +3075,8 @@ class QtSystemTabView(QWidget):
                 background-color: {THEME['bg_root']};
             }}
             QCheckBox::indicator:checked {{
-                background-color: {THEME['warning']};
-                border-color: {THEME['warning']};
+                background-color: {THEME['primary']};
+                border-color: {THEME['primary']};
             }}
         """)
         self.chk_dev_mode.toggled.connect(self.app.set_dev_mode)
@@ -3108,7 +3108,7 @@ class QtSystemTabView(QWidget):
         kor_layout.setSpacing(8)
 
         lbl_kor = QLabel("SAMPEL")
-        lbl_kor.setStyleSheet(f"color: {THEME['warning']}; font-weight: bold; font-size: 11px;")
+        lbl_kor.setStyleSheet(f"color: {THEME['primary']}; font-weight: bold; font-size: 11px;")
         kor_layout.addWidget(lbl_kor)
 
         self.lbl_koreksi_counts = QLabel("Memuat data sampel...")
@@ -3121,7 +3121,7 @@ class QtSystemTabView(QWidget):
         self.btn_open_kor.setCursor(Qt.PointingHandCursor)
         self.btn_open_kor.setStyleSheet(f"""
             QPushButton {{
-                background-color: {THEME['warning']};
+                background-color: {THEME['primary']};
                 color: {THEME['text_dark']};
                 font-weight: bold;
                 font-size: 11px;
@@ -3130,7 +3130,7 @@ class QtSystemTabView(QWidget):
                 padding: 6px 12px;
             }}
             QPushButton:hover {{
-                background-color: #fab387;
+                background-color: {THEME['accent_neon']};
             }}
         """)
         self.btn_open_kor.clicked.connect(self.app.open_koreksi_dialog)
@@ -3150,7 +3150,7 @@ class QtSystemTabView(QWidget):
                 font-weight: 500;
             }}
             QPushButton:hover {{
-                border-color: {THEME['border_focus']};
+                border-color: {THEME['primary']};
             }}
         """)
         self.btn_open_fld.clicked.connect(self.app.open_sample_folder)
@@ -3177,7 +3177,7 @@ class QtSystemTabView(QWidget):
         git_layout.setSpacing(8)
 
         lbl_git = QLabel("VERSI")
-        lbl_git.setStyleSheet(f"color: {THEME['accent_cyan']}; font-weight: bold; font-size: 11px;")
+        lbl_git.setStyleSheet(f"color: {THEME['primary']}; font-weight: bold; font-size: 11px;")
         git_layout.addWidget(lbl_git)
 
         # 1. Baris Informasi Branch Aktif
