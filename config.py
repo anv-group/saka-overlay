@@ -4,6 +4,16 @@ import json
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 LOCAL_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.local.json")
 
+DEFAULT_HOTKEYS = {
+    "toggle_scan": "F1",
+    "flag_error": "F2",
+    "add_whitelist": "F3",
+    "add_blocklist": "F4",
+    "add_kamus": "",
+    "add_tag": "F6",
+    "cycle_mode": "",
+}
+
 DEFAULT_CONFIG = {
     "screen_area": {
         "top": 300,
@@ -17,6 +27,7 @@ DEFAULT_CONFIG = {
     "brutal_mode_tags": ["AMSI", "KSO", "RHU", "TL", "BD"],  # Tag kustom yang otomatis aktif saat Mode Brutal
     "saved_normal_tags": [],  # Snapshot tag aktif di Mode Normal untuk pemulihan saat keluar dari Mode Brutal
     "report_hotkey": "F2",  # Hotkey screenshot instan deteksi salah
+    "hotkeys": DEFAULT_HOTKEYS.copy(),
     "ocr_engine": "winocr",  # "winocr" atau "tesseract"
     "tesseract_path": r"C:\Program Files\Tesseract-OCR\tesseract.exe",
     "updater_mode": "prompt",  # "prompt", "auto", "disabled"
@@ -69,6 +80,12 @@ def load_config():
         except Exception as e:
             print(f"[!] Error loading local config override: {e}")
 
+    # Pastikan semua kunci hotkey default tersedia
+    merged_hotkeys = DEFAULT_HOTKEYS.copy()
+    if isinstance(config.get("hotkeys"), dict):
+        merged_hotkeys.update(config["hotkeys"])
+    config["hotkeys"] = merged_hotkeys
+
     return config
 
 def save_config(cfg):
@@ -99,7 +116,8 @@ def save_config(cfg):
             "use_kbbi",
             "use_contek",
             "window_geometry",
-            "report_hotkey"
+            "report_hotkey",
+            "hotkeys"
         ]
         local_cfg = {}
         if os.path.exists(LOCAL_CONFIG_FILE):

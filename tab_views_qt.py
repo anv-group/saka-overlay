@@ -173,6 +173,7 @@ class QtLiveTabView(QWidget):
         self.btn_toggle.setIcon(get_qicon("play", size=14, color=THEME["text_dark"]))
         self.btn_toggle.setCursor(Qt.PointingHandCursor)
         self.btn_toggle.setFixedHeight(30)
+        self.btn_toggle.setToolTip("Mulai / Hentikan Live OCR Scanner (Hotkey: F5)")
         self.btn_toggle.setStyleSheet(f"""
             QPushButton {{
                 background-color: {THEME["primary"]};
@@ -235,7 +236,7 @@ class QtLiveTabView(QWidget):
         self.btn_add_wl.setIcon(get_qicon("star_filled", size=14, color=THEME["warning"]))
         self.btn_add_wl.setCursor(Qt.PointingHandCursor)
         self.btn_add_wl.setFixedSize(30, 30)
-        self.btn_add_wl.setToolTip("Tambah Kata ke Whitelist (Prioritas Teratas #1)")
+        self.btn_add_wl.setToolTip("Tambah Kata ke Whitelist (Prioritas Teratas #1) (Hotkey: F3)")
         self.btn_add_wl.setStyleSheet(f"""
             QPushButton {{
                 background-color: {THEME["bg_card"]};
@@ -255,7 +256,7 @@ class QtLiveTabView(QWidget):
         self.btn_add_bl.setIcon(get_qicon("cross", size=14, color=THEME["danger"]))
         self.btn_add_bl.setCursor(Qt.PointingHandCursor)
         self.btn_add_bl.setFixedSize(30, 30)
-        self.btn_add_bl.setToolTip("Blokir Kata ke Blocklist (Kata Ditolak)")
+        self.btn_add_bl.setToolTip("Blokir Kata ke Blocklist (Kata Ditolak) (Hotkey: F4)")
         self.btn_add_bl.setStyleSheet(f"""
             QPushButton {{
                 background-color: {THEME["bg_card"]};
@@ -434,6 +435,18 @@ class QtLiveTabView(QWidget):
         self.scroll_area.setWidget(self.cards_container)
         layout.addWidget(self.scroll_area, 1)
 
+    def update_hotkey_tooltips(self, hotkeys: dict):
+        def _fmt(aid, desc):
+            k = (hotkeys.get(aid) or "").strip()
+            return f"{desc} (Hotkey: {k})" if k else desc
+
+        self.btn_toggle.setToolTip(_fmt("toggle_scan", "Mulai / Hentikan Live OCR Scanner"))
+        self.btn_flag.setToolTip(_fmt("flag_error", "Laporkan / Simpan Sampel Deteksi Salah"))
+        self.btn_add_wl.setToolTip(_fmt("add_whitelist", "Tambah Kata ke Whitelist (Prioritas Teratas #1)"))
+        self.btn_add_bl.setToolTip(_fmt("add_blocklist", "Blokir Kata ke Blocklist (Kata Ditolak)"))
+        self.btn_add_word.setToolTip(_fmt("add_kamus", "Tambah Kata Baru ke Kamus Lengkap"))
+        self.mode_pills.setToolTip(_fmt("cycle_mode", "Ganti Mode Permainan (Default / Santai / Brutal)"))
+
     def _on_tag_scroll_wheel(self, event):
         delta = event.angleDelta().y() or event.angleDelta().x()
         sb = self.tag_scroll.horizontalScrollBar()
@@ -593,6 +606,7 @@ class QtQuickAddDialog(QDialog):
         title, icon_name, color, hint = titles.get(mode, titles["whitelist"])
 
         self.setWindowTitle(title)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         self.setFixedSize(350, 160)
         self.setStyleSheet(f"""
             QDialog {{
@@ -2389,8 +2403,6 @@ class QtDictionaryTabView(QWidget):
         self._search_dictionary()
 
 
-# --- Tab 4: SYSTEM Tab View ---
-
 # --- Dialog Pendataan Koreksi Sampel OCR ---
 class QtKoreksiDialog(QDialog):
     """
@@ -2857,6 +2869,110 @@ class QtKoreksiDialog(QDialog):
             super().keyPressEvent(event)
 
 
+class QtHotkeyButton(QPushButton):
+    """Tombol interaktif untuk merekam kombinasi tombol keyboard sebagai hotkey kustom."""
+    hotkey_changed = Signal(str, str)  # (action_id, new_key)
+
+    def __init__(self, action_id: str, key_str: str = "", parent=None):
+        super().__init__(parent)
+        self.action_id = action_id
+        self._key_str = (key_str or "").strip()
+        self._capturing = False
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedHeight(26)
+        self.setMinimumWidth(96)
+        self.setToolTip("Klik lalu tekan tombol baru (Backspace/Del untuk hapus, Esc untuk batal)")
+        self.clicked.connect(self._start_capture)
+        self._refresh_visual()
+
+    def set_hotkey(self, key_str: str):
+        self._key_str = (key_str or "").strip()
+        self._capturing = False
+        self._refresh_visual()
+
+    def _refresh_visual(self):
+        if self._capturing:
+            self.setText("Tekan tombol...")
+            self.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: rgba(56, 217, 118, 0.16);
+                    color: {THEME['primary']};
+                    border: 1px solid {THEME['primary']};
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    font-size: 11px;
+                    font-weight: bold;
+                }}
+            """)
+        else:
+            label = self._key_str if self._key_str else "Kosong"
+            fg = THEME["text_primary"] if self._key_str else THEME["text_muted"]
+            self.setText(label)
+            self.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {THEME['bg_root']};
+                    color: {fg};
+                    border: 1px solid {THEME['border']};
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    font-size: 11px;
+                    font-weight: bold;
+                }}
+                QPushButton:hover {{
+                    border-color: {THEME['primary']};
+                }}
+            """)
+
+    def _start_capture(self):
+        self._capturing = True
+        self._refresh_visual()
+        self.setFocus()
+
+    def focusOutEvent(self, event):
+        if self._capturing:
+            self._capturing = False
+            self._refresh_visual()
+        super().focusOutEvent(event)
+
+    def keyPressEvent(self, event):
+        if not self._capturing:
+            super().keyPressEvent(event)
+            return
+
+        key = event.key()
+        if key in (Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta):
+            return
+
+        if key == Qt.Key_Escape:
+            self._capturing = False
+            self._refresh_visual()
+            return
+
+        if key in (Qt.Key_Backspace, Qt.Key_Delete):
+            self._capturing = False
+            self._key_str = ""
+            self._refresh_visual()
+            self.hotkey_changed.emit(self.action_id, "")
+            return
+
+        mods = []
+        m = event.modifiers()
+        if m & Qt.ControlModifier:
+            mods.append("Ctrl")
+        if m & Qt.AltModifier:
+            mods.append("Alt")
+        if m & Qt.ShiftModifier:
+            mods.append("Shift")
+
+        key_name = QKeySequence(key).toString().strip()
+        if not key_name:
+            return
+        combo = "+".join(mods + [key_name])
+        self._capturing = False
+        self._refresh_visual()
+        self.hotkey_changed.emit(self.action_id, combo)
+
+
 # --- Tab 4: SYSTEM Tab View ---
 class QtSystemTabView(QWidget):
     def __init__(self, app, parent=None):
@@ -3184,7 +3300,78 @@ class QtSystemTabView(QWidget):
 
         layout.addWidget(kor_box)
 
-        # 4. Git & Version Info Frame with Branch Switcher!
+        # 4. Hotkey Kustom Frame
+        hk_box = QFrame()
+        hk_box.setObjectName("HkBox")
+        hk_box.setStyleSheet(f"""
+            #HkBox {{
+                background-color: {THEME['bg_card']};
+                border: 1px solid {THEME['border']};
+                border-radius: 6px;
+            }}
+            #HkBox QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """)
+        hk_layout = QVBoxLayout(hk_box)
+        hk_layout.setContentsMargins(12, 10, 12, 10)
+        hk_layout.setSpacing(6)
+
+        hk_hdr = QHBoxLayout()
+        lbl_hk = QLabel("HOTKEY")
+        lbl_hk.setStyleSheet(f"color: {THEME['primary']}; font-weight: bold; font-size: 11px;")
+        hk_hdr.addWidget(lbl_hk)
+        hk_hdr.addStretch(1)
+
+        btn_hk_reset = QPushButton("Reset Default")
+        btn_hk_reset.setCursor(Qt.PointingHandCursor)
+        btn_hk_reset.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {THEME['text_secondary']};
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 2px 8px;
+                font-size: 10px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                color: {THEME['primary']};
+                border-color: {THEME['primary']};
+            }}
+        """)
+        btn_hk_reset.clicked.connect(self.app.reset_hotkeys)
+        hk_hdr.addWidget(btn_hk_reset)
+        hk_layout.addLayout(hk_hdr)
+
+        self._hotkey_specs = [
+            ("toggle_scan", "Start / Stop Scanner"),
+            ("flag_error", "Flag Deteksi Salah"),
+            ("add_whitelist", "Tambah Whitelist"),
+            ("add_blocklist", "Tambah Blocklist"),
+            ("add_kamus", "Tambah Kata ke Kamus"),
+            ("add_tag", "Tambah Tag Akhiran"),
+            ("cycle_mode", "Ganti Mode Permainan"),
+        ]
+        self._hotkey_buttons = {}
+        cur_hotkeys = self.app.config.get("hotkeys", {})
+        for aid, label_txt in self._hotkey_specs:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            lbl = QLabel(label_txt)
+            lbl.setStyleSheet(f"color: {THEME['text_primary']}; font-size: 11px;")
+            row.addWidget(lbl, 1)
+
+            btn_hk = QtHotkeyButton(aid, cur_hotkeys.get(aid, ""))
+            btn_hk.hotkey_changed.connect(self._on_hotkey_changed)
+            self._hotkey_buttons[aid] = btn_hk
+            row.addWidget(btn_hk)
+            hk_layout.addLayout(row)
+
+        layout.addWidget(hk_box)
+
+        # 5. Git & Version Info Frame with Branch Switcher!
         git_box = QFrame()
         git_box.setObjectName("GitBox")
         git_box.setStyleSheet(f"""
@@ -3312,6 +3499,28 @@ class QtSystemTabView(QWidget):
             if hasattr(self, "container"):
                 self.container.setFixedWidth(event.size().width())
         return super().eventFilter(obj, event)
+
+    def _on_hotkey_changed(self, action_id: str, new_key: str):
+        if new_key:
+            cur_hotkeys = self.app.config.get("hotkeys", {})
+            spec_map = dict(self._hotkey_specs)
+            for other_id, other_key in cur_hotkeys.items():
+                if other_id != action_id and (other_key or "").strip().lower() == new_key.lower():
+                    self._hotkey_buttons[action_id].set_hotkey(cur_hotkeys.get(action_id, ""))
+                    self.app.show_toast(f"Hotkey '{new_key}' sudah dipakai oleh '{spec_map.get(other_id, other_id)}'!")
+                    return
+        self.app.set_hotkey(action_id, new_key)
+        self._hotkey_buttons[action_id].set_hotkey(new_key)
+        spec_map = dict(self._hotkey_specs)
+        if new_key:
+            self.app.show_toast(f"Hotkey '{spec_map.get(action_id, action_id)}' diubah ke {new_key}")
+        else:
+            self.app.show_toast(f"Hotkey '{spec_map.get(action_id, action_id)}' dinonaktifkan")
+
+    def refresh_hotkeys(self):
+        cur_hotkeys = self.app.config.get("hotkeys", {})
+        for aid, btn in self._hotkey_buttons.items():
+            btn.set_hotkey(cur_hotkeys.get(aid, ""))
 
     def refresh_counts(self):
         folder_kt = os.path.abspath("sample/kurang_tepat")

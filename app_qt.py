@@ -15,7 +15,7 @@ from qt_theme import THEME, GLOBAL_QSS, get_qicon
 from qt_components import QtTopTabStrip, QtMiniTickerBar, QtCustomTitleBar
 from tab_views_qt import QtLiveTabView, QtTagsTabView, QtDictionaryTabView, QtSystemTabView, QtKoreksiDialog
 
-from config import load_config, save_config
+from config import load_config, save_config, DEFAULT_HOTKEYS
 from solver import SambungKataSolver
 from ocr_engine import OCREngine
 from updater import GitUpdater
@@ -54,7 +54,7 @@ class SambungKataQtApp(QMainWindow):
     """
     Aplikasi Utama SAKA Overlay berbasis PySide6 (Tactical Cyber Bamboo Theme).
     """
-    f2_hotkey_triggered = Signal()
+    hotkey_triggered = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -183,14 +183,11 @@ class SambungKataQtApp(QMainWindow):
         self.scan_worker = ScanWorker(self.ocr, lambda: self.config.get("scan_interval_sec", 0.08))
         self.scan_worker.result_ready.connect(self._on_scan_result)
 
-        # Global Hotkey F2 (manual flag detection) - marshal ke Qt main thread via Signal
-        self.f2_hotkey_triggered.connect(self._on_f2_hotkey)
-        try:
-            import keyboard
-            keyboard.add_hotkey("F2", self.f2_hotkey_triggered.emit)
-        except Exception:
-            self.sc_f2 = QShortcut(QKeySequence("F2"), self)
-            self.sc_f2.activated.connect(self._on_f2_hotkey)
+        # Global Hotkeys (Customizables) - marshal ke Qt main thread via Signal(str)
+        self._kb_hooks = []
+        self._qt_shortcuts = []
+        self.hotkey_triggered.connect(self._on_hotkey_action)
+        self.register_hotkeys()
 
         # Posisikan window di sisi kanan layar (Default Right-Docked) & Muat Geometri Tersimpan
         self._init_window_geometry()
@@ -464,6 +461,12 @@ class SambungKataQtApp(QMainWindow):
             self.update_results(self.last_detected_word)
         self.show_toast(f"Mode permainan diubah ke {mode.upper()}")
 
+    def cycle_game_mode(self):
+        order = ["default", "santai", "brutal"]
+        cur = self.config.get("game_mode", "default")
+        nxt = order[(order.index(cur) + 1) % len(order)] if cur in order else "default"
+        self.set_game_mode(nxt)
+
     def toggle_tier0_sort(self):
         curr = self.config.get("tier0_sort_mode", "default")
         nxt = "tag_order" if curr == "default" else "default"
@@ -484,10 +487,86 @@ class SambungKataQtApp(QMainWindow):
         st = "diaktifkan" if enabled else "dinonaktifkan"
         self.show_toast(f"Two-Tone Text {st}")
 
+    def _exec_dialog_with_focus(self, dlg: QDialog, focus_widget):
+        """Menjalankan dialog modal dengan auto-focus ke input dan mengembalikan fokus ke window sebelumnya (misal Roblox)."""
+        prev_hwnd = 0
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                user32 = ctypes.windll.user32
+                fg = user32.GetForegroundWindow()
+                if fg and fg != int(self.winId()):
+                    prev_hwnd = fg
+            except Exception:
+                prev_hwnd = 0
+
+        dlg.setWindowFlags(dlg.windowFlags() | Qt.WindowStaysOnTopHint)
+
+        def _force_focus_dialog():
+            if sys.platform == "win32":
+                try:
+                    import ctypes
+                    user32 = ctypes.windll.user32
+                    kernel32 = ctypes.windll.kernel32
+                    fg = user32.GetForegroundWindow()
+                    fg_tid = user32.GetWindowThreadProcessId(fg, None) if fg else 0
+                    cur_tid = kernel32.GetCurrentThreadId()
+                    attached = False
+                    if fg_tid and fg_tid != cur_tid:
+                        attached = bool(user32.AttachThreadInput(cur_tid, fg_tid, True))
+                    dlg.raise_()
+                    dlg.activateWindow()
+                    user32.SetForegroundWindow(int(dlg.winId()))
+                    if attached:
+                        user32.AttachThreadInput(cur_tid, fg_tid, False)
+                except Exception:
+                    pass
+            dlg.raise_()
+            dlg.activateWindow()
+            if focus_widget is not None:
+                focus_widget.setFocus()
+
+        QTimer.singleShot(20, _force_focus_dialog)
+        dlg.exec()
+
+        if prev_hwnd and sys.platform == "win32":
+            def _restore_prev_window():
+                try:
+                    import ctypes
+                    user32 = ctypes.windll.user32
+                    kernel32 = ctypes.windll.kernel32
+                    if not user32.IsWindow(prev_hwnd):
+                        return
+                    fg = user32.GetForegroundWindow()
+                    fg_tid = user32.GetWindowThreadProcessId(fg, None) if fg else 0
+                    target_tid = user32.GetWindowThreadProcessId(prev_hwnd, None)
+                    cur_tid = kernel32.GetCurrentThreadId()
+                    att_fg = bool(fg_tid and fg_tid != cur_tid and user32.AttachThreadInput(cur_tid, fg_tid, True))
+                    att_tgt = bool(target_tid and target_tid != cur_tid and user32.AttachThreadInput(cur_tid, target_tid, True))
+                    user32.SetForegroundWindow(prev_hwnd)
+                    if att_tgt:
+                        user32.AttachThreadInput(cur_tid, target_tid, False)
+                    if att_fg:
+                        user32.AttachThreadInput(cur_tid, fg_tid, False)
+                except Exception:
+                    pass
+            QTimer.singleShot(30, _restore_prev_window)
+
     def open_quick_add_dialog(self, mode: str = "whitelist"):
+        if getattr(self, "_active_quick_add", None) is not None:
+            try:
+                self._active_quick_add.raise_()
+                self._active_quick_add.activateWindow()
+                self._active_quick_add.edit_word.setFocus()
+                return
+            except Exception:
+                self._active_quick_add = None
+
         from tab_views_qt import QtQuickAddDialog
         dlg = QtQuickAddDialog(self, mode=mode, parent=self)
-        dlg.exec()
+        self._active_quick_add = dlg
+        self._exec_dialog_with_focus(dlg, dlg.edit_word)
+        self._active_quick_add = None
 
     def on_add_word_quick(self, word: str):
         if not word:
@@ -594,6 +673,15 @@ class SambungKataQtApp(QMainWindow):
             self.show_toast(f"Tag '{item.get('suffix')}' dipindahkan ke #{target_idx + 1}")
 
     def open_edit_tag_dialog(self, tag_data: dict = None):
+        if tag_data is None and getattr(self, "_active_tag_dialog", None) is not None:
+            try:
+                self._active_tag_dialog.raise_()
+                self._active_tag_dialog.activateWindow()
+                self._active_tag_edit.setFocus()
+                return
+            except Exception:
+                self._active_tag_dialog = None
+
         dlg = QDialog(self)
         dlg.setWindowTitle("Edit Tag Akhiran" if tag_data else "Tambah Tag Baru")
         dlg.setFixedSize(300, 140)
@@ -690,8 +778,13 @@ class SambungKataQtApp(QMainWindow):
         btn_box.addWidget(btn_save)
         d_layout.addLayout(btn_box)
 
-        QTimer.singleShot(50, e_sfx.setFocus)
-        dlg.exec()
+        if tag_data is None:
+            self._active_tag_dialog = dlg
+            self._active_tag_edit = e_sfx
+        self._exec_dialog_with_focus(dlg, e_sfx)
+        if tag_data is None:
+            self._active_tag_dialog = None
+            self._active_tag_edit = None
 
     def open_region_selector(self):
         from region_selector_qt import QtRegionSelector
@@ -942,6 +1035,83 @@ class SambungKataQtApp(QMainWindow):
                     return True, 11  # HTRIGHT
 
         return super().nativeEvent(event_type, message)
+
+    def register_hotkeys(self):
+        """Mendaftarkan ulang seluruh hotkey kustom dari config."""
+        for hk in getattr(self, "_kb_hooks", []):
+            try:
+                import keyboard
+                keyboard.remove_hotkey(hk)
+            except Exception:
+                pass
+        self._kb_hooks = []
+
+        for sc in getattr(self, "_qt_shortcuts", []):
+            try:
+                sc.setEnabled(False)
+                sc.deleteLater()
+            except Exception:
+                pass
+        self._qt_shortcuts = []
+
+        hotkeys = self.config.get("hotkeys", DEFAULT_HOTKEYS)
+        try:
+            import keyboard
+            has_kb = True
+        except Exception:
+            has_kb = False
+
+        for action_id, key_str in hotkeys.items():
+            key_clean = (key_str or "").strip()
+            if not key_clean:
+                continue
+            if has_kb:
+                try:
+                    hk = keyboard.add_hotkey(key_clean.lower(), lambda a=action_id: self.hotkey_triggered.emit(a))
+                    self._kb_hooks.append(hk)
+                    continue
+                except Exception:
+                    pass
+            try:
+                sc = QShortcut(QKeySequence(key_clean), self)
+                sc.activated.connect(lambda a=action_id: self._on_hotkey_action(a))
+                self._qt_shortcuts.append(sc)
+            except Exception:
+                pass
+
+        if hasattr(self, "tab_live") and hasattr(self.tab_live, "update_hotkey_tooltips"):
+            self.tab_live.update_hotkey_tooltips(hotkeys)
+
+    def set_hotkey(self, action_id: str, key_str: str):
+        hotkeys = dict(self.config.get("hotkeys", DEFAULT_HOTKEYS))
+        hotkeys[action_id] = (key_str or "").strip()
+        self.config["hotkeys"] = hotkeys
+        self.save_config_debounced()
+        self.register_hotkeys()
+
+    def reset_hotkeys(self):
+        self.config["hotkeys"] = DEFAULT_HOTKEYS.copy()
+        self.save_config_debounced()
+        self.register_hotkeys()
+        if hasattr(self, "tab_system") and hasattr(self.tab_system, "refresh_hotkeys"):
+            self.tab_system.refresh_hotkeys()
+        self.show_toast("Semua hotkey dikembalikan ke pengaturan default!")
+
+    def _on_hotkey_action(self, action_id: str):
+        if action_id == "toggle_scan":
+            self.toggle_scan()
+        elif action_id == "flag_error":
+            self._on_f2_hotkey()
+        elif action_id == "add_whitelist":
+            self.open_quick_add_dialog("whitelist")
+        elif action_id == "add_blocklist":
+            self.open_quick_add_dialog("blocklist")
+        elif action_id == "add_kamus":
+            self.open_quick_add_dialog("kamus")
+        elif action_id == "add_tag":
+            self.open_edit_tag_dialog(None)
+        elif action_id == "cycle_mode":
+            self.cycle_game_mode()
 
     def _on_f2_hotkey(self):
         try:
