@@ -280,7 +280,6 @@ class QtLiveTabView(QWidget):
         self.btn_sort.setIcon(get_qicon("sort", size=13, color=THEME["text_secondary"]))
         self.btn_sort.setCursor(Qt.PointingHandCursor)
         self.btn_sort.setFixedHeight(30)
-        self.btn_sort.setToolTip("Metode Pengurutan Kata: Default (Panjang & Abjad) vs Urutan Tag Kustom")
         self.btn_sort.setStyleSheet(f"""
             QPushButton {{
                 background-color: {THEME["bg_card"]};
@@ -441,15 +440,15 @@ class QtLiveTabView(QWidget):
     def update_hotkey_tooltips(self, hotkeys: dict):
         def _fmt(aid, desc):
             k = (hotkeys.get(aid) or "").strip()
-            return f"{desc} (Hotkey: {k})" if k else desc
+            return f"{desc} ({k})" if k else desc
 
-        self.btn_toggle.setToolTip(_fmt("toggle_scan", "Mulai / Hentikan Live OCR Scanner"))
-        self.btn_flag.setToolTip(_fmt("flag_error", "Laporkan / Simpan Sampel Deteksi Salah"))
-        self.btn_add_wl.setToolTip(_fmt("add_whitelist", "Tambah Kata ke Whitelist (Prioritas Teratas #1)"))
-        self.btn_add_bl.setToolTip(_fmt("add_blocklist", "Blokir Kata ke Blocklist (Kata Ditolak)"))
-        self.btn_add_word.setToolTip(_fmt("add_kamus", "Tambah Kata Baru ke Kamus Lengkap"))
-        if hasattr(self, "mode_pills"):
-            self.mode_pills.setToolTip(_fmt("cycle_mode", "Ganti Mode Permainan (Default / Santai / Brutal)"))
+        self.btn_toggle.setToolTip(_fmt("toggle_scan", "Mulai / Hentikan"))
+        self.btn_flag.setToolTip(_fmt("flag_error", "Flag Kesalahan"))
+        self.btn_add_word.setToolTip(_fmt("add_kamus", "Kata Baru"))
+        self.btn_add_wl.setToolTip(_fmt("add_whitelist", "Whitelist Kata"))
+        self.btn_add_bl.setToolTip(_fmt("add_blocklist", "Blacklist Kata"))
+        if hasattr(self, "_btn_add_tag") and self._btn_add_tag is not None:
+            self._btn_add_tag.setToolTip(_fmt("add_tag", "Akhiran Baru"))
 
     def _on_tag_scroll_wheel(self, event):
         delta = event.angleDelta().y() or event.angleDelta().x()
@@ -546,9 +545,11 @@ class QtLiveTabView(QWidget):
         btn_ico.setIcon(get_badge_qicon("tag", "plus", size=15, color=THEME["text_secondary"]))
         btn_ico.setFixedSize(26, 26)
         btn_ico.setCursor(Qt.PointingHandCursor)
-        btn_ico.setToolTip("Tambah Tag Baru")
+        hk_tag = (self.app.config.get("hotkeys", {}).get("add_tag") or "").strip()
+        btn_ico.setToolTip(f"Akhiran Baru ({hk_tag})" if hk_tag else "Akhiran Baru")
         btn_ico.setStyleSheet(f"background: {THEME['bg_card']}; border: 1px solid {THEME['border']}; border-radius: 4px;")
         btn_ico.clicked.connect(self.app.open_add_tag_dialog)
+        self._btn_add_tag = btn_ico
         self.tag_bar_layout.addWidget(btn_ico)
 
         for cat in categories:
@@ -604,7 +605,7 @@ class QtQuickAddDialog(QDialog):
 
         titles = {
             "whitelist": ("Tambah ke Whitelist", "star_filled", THEME["warning"], "Kata ini akan selalu diprioritaskan di posisi #1 rekomendasi"),
-            "blocklist": ("Blokir ke Blocklist", "cross", THEME["danger"], "Kata ini tidak akan pernah direkomendasikan lagi oleh bot"),
+            "blocklist": ("Blokir ke Blocklist", "ban", THEME["danger"], "Kata ini tidak akan pernah direkomendasikan lagi oleh bot"),
             "kamus": ("Tambah Kata ke Kamus", "plus", THEME["primary"], "Daftarkan kata baru ke kamus lengkap")
         }
         title, icon_name, color, hint = titles.get(mode, titles["whitelist"])
@@ -1066,8 +1067,8 @@ class QtTagsTabView(QWidget):
         self.app = app
         self.last_brutal_idx = None
         self.sub_strip = QtSubTabStrip([
-            ("brutal", "BRUTAL PRESET", "zap"),
-            ("custom", "KELOLA SEMUA TAG", "tag")
+            ("custom", "Kelola (0)", "tag"),
+            ("brutal", "Brutal", "zap")
         ])
         self.sub_strip.sub_tab_changed.connect(self._on_sub_tab_changed)
 
@@ -1079,12 +1080,12 @@ class QtTagsTabView(QWidget):
         self.stack_brutal = QWidget()
         self.stack_custom = QWidget()
 
-        layout.addWidget(self.stack_brutal, 1)
         layout.addWidget(self.stack_custom, 1)
+        layout.addWidget(self.stack_brutal, 1)
 
-        self._build_brutal_view()
         self._build_custom_view()
-        self._on_sub_tab_changed("brutal")
+        self._build_brutal_view()
+        self._on_sub_tab_changed("custom")
 
     def _on_sub_tab_changed(self, sub_id):
         if sub_id == "brutal":
@@ -1121,7 +1122,7 @@ class QtTagsTabView(QWidget):
         self.btn_brutal_opts.setIcon(get_qicon("settings", size=13, color=THEME["text_secondary"]))
         self.btn_brutal_opts.setFixedSize(26, 26)
         self.btn_brutal_opts.setCursor(Qt.PointingHandCursor)
-        self.btn_brutal_opts.setToolTip("Opsi Pengaturan Preset Brutal")
+        self.btn_brutal_opts.setToolTip("Aksi Massal Preset Brutal")
         self.btn_brutal_opts.setStyleSheet(f"""
             QPushButton {{
                 background-color: {THEME["bg_card"]};
@@ -1166,8 +1167,8 @@ class QtTagsTabView(QWidget):
                 color: {THEME["primary"]};
             }}
         """)
-        act_all = menu.addAction("Pilih Semua Tag")
-        act_none = menu.addAction("Matikan Semua Tag")
+        act_all = menu.addAction("Aktifkan Semua Tag (Timpa Preset)")
+        act_none = menu.addAction("Matikan Semua Tag (Timpa Preset)")
 
         action = menu.exec(self.btn_brutal_opts.mapToGlobal(QPoint(0, self.btn_brutal_opts.height() + 2)))
         if action == act_all:
@@ -1177,11 +1178,29 @@ class QtTagsTabView(QWidget):
 
     def _select_all_brutal(self):
         cats = self.app.config.get("custom_trap_endings", [])
+        reply = QMessageBox.question(
+            self,
+            "Konfirmasi Aksi Massal",
+            f"Aktifkan semua {len(cats)} tag untuk preset Brutal?\n\nSeleksi preset Brutal Anda saat ini akan tertimpa.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
         all_sfx = [c.get("suffix", "").upper() for c in cats]
         self.app.set_brutal_tags_batch(all_sfx)
         self.app.show_toast(f"Semua {len(all_sfx)} tag Brutal diaktifkan")
 
     def _deselect_all_brutal(self):
+        reply = QMessageBox.question(
+            self,
+            "Konfirmasi Aksi Massal",
+            "Matikan seluruh tag di preset Brutal?\n\nSeleksi preset Brutal Anda saat ini akan tertimpa.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
         self.app.set_brutal_tags_batch([])
         self.app.show_toast("Semua tag Brutal dinonaktifkan")
 
@@ -1247,8 +1266,8 @@ class QtTagsTabView(QWidget):
         a_layout.setContentsMargins(0, 0, 0, 0)
         a_layout.setSpacing(6)
 
-        # Dropdown button: Urutkan Prioritas LIVE
-        self.btn_sort_menu = QPushButton(" Urutkan Prioritas")
+        # Dropdown button: Urutkan Semua Tag
+        self.btn_sort_menu = QPushButton(" Urutkan Semua")
         self.btn_sort_menu.setIcon(get_qicon("sort", size=13, color=THEME["text_secondary"]))
         self.btn_sort_menu.setFixedHeight(26)
         self.btn_sort_menu.setCursor(Qt.PointingHandCursor)
@@ -1337,7 +1356,8 @@ class QtTagsTabView(QWidget):
         layout.addWidget(act_bar)
 
         # Helper info notice
-        lbl_hint = QLabel("Urutan tag di sini menentukan posisi di Quick Bar & mode URUT TAG di LIVE.")
+        lbl_hint = QLabel("Toggle aktif di sini dipakai untuk mode Normal (mode Santai otomatis menyaring X, Q, F).")
+        lbl_hint.setWordWrap(True)
         lbl_hint.setStyleSheet(f"color: {THEME['text_muted']}; font-size: 10px; font-style: italic; border: none; background: transparent; padding: 0 2px;")
         layout.addWidget(lbl_hint)
 
@@ -1361,7 +1381,7 @@ class QtTagsTabView(QWidget):
                 item.widget().deleteLater()
 
         cats = self.app.config.get("custom_trap_endings", [])
-        self.sub_strip.update_tab_label("custom", f"KELOLA SEMUA TAG ({len(cats)})")
+        self.sub_strip.update_tab_label("custom", f"Kelola ({len(cats)})")
 
         for idx, cat in enumerate(cats):
             sfx = cat.get("suffix", "").upper()
@@ -1569,9 +1589,9 @@ class QtDictionaryTabView(QWidget):
         self._search_timer.timeout.connect(self._search_dictionary)
 
         self.sub_strip = QtSubTabStrip([
-            ("whitelist", "WHITELIST", "star_filled"),
-            ("blocklist", "BLOCKLIST", "cross"),
-            ("explorer", "EKSPLORER", "search")
+            ("whitelist", "Whitelist", "star_filled"),
+            ("blocklist", "Blocklist", "ban"),
+            ("explorer", "Eksplorer", "search")
         ])
         self.sub_strip.sub_tab_changed.connect(self._on_sub_tab_changed)
 
@@ -1701,7 +1721,7 @@ class QtDictionaryTabView(QWidget):
         v_scroll = self.scroll_wl.verticalScrollBar().value() if hasattr(self, "scroll_wl") else 0
         wl_words = sorted(list(self.app.solver.whitelisted_words))
         self.lbl_wl_count.setText(f"WHITELIST ({len(wl_words)})")
-        self.sub_strip.update_tab_label("whitelist", f"WHITELIST ({len(wl_words)})")
+        self.sub_strip.update_tab_label("whitelist", f"Whitelist ({len(wl_words)})")
         query = self.edit_filter_wl.text().strip().lower() if hasattr(self, "edit_filter_wl") else ""
         if query:
             filtered = [w for w in wl_words if query in w.lower()]
@@ -1886,7 +1906,7 @@ class QtDictionaryTabView(QWidget):
         v_scroll = self.scroll_bl.verticalScrollBar().value() if hasattr(self, "scroll_bl") else 0
         bl_words = sorted(list(self.app.solver.blacklisted_words))
         self.lbl_bl_count.setText(f"BLOCKLIST ({len(bl_words)})")
-        self.sub_strip.update_tab_label("blocklist", f"BLOCKLIST ({len(bl_words)})")
+        self.sub_strip.update_tab_label("blocklist", f"Blocklist ({len(bl_words)})")
         query = self.edit_filter_bl.text().strip().lower() if hasattr(self, "edit_filter_bl") else ""
         if query:
             filtered = [w for w in bl_words if query in w.lower()]
@@ -2363,7 +2383,7 @@ class QtDictionaryTabView(QWidget):
             btn_cross = QPushButton()
             btn_cross.setFixedSize(24, 24)
             btn_cross.setCursor(Qt.PointingHandCursor)
-            btn_cross.setIcon(get_qicon("cross", size=12, color=THEME["danger"] if is_bl else THEME["text_muted"]))
+            btn_cross.setIcon(get_qicon("ban", size=12, color=THEME["danger"] if is_bl else THEME["text_muted"]))
             btn_cross.setToolTip("Pulihkan dari Blocklist" if is_bl else "Blokir kata ini")
             btn_cross.setStyleSheet(f"""
                 QPushButton {{
@@ -2472,34 +2492,55 @@ class QtKoreksiDialog(QDialog):
         hdr.addWidget(btn_folder)
         layout.addLayout(hdr)
 
-        # Source Selection Bar
+        # Source Selection Bar (Segmented Pills)
         src_bar = QFrame()
-        src_bar.setStyleSheet(f"background-color: {THEME['bg_card']}; border: 1px solid {THEME['border']}; border-radius: 6px;")
+        src_bar.setObjectName("KorSrcBar")
+        src_bar.setStyleSheet(f"""
+            #KorSrcBar {{
+                background-color: {THEME['bg_card']};
+                border: 1px solid {THEME['border']};
+                border-radius: 6px;
+            }}
+        """)
         sb_layout = QHBoxLayout(src_bar)
-        sb_layout.setContentsMargins(10, 6, 10, 6)
-        sb_layout.setSpacing(10)
+        sb_layout.setContentsMargins(6, 5, 6, 5)
+        sb_layout.setSpacing(6)
 
         self.btn_grp = QButtonGroup(self)
-        self.rb_kt = QRadioButton("Kurang Tepat")
-        self.rb_td = QRadioButton("Tidak Dikenali")
-        self.rb_all = QRadioButton("Semua")
-        self.rb_kt.setChecked(True)
+        self.btn_grp.setExclusive(True)
+        self.rb_kt = QPushButton("Kurang Tepat")
+        self.rb_td = QPushButton("Tidak Dikenali")
+        self.rb_all = QPushButton("Semua")
 
-        for i, (rb, sm) in enumerate([(self.rb_kt, "kurang_tepat"), (self.rb_td, "tidak_dikenali"), (self.rb_all, "all")]):
-            rb.setStyleSheet(f"""
-                QRadioButton {{
-                    color: {THEME['text_primary']};
-                    font-size: 11px;
-                    font-weight: bold;
-                    spacing: 6px;
-                }}
-                QRadioButton::indicator {{
-                    width: 14px;
-                    height: 14px;
-                }}
-            """)
+        pill_qss = f"""
+            QPushButton {{
+                background: transparent;
+                color: {THEME['text_secondary']};
+                border: 1px solid transparent;
+                border-radius: 4px;
+                padding: 4px 10px;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['bg_hover']};
+                color: {THEME['text_primary']};
+            }}
+            QPushButton:checked {{
+                background-color: {THEME['bg_selected']};
+                color: {THEME['primary']};
+                border: 1px solid {THEME['primary']};
+                font-weight: 600;
+            }}
+        """
+        for i, rb in enumerate([self.rb_kt, self.rb_td, self.rb_all]):
+            rb.setCheckable(True)
+            rb.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+            rb.setCursor(Qt.PointingHandCursor)
+            rb.setStyleSheet(pill_qss)
             self.btn_grp.addButton(rb, i)
             sb_layout.addWidget(rb)
+        self.rb_kt.setChecked(True)
 
         self.btn_grp.idClicked.connect(self._on_source_changed)
         sb_layout.addStretch(1)
@@ -2522,7 +2563,18 @@ class QtKoreksiDialog(QDialog):
 
         # Image preview container
         self.img_box = QFrame()
-        self.img_box.setStyleSheet(f"background-color: {THEME['bg_root']}; border: 1px solid {THEME['border']}; border-radius: 6px;")
+        self.img_box.setObjectName("KorImgBox")
+        self.img_box.setStyleSheet(f"""
+            #KorImgBox {{
+                background-color: {THEME['bg_root']};
+                border: 1px solid {THEME['border']};
+                border-radius: 6px;
+            }}
+            #KorImgBox QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """)
         ib_layout = QVBoxLayout(self.img_box)
         ib_layout.setContentsMargins(12, 12, 12, 12)
         self.lbl_img = QLabel("Tidak ada gambar")
@@ -2533,7 +2585,18 @@ class QtKoreksiDialog(QDialog):
 
         # Info Box
         info_box = QFrame()
-        info_box.setStyleSheet(f"background-color: {THEME['bg_card']}; border: 1px solid {THEME['border']}; border-radius: 6px;")
+        info_box.setObjectName("KorInfoBox")
+        info_box.setStyleSheet(f"""
+            #KorInfoBox {{
+                background-color: {THEME['bg_card']};
+                border: 1px solid {THEME['border']};
+                border-radius: 6px;
+            }}
+            #KorInfoBox QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """)
         inf_l = QVBoxLayout(info_box)
         inf_l.setContentsMargins(10, 8, 10, 8)
         inf_l.setSpacing(4)
@@ -2547,19 +2610,30 @@ class QtKoreksiDialog(QDialog):
         inf_l.addWidget(self.lbl_detail)
 
         self.lbl_status = QLabel("Status: -")
-        self.lbl_status.setStyleSheet(f"color: {THEME['warning']}; font-size: 11px;")
+        self.lbl_status.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
         inf_l.addWidget(self.lbl_status)
         layout.addWidget(info_box)
 
         # Input Frame
         in_frame = QFrame()
-        in_frame.setStyleSheet(f"background-color: {THEME['bg_card']}; border: 1px solid {THEME['border_focus']}; border-radius: 6px;")
+        in_frame.setObjectName("KorInFrame")
+        in_frame.setStyleSheet(f"""
+            #KorInFrame {{
+                background-color: {THEME['bg_card']};
+                border: 1px solid {THEME['border']};
+                border-radius: 6px;
+            }}
+            #KorInFrame QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """)
         in_l = QVBoxLayout(in_frame)
         in_l.setContentsMargins(10, 8, 10, 8)
         in_l.setSpacing(6)
 
         lbl_p = QLabel("Awalan yang Seharusnya (Benar):")
-        lbl_p.setStyleSheet(f"color: {THEME['warning']}; font-size: 11px; font-weight: bold;")
+        lbl_p.setStyleSheet(f"color: {THEME['text_primary']}; font-size: 11px; font-weight: bold;")
         in_l.addWidget(lbl_p)
 
         act_r = QHBoxLayout()
@@ -2609,13 +2683,18 @@ class QtKoreksiDialog(QDialog):
 
         # Navigation & Delete Bar
         nav_r = QHBoxLayout()
-        self.btn_prev = QPushButton("◀ Sebelumnya (←)")
+        self.btn_prev = QPushButton(" Sebelumnya")
+        self.btn_prev.setIcon(get_qicon("arrow_back", size=12, color=THEME["text_primary"]))
+        self.btn_prev.setToolTip("Sebelumnya (←)")
         self.btn_prev.setCursor(Qt.PointingHandCursor)
         self.btn_prev.setStyleSheet(f"background-color: {THEME['bg_card']}; color: {THEME['text_primary']}; border: 1px solid {THEME['border']}; border-radius: 4px; padding: 4px 10px; font-size: 11px;")
         self.btn_prev.clicked.connect(self._prev)
         nav_r.addWidget(self.btn_prev)
 
-        self.btn_next = QPushButton("Berikutnya ▶ (→)")
+        self.btn_next = QPushButton("Berikutnya ")
+        self.btn_next.setIcon(get_qicon("arrow_forward", size=12, color=THEME["text_primary"]))
+        self.btn_next.setLayoutDirection(Qt.RightToLeft)
+        self.btn_next.setToolTip("Berikutnya (→)")
         self.btn_next.setCursor(Qt.PointingHandCursor)
         self.btn_next.setStyleSheet(f"background-color: {THEME['bg_card']}; color: {THEME['text_primary']}; border: 1px solid {THEME['border']}; border-radius: 4px; padding: 4px 10px; font-size: 11px;")
         self.btn_next.clicked.connect(self._next)
@@ -2715,32 +2794,39 @@ class QtKoreksiDialog(QDialog):
         return None
 
     def _reload_items(self):
-        parsed = []
-        if self.source_mode in ("kurang_tepat", "all") and os.path.exists(self.kurang_tepat_dir):
+        all_kt = []
+        if os.path.exists(self.kurang_tepat_dir):
             for f in sorted(os.listdir(self.kurang_tepat_dir)):
                 if f.endswith(".png"):
                     p = self._parse_file(os.path.join(self.kurang_tepat_dir, f), "kurang_tepat")
                     if p:
-                        parsed.append(p)
+                        all_kt.append(p)
 
-        if self.source_mode in ("tidak_dikenali", "all") and os.path.exists(self.unknown_dir):
+        all_td = []
+        if os.path.exists(self.unknown_dir):
             for f in sorted(os.listdir(self.unknown_dir)):
                 fpath = os.path.join(self.unknown_dir, f)
                 if f.endswith(".png") and os.path.isfile(fpath):
                     p = self._parse_file(fpath, "tidak_dikenali")
                     if p:
-                        parsed.append(p)
+                        all_td.append(p)
 
-        if self.only_uncorrected:
-            self.items = [p for p in parsed if not p["is_corrected"]]
+        filt_kt = [p for p in all_kt if not p["is_corrected"]] if self.only_uncorrected else all_kt
+        filt_td = [p for p in all_td if not p["is_corrected"]] if self.only_uncorrected else all_td
+
+        self.rb_kt.setText(f"Kurang Tepat ({len(filt_kt)})")
+        self.rb_td.setText(f"Tidak Dikenali ({len(filt_td)})")
+        self.rb_all.setText(f"Semua ({len(filt_kt) + len(filt_td)})")
+        for rb in (self.rb_kt, self.rb_td, self.rb_all):
+            rb.adjustSize()
+            rb.updateGeometry()
+
+        if self.source_mode == "kurang_tepat":
+            self.items = filt_kt
+        elif self.source_mode == "tidak_dikenali":
+            self.items = filt_td
         else:
-            self.items = parsed
-
-        cnt_kt = len([p for p in parsed if p["source"] == "kurang_tepat" and (not self.only_uncorrected or not p["is_corrected"])])
-        cnt_td = len([p for p in parsed if p["source"] == "tidak_dikenali" and (not self.only_uncorrected or not p["is_corrected"])])
-        self.rb_kt.setText(f"Kurang Tepat ({cnt_kt})")
-        self.rb_td.setText(f"Tidak Dikenali ({cnt_td})")
-        self.rb_all.setText(f"Semua ({len(self.items)})")
+            self.items = filt_kt + filt_td
 
         self.current_idx = min(self.current_idx, max(0, len(self.items) - 1))
         self._display_current()
@@ -2770,8 +2856,8 @@ class QtKoreksiDialog(QDialog):
             self.edit_text.setText(item["seh"])
             self.edit_text.selectAll()
         else:
-            self.lbl_status.setText("⚠️ Belum dikoreksi")
-            self.lbl_status.setStyleSheet(f"color: {THEME['warning']}; font-size: 11px;")
+            self.lbl_status.setText("Belum dikoreksi")
+            self.lbl_status.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
             self.edit_text.clear()
 
         pix = QPixmap(item["fpath"])
@@ -3091,10 +3177,10 @@ class QtSystemTabView(QWidget):
         btn_roi.clicked.connect(self.app.open_region_selector)
         roi_row.addWidget(btn_roi, 1)
 
-        btn_test_roi = QPushButton(" Test Area")
+        btn_test_roi = QPushButton(" Cek Area Scanner")
         btn_test_roi.setIcon(get_qicon("search", size=13, color=THEME["primary"]))
         btn_test_roi.setCursor(Qt.PointingHandCursor)
-        btn_test_roi.setToolTip("Tampilkan posisi Area Scanner di layar & uji deteksi OCR 1x")
+        btn_test_roi.setToolTip("Tampilkan posisi Area Scanner di layar")
         btn_test_roi.setStyleSheet(f"""
             QPushButton {{
                 background-color: {THEME['bg_hover']};
@@ -3109,7 +3195,7 @@ class QtSystemTabView(QWidget):
                 background-color: {THEME['bg_card']};
             }}
         """)
-        btn_test_roi.clicked.connect(self.app.test_region_scanner)
+        btn_test_roi.clicked.connect(self.app.check_region_scanner)
         roi_row.addWidget(btn_test_roi)
 
         sc_layout.addLayout(roi_row)
@@ -3471,6 +3557,11 @@ class QtSystemTabView(QWidget):
         c_row.addStretch(1)
         git_layout.addLayout(c_row)
 
+        self.lbl_commit_msg = QLabel(curr_commit.get("message", ""))
+        self.lbl_commit_msg.setWordWrap(True)
+        self.lbl_commit_msg.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
+        git_layout.addWidget(self.lbl_commit_msg)
+
         self.btn_check_update = QPushButton(" Cek Update")
         self.btn_check_update.setIcon(get_qicon("refresh", size=13, color=THEME["text_dark"]))
         self.btn_check_update.setCursor(Qt.PointingHandCursor)
@@ -3549,6 +3640,8 @@ class QtSystemTabView(QWidget):
         self.commit_hash = curr_commit.get("hash", "Unknown")
         if hasattr(self, "lbl_commit"):
             self.lbl_commit.setText(f"#{self.commit_hash}")
+        if hasattr(self, "lbl_commit_msg"):
+            self.lbl_commit_msg.setText(curr_commit.get("message", ""))
 
     def _open_commit_link(self):
         url = f"https://github.com/anv-group/sambung-kata-overlay/commit/{self.commit_hash}"

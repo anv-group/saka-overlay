@@ -24,13 +24,13 @@ class QtTopTabStrip(QWidget):
 
         tabs = [
             ("live", "LIVE", "zap"),
-            ("tags", "TAGS", "tag"),
+            ("tags", "MODE", "tag"),
             ("kamus", "KAMUS", "book"),
             ("system", "SYSTEM", "settings")
         ]
 
         for tab_id, label, icon_name in tabs:
-            btn = QPushButton(label)
+            btn = QPushButton(f" {label}")
             btn.setCursor(Qt.PointingHandCursor)
             btn.setIcon(get_qicon(icon_name, size=14, color=THEME["text_secondary"]))
             btn.setFixedHeight(32)
@@ -59,7 +59,7 @@ class QtTopTabStrip(QWidget):
                     QPushButton {{
                         background-color: {THEME["bg_card"]};
                         color: {THEME["primary"]};
-                        font-weight: bold;
+                        font-weight: 500;
                         border: 1px solid {THEME["border_focus"]};
                         border-bottom: 2px solid {THEME["primary"]};
                         border-top-left-radius: 6px;
@@ -349,7 +349,7 @@ class QtSegmentedPills(QWidget):
         layout.setSpacing(4)
 
         modes = [
-            ("default", "DEFAULT", "zap"),
+            ("default", "NORMAL", "zap"),
             ("santai", "SANTAI", "book"),
             ("brutal", "BRUTAL", "danger")
         ]
@@ -439,12 +439,36 @@ class QtCustomTitleBar(QWidget):
         layout.setContentsMargins(10, 0, 0, 0)
         layout.setSpacing(6)
 
-        # Logo horizontal (177x28 -> scaled to height 20)
+        # Logo horizontal (downscale Lanczos presisi pada native DPR agar tajam & tidak burik)
         self.lbl_logo = QLabel()
         if os.path.exists(logo_path):
-            pix = QPixmap(logo_path)
-            if not pix.isNull():
-                self.lbl_logo.setPixmap(pix.scaledToHeight(20, Qt.SmoothTransformation))
+            dpr = self.devicePixelRatioF() or 1.0
+            target_h = max(20, int(round(20 * dpr)))
+            loaded_pm = None
+            try:
+                from PIL import Image
+                from PySide6.QtGui import QImage
+                with Image.open(logo_path) as im:
+                    im = im.convert("RGBA")
+                    w, h = im.size
+                    if h > 0:
+                        target_w = max(1, int(round(w * (target_h / float(h)))))
+                        resized = im.resize((target_w, target_h), Image.Resampling.LANCZOS)
+                        raw_bytes = resized.tobytes("raw", "RGBA")
+                        qimg = QImage(raw_bytes, target_w, target_h, target_w * 4, QImage.Format_RGBA8888).copy()
+                        loaded_pm = QPixmap.fromImage(qimg)
+                        loaded_pm.setDevicePixelRatio(dpr)
+            except Exception:
+                loaded_pm = None
+
+            if loaded_pm is None or loaded_pm.isNull():
+                pix = QPixmap(logo_path)
+                if not pix.isNull():
+                    loaded_pm = pix.scaledToHeight(target_h, Qt.SmoothTransformation)
+                    loaded_pm.setDevicePixelRatio(dpr)
+
+            if loaded_pm is not None and not loaded_pm.isNull():
+                self.lbl_logo.setPixmap(loaded_pm)
         layout.addWidget(self.lbl_logo)
 
         layout.addStretch(1)

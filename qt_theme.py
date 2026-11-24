@@ -1,6 +1,6 @@
 import os
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
 
 # Palet Warna Resmi Tactical Cyber Bamboo (sesuai DESIGN.md)
 THEME = {
@@ -40,12 +40,15 @@ _QICON_CACHE = {}
 
 def get_qicon(name: str, size: int = 18, color: str = None, angle: float = 0) -> QIcon:
     """
-    Memuat icon PNG resmi Material Design dari assets/icons/, meresize dengan
-    anti-aliasing halus, lalu mewarnainya (Dynamic Color Tinting) menggunakan
-    QPainter CompositionMode_SourceIn. Mendukung rotasi opsional (angle).
+    Memuat icon PNG resmi Material Design dari assets/icons/ pada resolusi HiDPI (2x)
+    agar tajam di layar DPI scaling 125%+, lalu mewarnainya (Dynamic Color Tinting).
+    Mendukung rotasi opsional (angle).
     """
     if color is None:
         color = THEME["text_primary"]
+
+    if name == "ban" and angle == 0:
+        return get_ban_qicon(size=size, color=color)
 
     cache_key = (name, size, color, angle)
     if cache_key in _QICON_CACHE:
@@ -54,23 +57,29 @@ def get_qicon(name: str, size: int = 18, color: str = None, angle: float = 0) ->
     filename = f"{name}.png" if not name.endswith(".png") else name
     file_path = os.path.join(ICONS_DIR, filename)
 
+    render_dpr = 2.0
+    phys_sz = max(1, int(round(size * render_dpr)))
+
     if not os.path.exists(file_path):
         # Fallback empty transparent icon
-        pix = QPixmap(size, size)
+        pix = QPixmap(phys_sz, phys_sz)
         pix.fill(Qt.transparent)
+        pix.setDevicePixelRatio(render_dpr)
         ico = QIcon(pix)
         _QICON_CACHE[cache_key] = ico
         return ico
 
-    # Load source pixmap
+    # Load source pixmap at 2x physical pixels for crisp HiDPI rendering
     src = QPixmap(file_path)
-    scaled = src.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    scaled = src.scaled(phys_sz, phys_sz, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
     # Dynamic Color Tinting
     tinted = QPixmap(scaled.size())
     tinted.fill(Qt.transparent)
 
     painter = QPainter(tinted)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setRenderHint(QPainter.SmoothPixmapTransform)
     painter.drawPixmap(0, 0, scaled)
     painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
     painter.fillRect(tinted.rect(), QColor(color))
@@ -90,13 +99,14 @@ def get_qicon(name: str, size: int = 18, color: str = None, angle: float = 0) ->
         rp.end()
         tinted = rotated
 
+    tinted.setDevicePixelRatio(render_dpr)
     ico = QIcon(tinted)
     _QICON_CACHE[cache_key] = ico
     return ico
 
 
 def get_badge_qicon(base_icon, badge_name: str = "plus", size: int = 16, color: str = None, badge_color: str = None) -> QIcon:
-    """Membuat ikon komposit (ikon utama dari nama aset atau QIcon + badge kecil di pojok kanan bawah) dengan cache."""
+    """Membuat ikon komposit HiDPI 2x (ikon utama dari nama aset atau QIcon + badge kecil di pojok kanan bawah)."""
     if color is None:
         color = THEME["text_primary"]
     if badge_color is None:
@@ -107,34 +117,48 @@ def get_badge_qicon(base_icon, badge_name: str = "plus", size: int = 16, color: 
     if cache_key in _QICON_CACHE:
         return _QICON_CACHE[cache_key]
 
-    pix = QPixmap(size, size)
+    render_dpr = 2.0
+    phys_sz = max(1, int(round(size * render_dpr)))
+
+    pix = QPixmap(phys_sz, phys_sz)
     pix.fill(Qt.transparent)
     painter = QPainter(pix)
     painter.setRenderHint(QPainter.Antialiasing)
+    painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
-    base_sz = max(10, size - 3)
-    src_icon = get_qicon(base_icon, size=base_sz, color=color) if isinstance(base_icon, str) else base_icon
-    base_pix = src_icon.pixmap(base_sz, base_sz)
+    base_logical = max(10, size - 3)
+    base_phys = int(round(base_logical * render_dpr))
+    src_icon = get_qicon(base_icon, size=base_logical, color=color) if isinstance(base_icon, str) else base_icon
+    base_pix = src_icon.pixmap(QSize(base_logical, base_logical), render_dpr)
+    if base_pix.width() != base_phys:
+        base_pix = base_pix.scaled(base_phys, base_phys, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    base_pix.setDevicePixelRatio(1.0)
     painter.drawPixmap(0, 0, base_pix)
 
-    badge_sz = max(7, size // 2)
-    bx = size - badge_sz
-    by = size - badge_sz
+    badge_logical = max(7, size // 2)
+    badge_phys = int(round(badge_logical * render_dpr))
+    bx = phys_sz - badge_phys
+    by = phys_sz - badge_phys
+    pad_px = int(round(1 * render_dpr))
     painter.setPen(Qt.NoPen)
     painter.setBrush(QColor(THEME["bg_card"]))
-    painter.drawEllipse(bx - 1, by - 1, badge_sz + 2, badge_sz + 2)
+    painter.drawEllipse(bx - pad_px, by - pad_px, badge_phys + pad_px * 2, badge_phys + pad_px * 2)
 
-    badge_pix = get_qicon(badge_name, size=badge_sz, color=badge_color).pixmap(badge_sz, badge_sz)
+    badge_pix = get_qicon(badge_name, size=badge_logical, color=badge_color).pixmap(QSize(badge_logical, badge_logical), render_dpr)
+    if badge_pix.width() != badge_phys:
+        badge_pix = badge_pix.scaled(badge_phys, badge_phys, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    badge_pix.setDevicePixelRatio(1.0)
     painter.drawPixmap(bx, by, badge_pix)
     painter.end()
 
+    pix.setDevicePixelRatio(render_dpr)
     ico = QIcon(pix)
     _QICON_CACHE[cache_key] = ico
     return ico
 
 
 def get_ban_qicon(size: int = 15, color: str = None) -> QIcon:
-    """Menggambar ikon vektor larangan (lingkaran + garis miring) untuk Blocklist."""
+    """Menggambar ikon vektor larangan HiDPI 2x (lingkaran + garis miring) untuk Blocklist."""
     if color is None:
         color = THEME["danger"]
 
@@ -142,22 +166,26 @@ def get_ban_qicon(size: int = 15, color: str = None) -> QIcon:
     if cache_key in _QICON_CACHE:
         return _QICON_CACHE[cache_key]
 
-    pix = QPixmap(size, size)
+    render_dpr = 2.0
+    phys_sz = max(1, int(round(size * render_dpr)))
+
+    pix = QPixmap(phys_sz, phys_sz)
     pix.fill(Qt.transparent)
     painter = QPainter(pix)
     painter.setRenderHint(QPainter.Antialiasing)
 
-    pen = QPen(QColor(color), max(1.6, size * 0.13), Qt.SolidLine, Qt.RoundCap)
+    pen = QPen(QColor(color), max(3.0, phys_sz * 0.13), Qt.SolidLine, Qt.RoundCap)
     painter.setPen(pen)
     painter.setBrush(Qt.NoBrush)
 
-    pad = max(2, int(round(size * 0.14)))
-    d = size - (pad * 2)
+    pad = max(4, int(round(phys_sz * 0.14)))
+    d = phys_sz - (pad * 2)
     painter.drawEllipse(pad, pad, d, d)
     offset = int(round(d * 0.16))
     painter.drawLine(pad + offset, pad + d - offset, pad + d - offset, pad + offset)
     painter.end()
 
+    pix.setDevicePixelRatio(render_dpr)
     ico = QIcon(pix)
     _QICON_CACHE[cache_key] = ico
     return ico

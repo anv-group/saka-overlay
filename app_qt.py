@@ -459,7 +459,8 @@ class SambungKataQtApp(QMainWindow):
 
         if self.last_detected_word:
             self.update_results(self.last_detected_word)
-        self.show_toast(f"Mode permainan diubah ke {mode.upper()}")
+        mode_label = "NORMAL" if mode == "default" else mode.upper()
+        self.show_toast(f"Mode permainan diubah ke {mode_label}")
 
     def cycle_game_mode(self):
         order = ["default", "santai", "brutal"]
@@ -846,30 +847,19 @@ class SambungKataQtApp(QMainWindow):
         self._area_preview_win = preview
         QTimer.singleShot(1200, preview.close)
 
-    def test_region_scanner(self):
-        """Menguji Area Scanner dengan menampilkan preview area dan menjalankan 1x scan OCR."""
+    def check_region_scanner(self):
+        """Menampilkan preview posisi Area Scanner di layar tanpa menjalankan OCR."""
         area = self.config.get("screen_area")
         if not area or area.get("width", 0) <= 0 or area.get("height", 0) <= 0:
             self.show_toast("Belum ada area layar yang diatur! Klik 'Atur Area Scanner' dulu.")
             return
 
+        l = int(area.get("left", 0))
+        t = int(area.get("top", 0))
         w = int(area.get("width", 0))
         h = int(area.get("height", 0))
-
-        try:
-            self.ocr.update_config(self.config)
-            res = self.ocr.scan_once() or {}
-            text = res.get("text", "").strip()
-            conf_pct = int(res.get("confidence", 0.0) * 100)
-            self.preview_selected_area(area, title=f"TEST AREA ({w}x{h})", bg_color=THEME["primary"])
-            if text:
-                self._on_scan_result(res)
-                self.show_toast(f"Test Area ({w}x{h}): Terdeteksi '{text}' ({conf_pct}%)")
-            else:
-                self.show_toast(f"Test Area ({w}x{h}): Tidak ada teks terdeteksi")
-        except Exception as e:
-            self.preview_selected_area(area, title=f"TEST AREA ({w}x{h})", bg_color=THEME["primary"])
-            self.show_toast(f"Gagal test Area Scanner: {e}")
+        self.preview_selected_area(area, title=f"AREA SCANNER ({w}x{h})", bg_color=THEME["primary"])
+        self.show_toast(f"Posisi Area Scanner: {w}x{h} px (X={l}, Y={t})")
 
     # --- Mode Dev & Window Management ---
     def set_always_on_top(self, enabled: bool):
@@ -965,8 +955,19 @@ class SambungKataQtApp(QMainWindow):
         target_branch = getattr(self.tab_system, "combo_branch", None)
         tb = target_branch.currentText().strip() if target_branch else curr_branch
 
-        self.show_toast(f"Memeriksa update di branch '{tb}'...")
-        res = self.updater.check_for_updates(target_branch=tb)
+        btn_upd = getattr(self.tab_system, "btn_check_update", None)
+        if btn_upd is not None:
+            btn_upd.setEnabled(False)
+            btn_upd.setText(f" Mengecek '{tb}'...")
+        self.show_toast(f"Mengecek update di '{tb}'...")
+        QApplication.processEvents()
+
+        try:
+            res = self.updater.check_for_updates(target_branch=tb)
+        finally:
+            if btn_upd is not None:
+                btn_upd.setText(" Cek Update")
+                btn_upd.setEnabled(True)
         if not res.get("success"):
             QMessageBox.warning(self, "Cek Update", f"Gagal: {res.get('message', 'Tidak ada koneksi internet')}")
             return
@@ -1134,21 +1135,37 @@ class SambungKataQtApp(QMainWindow):
             self.show_toast(f"Gagal simpan sampel F2: {e}")
 
     # --- Sorting tags ---
+    def _confirm_sort_tags(self, desc: str) -> bool:
+        reply = QMessageBox.question(
+            self,
+            "Konfirmasi Urutkan Semua",
+            f"Urutkan ulang semua tag berdasarkan {desc}?\n\nSusunan manual Anda saat ini akan tertimpa.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        return reply == QMessageBox.Yes
+
     def on_sort_custom_categories_az(self):
+        if not self._confirm_sort_tags("A-Z"):
+            return
         cats = self.config.get("custom_trap_endings", [])
         cats.sort(key=lambda c: c.get("suffix", "").upper())
         self._after_sort_tags(cats, "A-Z")
 
     def on_sort_custom_categories_count(self, reverse=True):
+        txt = "Kata Terbanyak" if reverse else "Kata Terdikit"
+        if not self._confirm_sort_tags(txt):
+            return
         cats = self.config.get("custom_trap_endings", [])
         cats.sort(key=lambda c: self.solver.count_words_by_suffix(c.get("suffix", "")), reverse=reverse)
-        txt = "Kata Terbanyak" if reverse else "Kata Terdikit"
         self._after_sort_tags(cats, txt)
 
     def on_sort_custom_categories_length(self, reverse=True):
+        txt = "Huruf Terpanjang" if reverse else "Huruf Terpendek"
+        if not self._confirm_sort_tags(txt):
+            return
         cats = self.config.get("custom_trap_endings", [])
         cats.sort(key=lambda c: (len(c.get("suffix", "")), c.get("suffix", "").upper()), reverse=reverse)
-        txt = "Huruf Terpanjang" if reverse else "Huruf Terpendek"
         self._after_sort_tags(cats, txt)
 
     def _after_sort_tags(self, cats, desc):
