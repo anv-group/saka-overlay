@@ -8,6 +8,7 @@ Memverifikasi:
 5. Sistem Blacklist (Blokir dan Pemulihan)
 """
 
+import os
 import unittest
 from solver import SambungKataSolver
 
@@ -151,7 +152,15 @@ class TestSambungKataSolver(unittest.TestCase):
         self.solver.unwhitelist_word(kata_x)
         self.solver.unwhitelist_word(kata_baru)
         self.assertFalse(self.solver.is_whitelisted(kata_x))
-        self.assertFalse(self.solver.has_word(kata_baru))
+        self.assertFalse(self.solver.is_whitelisted(kata_baru))
+        self.assertTrue(self.solver.has_word(kata_baru))
+
+        # Hapus kata uji dari kamus_lengkap.txt agar file kamus tetap bersih
+        if os.path.exists(self.solver.dictionary_path):
+            with open(self.solver.dictionary_path, "r", encoding="utf-8") as f:
+                lines = [ln for ln in f if ln.strip().lower() != kata_baru]
+            with open(self.solver.dictionary_path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
 
     def test_tier0_sort_modes_default_and_tag_order(self):
         """Memastikan mode sortir Tier 0 (default: panjang & abjad vs tag_order: urutan tag kustom) bekerja akurat"""

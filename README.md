@@ -1,237 +1,291 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="SAKA Overlay Logo" width="220" />
+<img src="assets/logo_horizontal.png" alt="SAKA Overlay Logo" width="460" />
 
 # SAKA Overlay
-### 🎮 Asisten Cerdas & Auto Solver Roblox Sambung Kata
+### 🎮 Asisten Cerdas, Visi Komputer & Auto Solver Roblox Sambung Kata
 
-[![CI & Regression Tests](https://github.com/anv-group/sambung-kata-overlay/actions/workflows/test.yml/badge.svg)](https://github.com/anv-group/sambung-kata-overlay/actions/workflows/test.yml)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![PySide6](https://img.shields.io/badge/PySide6-Qt6-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://pypi.org/project/PySide6/)
+[![OpenCV](https://img.shields.io/badge/OpenCV-Computer%20Vision-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)](https://opencv.org/)
+[![Platform Windows](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/)
+[![License MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 </div>
 
-**SAKA Overlay** (dari kata **SAmbung KAta** + **Overlay**) adalah asisten cerdas pendamping bermain game **Roblox Sambung Kata** ([Mainkan di Roblox](https://www.roblox.com/games/130342654546662/Sambung-Kata)).
+**SAKA Overlay** (*SAmbung KAta Overlay*) adalah aplikasi asisten *desktop overlay* modern berlatensi ultra-rendah untuk mendampingi pemain dalam game **Roblox Sambung Kata** ([Mainkan di Roblox](https://www.roblox.com/games/130342654546662/Sambung-Kata)).
 
-Aplikasi ini secara otomatis mendeteksi kotak awalan huruf giliran Anda di layar secara *real-time*, memilihkan kata serangan terbaik dari kamus **147.880+ kata** (KBBI v6 + Database Contek Game Roblox), lengkap dengan petunjuk sisa huruf yang perlu Anda ketik sebelum waktu habis!
-
----
-
-## ⚡ Panduan Kilat 1 Menit (Quick Start)
-
-1. **Buka Roblox** dan masuk ke room permainan **Sambung Kata**.
-2. **Jalankan Asisten:** Klik ganda file **`run.bat`** (atau jalankan `python main.py`). Window akan otomatis menempel di sisi kanan layar dalam format *ultra-compact overlay*.
-3. **Tentukan Area Huruf:**
-   - Klik tombol **`⚙️`** di kanan atas, lalu pilih **`🎯 Set Area Deteksi`**.
-   - Layar akan meredup. Tarik kotak seleksi menggunakan mouse tepat mengelilingi kotak putih tempat huruf giliran muncul di game Roblox.
-4. **Mulai Main:**
-   - Klik tombol **`▶️ Mulai`** di bilah atas.
-   - Saat giliran Anda tiba, rekomendasi kata langsung muncul seketika (latensi 40–80ms).
-   - Klik kartu kata yang diinginkan untuk menyalinnya ke clipboard, lalu tekan **`Ctrl + V`** dan **`Enter`** di Roblox!
+Mengusung antarmuka bertema **Tactical Cyber Bamboo** (terinspirasi dari antarmuka modern *cheat client*), SAKA Overlay secara otomatis membaca kotak awalan huruf giliran Anda di layar menggunakan teknologi **Dual-Engine Computer Vision (OCR)**, lalu merekomendasikan kata serangan terbaik dari basis data raksasa **147.900+ kata** (KBBI Edisi VI + Database Contek Game Roblox). Aplikasi ini dirancang untuk menjebak lawan dengan akhiran kata mematikan (**X**, konsonan sulit, dan tag brutal) atau menyelamatkan Anda saat lawan menjebak dengan awalan langka.
 
 ---
 
-## 🚀 Cara Instalasi & Menjalankan
+## 📑 Daftar Isi (Table of Contents)
+
+- [1. Fitur Utama (Features)](#-fitur-utama-features)
+- [2. Panduan Instalasi (Installation Instructions)](#-panduan-instalasi-installation-instructions)
+  - [Prasyarat Sistem](#-prasyarat-sistem)
+  - [Langkah-Langkah Instalasi](#-langkah-langkah-instalasi)
+- [3. Panduan Penggunaan & Antarmuka (Usage with Screenshots)](#-panduan-penggunaan--antarmuka-usage-with-screenshots)
+  - [Panduan Kilat (Quick Start)](#-panduan-kilat-quick-start)
+  - [Tab 1: ⚡ LIVE — Ruang Kendali Bermain](#-tab-1--live--ruang-kendali-bermain)
+  - [Tab 2: 🏷️ TAGS — Kategori Kustom & Mode Brutal](#-tab-2-️-tags--kategori-kustom--mode-brutal)
+  - [Tab 3: 📖 KAMUS — Penjelajah Kata, Whitelist & Blocklist](#-tab-3--kamus--penjelajah-kata-whitelist--blocklist)
+  - [Tab 4: ⚙️ SYSTEM — Pengaturan, Scanner & Tampilan](#-tab-4-️-system--pengaturan-scanner--tampilan)
+  - [Mini Ticker Bar Real-Time](#-mini-ticker-bar-real-time)
+  - [Mekanisme Kalibrasi & Koreksi Sampel (F2 / Del)](#-mekanisme-kalibrasi--koreksi-sampel-f2--del)
+- [4. Strategi Kata & Trik Menang](#-strategi-kata--trik-menang)
+- [5. Tumpukan Teknologi (Tech Stack)](#-tumpukan-teknologi-tech-stack)
+- [6. Pengujian & Jaminan Kualitas](#-pengujian--jaminan-kualitas)
+- [7. Tanya Jawab Umum (FAQ)](#-tanya-jawab-umum-faq)
+
+---
+
+## ✨ Fitur Utama (Features)
+
+* ⚡ **Dual-Engine Computer Vision & OCR:**
+  * **Fast-Path (1–2 Huruf):** Kombinasi *Template Matching* dan analisis bentuk geometris piksel dengan latensi eksekusi hanya **1–2 ms**. Mampu membedakan glyph identik Roblox tanpa salah baca (`B` vs `D` vs `E` vs `O` vs `U`, `G` vs `C` vs `O`, `Q` vs `O`, `I`, `W` vs `U`).
+  * **Deep-Path (3 Huruf & Huruf Menempel):** Pemotongan kontur cerdas (*vertical projection dip*) untuk huruf yang bersentuhan kaki/lengannya (seperti `KAR`, `AKAN`) dipadukan dengan RapidOCR DBNet ONNX berfitur multi-padding adaptif (`[8, 0, 15, 20]`).
+* 💥 **Sistem Prioritas Kata Bertingkat (Tier Matrix):**
+  * **Tier 0:** *Custom Traps* (kata berakhiran tag kustom seperti `NS`, `MP`, `NGK`).
+  * **Tier 1:** *Jebakan X* (kata berakhiran `X` seperti `SEX`, `COMPLEX`, `PARADOX`, `DETOX`).
+  * **Tier 2:** *Jebakan Sulit* (kata berakhiran konsonan `Z`, `Q`, `V`, `J`, `W`, `F`).
+  * **Tier 3:** *Normal / Defensif* (kosakata baku KBBI terpendek untuk kecepatan mengetik darurat).
+* 🎮 **Tiga Mode Permainan Taktis:**
+  * **⚔️ DEFAULT:** Mode serangan standar dengan jebakan X, konsonan sulit, dan tag kustom aktif.
+  * **🌿 SANTAI:** Dikhususkan untuk room Roblox Santai. Otomatis membuang kata yang mengandung/berakhiran `X`, `Q`, dan `F`.
+  * **🔥 BRUTAL:** Mode ofensif ekstrem dengan daftar akhiran mematikan seperti `AMSI, KSO, RHU, TL, BD`.
+* 🛡️ **Isolasi Whitelist & Blocklist:**
+  * **Whitelist (`whitelist.txt`):** Kata valid langsung menempati posisi teratas (#1) tanpa mengubah file kamus inti.
+  * **Blocklist (`blacklist.txt`):** Kata yang ditolak/disensor game langsung diabaikan secara instan ($O(1)$).
+* 🎨 **Antarmuka Tactical Cyber Modern (PySide6):**
+  * Tema *Tactical Cyber Bamboo* gelap obsidian (`#0b0f0c`) dengan aksen hijau neon (`#a2c73e`).
+  * Custom frameless titlebar dengan resize border Windows asli via event `WM_NCHITTEST`.
+  * Pin *Always-on-Top* terintegrasi dua arah dengan pengaturan sistem.
+  * Baris tag dengan pembungkusan dinamis (*dynamic auto-reflow* saat resize).
+  * Bersih dari emoji bawaan OS, digantikan oleh ikon vektor Material Design (MDI) beresolusi tinggi.
+* 🔄 **Konfigurasi Kebal Pembaruan Git:**
+  * Pengaturan lokal disimpan pada `config.local.json` (terdaftar di `.gitignore`), memastikan mode game, tag kustom, dan area deteksi Anda tidak pernah hilang saat melakukan update aplikasi via Git.
+
+---
+
+## 🚀 Panduan Instalasi (Installation Instructions)
 
 ### 📋 Prasyarat Sistem
 - **Sistem Operasi:** Windows 10 atau Windows 11 (64-bit).
-- **Python:** Versi **3.10** ke atas ([Download Python](https://www.python.org/downloads/)).
+- **Python:** Versi **3.10** atau lebih baru ([Unduh Python](https://www.python.org/downloads/)).
   > [!IMPORTANT]
-  > Saat menginstal Python di Windows, **wajib centang opsi "Add python.exe to PATH"** di layar awal installer agar perintah python dapat dikenali sistem.
+  > Saat menginstal Python di Windows, **wajib mencentang kotak "Add python.exe to PATH"** di halaman awal installer agar perintah dapat dipanggil dari terminal.
 
 ---
 
-### 📥 Langkah Instalasi & Menjalankan
+### 📥 Langkah-Langkah Instalasi
 
 1. **Clone Repositori:**
    ```powershell
    git clone https://github.com/anv-group/sambung-kata-overlay.git
    cd sambung-kata-overlay
    ```
-   *(Atau klik tombol **Code** > **Download ZIP** di GitHub lalu ekstrak foldernya).*
+   *(Atau unduh file ZIP melalui tombol **Code ➔ Download ZIP** di GitHub lalu ekstrak foldernya).*
 
-2. **Jalankan Aplikasi:**
-
-   **Cara 1 — Paling Praktis (1-Klik):**
-   - Klik ganda file **`run.bat`**.
-   - Skrip batch otomatis memeriksa environment, memasang dependensi dari `requirements.txt` bila belum ada, dan langsung meluncurkan aplikasi GUI.
-
-   **Cara 2 — Lewat Terminal / PowerShell:**
+2. **(Opsional tapi Disarankan) Buat Virtual Environment:**
    ```powershell
-   # 1. (Opsional tapi disarankan) Virtual environment
    python -m venv venv
    .\venv\Scripts\activate
+   ```
 
-   # 2. Instal dependensi
+3. **Pasang Dependensi:**
+   ```powershell
    pip install -r requirements.txt
-
-   # 3. Jalankan aplikasi
-   python main.py
    ```
 
-   **Cara 3 — Mode CLI (Headless / Terminal):**
-   ```powershell
-   python main_cli.py
-   ```
+4. **Jalankan Aplikasi:**
+   * **Cara 1 — 1-Klik Paling Praktis (Direkomendasikan):**  
+     Cukup klik ganda file **`run.bat`** di folder proyek.
+   * **Cara 2 — Melalui Terminal / PowerShell:**
+     ```powershell
+     python main.py
+     ```
+   * **Cara 3 — Terminal / Headless CLI Mode:**
+     ```powershell
+     python main_cli.py
+     ```
 
 ---
 
-## 🔄 Cara Memperbarui Aplikasi (Update)
+## 🖥️ Panduan Penggunaan & Antarmuka (Usage with Screenshots)
 
-### A. Jika Menggunakan Versi Sekarang (Sudah Ada Updater):
-Aplikasi sudah dilengkapi modul pembaruan otomatis di latar belakang:
-- **Saat Startup:** Jika ada commit baru di repositori GitHub, dialog pembaruan akan otomatis muncul (bisa diatur ke mode *Prompt*, *Auto-Update*, atau *Disabled*).
-- **Pemeriksaan Manual:** Klik tombol **`⚙️`** (Settings) di kanan atas ➔ pilih **`🔄 Cek Update Git...`** ➔ klik **`🚀 Perbarui Sekarang`**.
-- **Pemilihan Branch:** Anda dapat berpindah branch secara instan (misal branch stabil `main` atau branch pengembangan `dev`) langsung dari dropdown updater.
-
-### B. Khusus Pengguna Lama yang Clone Sebelum Fitur Updater Ada:
-Bagi pengguna yang meng-clone repositori ini sebelum modul updater dibuat (sehingga belum ada menu update di GUI):
-1. Buka folder aplikasi di **Terminal / Command Prompt / PowerShell**.
-2. Jalankan perintah berikut:
-   ```powershell
-   git pull
-   ```
-   *(Atau `git pull origin main`)*
-3. Setelah perintah di atas dijalankan sekali, seluruh modul updater, konfigurasi baru, dan fitur-fitur terkini akan langsung terpasang. Untuk pembaruan berikutnya cukup gunakan tombol update di aplikasi!
+### ⚡ Panduan Kilat (Quick Start)
+1. Buka game **Roblox Sambung Kata** di layar Anda.
+2. Luncurkan aplikasi dengan mengklik **`run.bat`**. Window akan otomatis mengambang (*overlay*) di sisi kanan layar.
+3. Buka tab **`⚙️ SYSTEM`** ➔ klik tombol **`🎯 Tentukan Area Layar`**. Tarik kotak seleksi transparan tepat mengelilingi kotak putih tempat huruf awalan muncul di game Roblox.
+4. Kembali ke tab **`⚡ LIVE`** ➔ klik **`▶️ MULAI SCAN`**.
+5. Saat giliran tiba, kata rekomendasi akan muncul secara instan. Klik kartu kata untuk menyalinnya ke clipboard, lalu tekan `Ctrl + V` dan `Enter` di game!
 
 ---
 
-## 🎯 Panduan Fitur & Antarmuka Aplikasi
+### ⚡ Tab 1: LIVE — Ruang Kendali Bermain
 
-Jendela aplikasi didesain khusus dengan konsep **Ultra-Compact Overlay** yang mengambang di atas Roblox (*Always-on-Top*) di sisi kanan monitor:
+Tab **LIVE** adalah ruang kerja utama saat permainan sedang berlangsung. Didesain secara ergonomis dengan kecepatan tanggap tinggi.
 
-| Elemen UI / Shortcut | Fungsi & Cara Pakai |
-| :--- | :--- |
-| **Title Bar Dinamis** | Format: `SAKA Overlay (<branch> <commit>) [<kecepatan scan>]`. Menampilkan branch git aktif, commit hash saat ini, dan kecepatan scan secara *real-time*. |
-| **`▶️ Mulai` / `⏹️ Stop`** | Menjalankan atau menghentikan pemindaian OCR layar secara instan. |
-| **`🔄` (Restart)** | Merestart aplikasi dalam 1-klik secara bersih untuk mereload kamus, memori, atau konfigurasi. |
-| **`NORMAL` / `SANTAI`** | Tombol tag cepat untuk beralih mode. Saat mode **`SANTAI`** aktif, seluruh kata yang mengandung atau berakhiran **X, Q, dan F** otomatis disaring dan dibuang. |
-| **`📊 DEFAULT` / `🏷️ URUT TAG`** | Tombol 1-klik di header utama untuk mengganti mode sortir rekomendasi Tier 0: **`DEFAULT`** (panjang 4–7 & abjad A–Z agar cepat diketik) atau **`URUT TAG`** (memprioritaskan urutan tag kustom/jebakan tersulit). |
-| **`⚙️` (Settings)** | Dropdown menu untuk konfigurasi: `🎯 Set Area Deteksi`, `👁️ Test Area Deteksi`, `⭐ Buka Whitelist Kata`, `🚫 Blocklist Kata`, `🏷️ Kategori Kustom`, `📋 Log Gameplay`, `⚡ Kecepatan Scan`, dan `🔄 Cek Update Git`. |
-| **`⚡ Kecepatan Scan`** | Submenu radio button 1-klik untuk memilih kecepatan: **`🔥 40ms (Ultra Instan)`**, **`⚡ 80ms (Kilat Turbo)`**, **`🚀 150ms (Cepat)`**, atau **`🐢 300ms (Santai)`**. |
-| **Search Bar Real-Time** | Input manual awalan huruf. Hasil rekomendasi langsung terfilter saat Anda mengetik tanpa perlu klik tombol cari. Input ini otomatis meng-overwrite OCR. Terdapat tombol **`❌`** di ujung kanan untuk membersihkan teks seketika. |
-| **`🏷️` Quick Toggle Bar** | Deretan tombol tag kategori akhiran kustom (misal: `NS`, `NGK`, `EI`) tepat di atas rekomendasi kata. Mendukung pembungkusan multi-baris dinamis (*dynamic auto-reflow* saat resize) dengan kalkulasi lebar tombol presisi font sehingga semua tag selalu terlihat utuh di layar (*never off-screen*). Klik icon `🏷️` untuk membuka jendela Kelola Tag (edit akhiran, nama, warna, dan urutan prioritas). |
-| **`⚡` (Dev Mode Restart)** | Tombol restart instan di header (disembunyikan secara default, dapat diaktifkan lewat `⚙️ Settings ➔ 🛠️ Mode Development` atau shortcut `Ctrl+Shift+D`). Kebal git update via `config.local.json`. |
-| **Rekomendasi Kata (Ultra-Smooth 60fps)** | Menampilkan kartu kata terurut berdasarkan tier jebakan (Tier 0 -> X -> Sulit -> Normal). Dilengkapi *widget pooling* berbasis *dirty-checking* (render instan < 0.1ms tanpa relayout spam), scroll terpusat tanpa lag, reset otomatis ke atas saat giliran berganti, serta sistem resize jendela adaptif 60fps dengan anti-ghost drag (*langsung berhenti saat mouse dilepas*). |
-| **`⭐` / `☆` di Kartu Kata** | Menandai kata sebagai **Whitelist** (terbukti valid). Kata langsung mendapat prioritas #1 di kategorinya tanpa mencemari kamus utama. |
-| **`❌` di Kartu Kata** | Memasukkan kata yang ditolak server Roblox ke dalam `blacklist.txt` seketika (dapat dibatalkan dengan tombol `↩️ Batalkan`). |
-| **`➕ Kamus`** | Menambahkan kata baru ke kamus secara permanen (klik kiri). Klik kanan tombol ini untuk membuka **📖 Eksplorasi Kamus**. |
-| **`📖 Eksplorasi Kamus & Whitelist/Blocklist`** | Jendela all-in-one penjelajah seluruh basis data kamus (147,000+ kata) dengan integrasi penuh manajemen Whitelist & Blocklist. Mendukung: pencarian berdasarkan **Awalan (Prefix)**, **Akhiran (Suffix)**, dan **Mengandung (Contains)**; filter sumber (**Semua**, **KBBI Saja**, **Contek Saja**, **KBBI + Contek**); filter **Multi-Tag** (tag kustom & konsonan sulit tanpa kurung siku); **tipografi nyaman dibaca** (font putih terang konsisten, highlight warna hanya pada background status Whitelist/Blocklist); **sortir semua kolom** (`#`, `Kata`, `Panjang`, `Tag`, `Sumber`); **infinite scroll** autoload tanpa batas entri (+ opsi *⚡ Muat Semua*); serta tombol aksi cepat untuk toggle status Whitelist/Blocklist, menambah kata, dan membuka file teks langsung. Dapat dibuka via `⚙️ Settings` atau klik kanan `➕ Kamus`. |
-| **`F2` (Screenshot Area Deteksi)** | **Global Hotkey:** Screenshot instan (< 5ms) saat ada huruf salah baca ke folder `sample/kurang_tepat/` tanpa popup yang mengganggu permainan. Review dilakukan setelah bermain lewat menu **`📝 Pendataan Koreksi Sampel`**. |
-| **`F3` (Screenshot Area Gameplay)** | Mengambil snapshot visual gameplay (kotak kata & avatar pemain) dan menyimpan metadata warna RGB/HSV ke folder `deteksi-gameplay/sample_kalibrasi/`. |
-| **Desain Jendela Frameless Konsisten** | Seluruh 10 dialog popup (Kamus, Whitelist, Blocklist, Tag Kustom, Koreksi, Update, dll.) menggunakan titlebar frameless bertema gelap Catppuccin yang seragam dengan UI utama, drag-to-move, resize grip, dan shortcut <kbd>Esc</kbd> untuk menutup. |
+<div align="center">
+  <img src="docs/screenshots/01_tab_live.png" alt="Tab LIVE SAKA Overlay" width="450" />
+  <p><em>Tampilan Tab LIVE: Mode Switcher, Card Awalan Huruf, Tag Kustom Cepat, dan Rekomendasi Kata</em></p>
+</div>
+
+* **Mode Switcher:** Beralih instan antara mode `DEFAULT`, `SANTAI`, dan `BRUTAL`.
+* **Layar Awalan (Prefix Card):** Menampilkan huruf terdeteksi dalam ukuran besar dan jelas. Kolom pencarian manual dapat digunakan kapan saja untuk menimpa hasil deteksi otomatis.
+* **Bar Tag Kustom Cepat:** Deretan tombol tag akhiran yang mendukung penataan baris dinamis (*auto-reflow*) saat jendela diubah ukurannya.
+* **Kartu Kata Rekomendasi:**
+  * Klik kata untuk menyalin langsung ke clipboard.
+  * Klik ikon bintang (`⭐` / `☆`) untuk memasukkan/mengeluarkan kata dari Whitelist.
+  * Klik ikon silang (`✕`) untuk memblokir kata ke dalam Blacklist.
+* **Tombol Deteksi Salah (`F2`):** Tangkapan layar kilat (< 5ms) saat terjadi salah baca OCR tanpa mengganggu jalannya permainan.
+
+---
+
+### 🏷️ Tab 2: TAGS — Kategori Kustom & Mode Brutal
+
+Tab **TAGS** memberikan kendali penuh terhadap manajemen akhiran kata mematikan yang ingin Anda prioritaskan.
+
+<div align="center">
+  <img src="docs/screenshots/02_tab_tags.png" alt="Tab TAGS SAKA Overlay" width="450" />
+  <p><em>Tampilan Tab TAGS: Manajemen Tag Kustom, Indikator Aktif, dan Pengaturan Mode Brutal</em></p>
+</div>
+
+* **Kelola Akhiran Kata:** Tambah, ubah nama, pilih warna badge, atau hapus tag kustom Anda.
+* **Mode Urutan Tag (Tag Order):** Mengatur prioritas kata agar mengalir ketat berdasarkan urutan tag dari atas ke bawah.
+* **Pengaturan Tag Mode Brutal:** Pilih tag mana saja yang otomatis menyala saat Mode Brutal diaktifkan via interaksi se-baris (*click anywhere*) dengan kontras visual tinggi.
+
+---
+
+### 📖 Tab 3: KAMUS — Penjelajah Kata, Whitelist & Blocklist
+
+Pusat eksplorasi seluruh kosakata **147.900+ kata** yang dilengkapi manajemen Whitelist dan Blocklist terintegrasi.
+
+<div align="center">
+  <img src="docs/screenshots/03_tab_kamus.png" alt="Tab KAMUS SAKA Overlay" width="520" />
+  <p><em>Tampilan Tab KAMUS: Eksplorasi Kosakata, Multi-Filter, dan Manajemen Status Kata</em></p>
+</div>
+
+* **3 Mode Pencarian:** Cari berdasarkan **Awalan (Prefix)**, **Akhiran (Suffix)**, atau **Mengandung (Contains)**.
+* **Filter Sumber Kosakata:** Saring kata berdasarkan `Semua`, `KBBI Saja`, `Contek Saja`, atau `KBBI + Contek`.
+* **Manajemen Instan:** Tambah kata baru ke kamus secara permanen, atau ubah status Whitelist dan Blocklist secara langsung.
+
+---
+
+### ⚙️ Tab 4: SYSTEM — Pengaturan, Scanner & Tampilan
+
+Pusat pengaturan operasional sistem, kalibrasi scanner, dan manajemen pembaruan git.
+
+<div align="center">
+  <img src="docs/screenshots/04_tab_system.png" alt="Tab SYSTEM SAKA Overlay" width="450" />
+  <p><em>Tampilan Tab SYSTEM: Konfigurasi Scanner, Tampilan, Sampel, dan Informasi Versi</em></p>
+</div>
+
+* **SCANNER:** Kalibrasi area ROI layar (`🎯 Tentukan Area Layar`, `👁️ Uji Area Layar`) dan atur kecepatan pemindaian (40ms, 80ms, 150ms, 300ms).
+* **TAMPILAN:** Pengaturan *Selalu di Atas (Always-on-Top)* yang tersinkronisasi dengan tombol Pin di titlebar.
+* **SAMPEL:** Akses folder sampel dan buka jendela koreksi hasil tangkapan F2.
+* **VERSI:** Pemantau branch git aktif, nomor commit hash saat ini, dan tombol pembaruan aplikasi.
+
+---
+
+### 🔴 Mini Ticker Bar Real-Time
+
+Ketika Anda berpindah ke tab lain (seperti tab `TAGS`, `KAMUS`, atau `SYSTEM`), sebuah **Mini Ticker Bar** ramping akan otomatis muncul di bawah tab navigasi jika pemindaian sedang aktif.
+
+<div align="center">
+  <img src="docs/screenshots/06_mini_ticker.png" alt="Mini Ticker Bar SAKA Overlay" width="460" />
+  <p><em>Mini Ticker Bar: Menampilkan status deteksi OCR dan rekomendasi kata saat membuka tab lain</em></p>
+</div>
+
+* Menampilkan status `[LIVE]` atau `[MANUAL]` beserta awalan kata yang sedang aktif.
+* Menampilkan kata rekomendasi teratas dan kategori tag terkait sehingga Anda tidak akan ketinggalan giliran bermain.
+
+---
+
+### 📝 Mekanisme Kalibrasi & Koreksi Sampel (F2 / Del)
+
+Jika OCR mendeteksi huruf yang salah saat bermain, tekan tombol **`F2`** di keyboard. Tangkapan layar akan disimpan seketika (< 5 ms) ke folder `sample/kurang_tepat/`. Setelah permainan selesai, Anda dapat membuka jendela **Koreksi Sampel**:
+
+<div align="center">
+  <img src="docs/screenshots/05_dialog_koreksi.png" alt="Jendela Koreksi Sampel" width="450" />
+  <p><em>Jendela Koreksi Visual: Navigasi keyboard penuh (Enter untuk simpan, Del untuk hapus)</em></p>
+</div>
+
+* Gambar ditampilkan dalam ukuran besar untuk memudahkan inspeksi visual.
+* Cukup ketik huruf yang benar lalu tekan <kbd>Enter</kbd> untuk berpindah ke sampel berikutnya secara otomatis.
+* Tekan tombol <kbd>Del</kbd> di keyboard untuk langsung menghapus sampel sampah tanpa dialog konfirmasi tambahan.
 
 ---
 
 ## 💥 Strategi Kata & Trik Menang
 
-Aplikasi ini menggunakan sistem tier prioritas multi-level untuk memaksimalkan peluang eliminasi lawan:
+Aplikasi ini menggunakan alur logika terstruktur untuk memaksimalkan peluang eliminasi lawan di setiap giliran:
 
 ```mermaid
 flowchart TD
-    Awalan["Awalan Huruf Giliran"] --> Tier0{"Ada Kategori Kustom Aktif?<br/>(Contoh: NS, NGK)"}
-    Tier0 -- "YA" --> CustomTrap["🔥 Tier 0: Custom Traps (Prioritas Super)<br/>Kata berakhiran NS, NGK, dll."]
+    Awalan["Awalan Huruf Giliran"] --> Tier0{"Ada Kategori Kustom Aktif?<br/>(Misal: NS, MP, NGK)"}
+    Tier0 -- "YA" --> CustomTrap["🔥 Tier 0: Custom Traps<br/>Kata berakhiran tag kustom"]
     Tier0 -- "TIDAK" --> Tier1{"Ada Kata Berakhiran X?"}
-    Tier1 -- "YA" --> TrapX["💥 Tier 1: JEBAKAN X (Mematikan)<br/>Contoh: SEX, COMPLEX, PARADOX, DETOX"]
+    Tier1 -- "YA" --> TrapX["💥 Tier 1: JEBAKAN X<br/>Contoh: SEX, COMPLEX, PARADOX, DETOX"]
     Tier1 -- "TIDAK" --> Tier2{"Ada Kata Akhiran Konsonan Sulit?"}
     Tier2 -- "YA" --> TrapHard["⚡ Tier 2: JEBAKAN SULIT<br/>Akhiran Z, Q, V, J, W, F"]
     Tier2 -- "TIDAK" --> Tier3["🛡️ Tier 3: NORMAL / CASUAL<br/>Kata KBBI pendek (3-6 huruf) yang cepat diketik"]
 ```
 
-1. **🔥 Tier 0: Custom Traps (Prioritas Super):**  
-   Kategori kustom buatan Anda sendiri (seperti kata berakhiran `NS`: *LENS, RESPONS*, atau `NGK`: *TENGKORAK*). Dapat diaktifkan/dinonaktifkan dengan 1-klik di bar tag `🏷️`.
-2. **💥 Tier 1: JEBAKAN X (Serangan Mematikan):**  
-   Kata-kata sah yang berakhiran huruf **`X`** (*SEX, COMPLEX, PARADOX, DETOX, BOX, FAX, BODREX, LATEX*). Lawan berikutnya dipaksa mencari awalan X yang sangat langka di Roblox sehingga 95% lawan akan gugur kehabisan waktu.
-3. **⚡ Tier 2: JEBAKAN SULIT:**  
-   Jika tidak ada akhiran X, bot memilihkan kata berakhiran konsonan sulit: **`Z`**, **`Q`**, **`V`**, **`J`**, **`W`**, dan **`F`**.
-4. **🛡️ Tier 3: NORMAL / BERTAHAN:**  
-   Kosakata baku bahasa Indonesia yang pendek (3–6 huruf) agar sangat cepat dan aman diketik secara manual saat waktu giliran menipis.
-5. **🎮 Tiga Mode Permainan (DEFAULT, SANTAI, BRUTAL):**  
-   - **⚔️ Mode Default:** Mode standar menyerang dengan jebakan X, konsonan sulit, dan tag kustom aktif pilihan pemain.
-   - **🌿 Mode Santai:** Pilihan khusus saat bermain di room Roblox Mode Santai (melarang huruf X, Q, dan F). Bot secara otomatis menyaring seluruh kata yang mengandung atau berakhiran `X, Q, F`, lalu mengalihkan serangan ke `Z, V, J, W`.
-     - **Auto-Filter Custom Tag:** Seluruh tag kustom yang mengandung huruf `X`, `Q`, atau `F` otomatis dinonaktifkan dan dipulihkan saat kembali ke Mode Default.
-   - **🔥 Mode Brutal:** Mode ofensif ekstrem untuk room brutal/kompetitif dengan akhiran mematikan seperti `AMSI, KSO, RHU, TL, BD`, dll.
-     - **Pengaturan Tag Brutal:** Pemain bebas memilih tag kustom mana saja yang otomatis dinyalakan saat Mode Brutal aktif melalui jendela `🔥 Pengaturan Mode Brutal` atau menu klik-kanan pada tombol mode. Dilengkapi fitur **klik se-baris** (click anywhere untuk toggle tanpa harus tepat pada checkbox), visual berbobot **kontras tinggi** (baris merah marun + badge pill menyala `🔥 BRUTAL` vs `⚪ NONAKTIF`), scrolling mousewheel mulus, **jendela lebih lega (580x720)** dengan tombol aksi permanen di dasar layar, serta **auto-save saat ditutup** (pengaturan langsung tersimpan otomatis tanpa khawatir lupa menekan tombol simpan).
-     - **Isolasi Tag Cerdas:** Tag normal pemain tetap tersimpan aman dan otomatis dipulihkan saat beralih kembali dari Mode Brutal.
-
-### 🔄 Logika Pengurutan di Dalam Tier (Panjang Kata & Abjad)
-Mengapa kata dengan akhiran berbeda bisa tampil berselang-seling (contoh saat mengetik `S` muncul `SAMP [MP]`, `SANS [NS]`, `SENS [NS]`, `SIMP [MP]`, `SINGK [NGK]`)?
-
-Di dalam setiap tier (terutama pada **Tier 0: Custom Traps**), sistem mengurutkan rekomendasi kata berdasarkan kombinasi 2 kriteria:
-
-1. **Prioritas Panjang Kata (Cepat & Nyaman Diketik):**
-   - **Panjang 4–7 huruf** (Prioritas tertinggi, panjang ideal yang paling cepat diketik sebelum waktu habis).
-   - **Panjang 3 huruf** (Prioritas kedua).
-   - **Panjang 8 huruf** (Prioritas ketiga).
-   - **Panjang > 8 huruf** (Prioritas terendah).
-
-2. **Urutan Abjad (A–Z) dari Kamus:**
-   Jika beberapa kata memiliki **panjang huruf yang sama** (misal sama-sama 4 huruf), sistem menggunakan *stable sort* yang mempertahankan urutan abjad asli kosakata kamus:
-   - `SAMP` (4 huruf, akhiran `MP`) — abjad **SA**-M
-   - `SANS` (4 huruf, akhiran `NS`) — abjad **SA**-N
-   - `SENS` (4 huruf, akhiran `NS`) — abjad **SE**
-   - `SIMP` (4 huruf, akhiran `MP`) — abjad **SI**-M
-   - `SINS` (4 huruf, akhiran `NS`) — abjad **SI**-N
-   - `SOMP` (4 huruf, akhiran `MP`) — abjad **SO**
-   - Kemudian beralih ke kelompok 5 huruf: `SAINS` (`NS`), `SINGK` (`NGK`), `SIUPP` (`PP`), `SPONS` (`NS`), dst.
-
-> [!TIP]
-> **Pilihan Mode Sortir Tier 0:**
-> 1. **Default (Panjang & Abjad):** Memprioritaskan kata panjang 4–7 huruf (nyaman & cepat diketik), urutan abjad asli kamus dipertahankan lintas tag.
-> 2. **Sesuai Urutan Tag Kustom:** Seluruh kata dari tag urutan teratas (misal tag jebakan tersulit buatan Anda) dimunculkan terlebih dahulu sebelum beralih ke tag berikutnya. Tag dapat diurutkan secara instan via tombol **`🔤 A-Z`**, **`📊 Terbanyak`**, **`📏 Terpanjang`**, atau **`📏 Tersedikit`** di jendela Kelola Tag.
-> Pengaturan ini dapat diubah langsung 1-klik via tombol **`📊 DEFAULT` / `🏷️ URUT TAG`** di header UI utama, di jendela `🏷️ Kelola Kategori Custom`, atau via menu `⚙️ Settings ➔ 📊 Mode Sortir Tier 0`.
+1. **Prioritas Panjang Kata Ideal (4–7 Huruf):** Di dalam setiap tier, kata dengan panjang 4–7 huruf dimunculkan terlebih dahulu karena terbukti paling cepat dan nyaman diketik sebelum timer giliran habis.
+2. **Sortir Abjad Alami (A–Z):** Kata dengan panjang yang sama diurutkan secara alfabetis berdasarkan kamus asli (*stable sort*).
 
 ---
 
-## 📚 Basis Kosakata & Kamus
+## 🛠️ Tumpukan Teknologi (Tech Stack)
 
-Aplikasi menggabungkan basis data kosakata terlengkap (**147.880+ kata unik**):
-- **KBBI VI (112.822 kata):** Kosakata baku resmi Kamus Besar Bahasa Indonesia Edisi VI.
-- **Contek Sambung Kata (108.130 kata):** Basis data `contek-sambungkata.web.id` yang mencakup kosakata gaul, istilah Roblox (`aho`, `alo`, `wibu`, `noob`, `pro`, `roblox`), imbuhan fleksibel, dan kata serangan.
-- **⭐ Whitelist Terverifikasi (`whitelist.txt`):** Daftar kata yang terbukti berhasil dimasukkan di Roblox. Kata whitelist diposisikan di urutan paling atas di dalam kategorinya (misal: di kategori X atau kategori kustom) dan tidak perlu dimasukkan ke kamus umum (hanya hidup di `whitelist.txt`).
-- **🚫 Blocklist Ditolak (`blacklist.txt`):** Daftar kata yang ditolak/disensor game Roblox sehingga tidak akan disarankan kembali oleh bot.
-- **Pembersihan Kata:** Seluruh kata bahasa Inggris non-Indonesia murni yang ditolak Roblox telah disaring (contoh: bot menggunakan `klimaks`, bukan `climax`).
-- **Validasi Struktur:** Setiap kata wajib memiliki minimal satu vokal untuk menyaring singkatan yang tidak valid di game.
-
----
-
-## 🎮 Pemantau & Pengindeks Gameplay Otomatis
-
-Aplikasi dilengkapi modul pemantau gameplay (`gameplay_indexer.py`) untuk mengenali respon visual nyata server Roblox:
-- **`KATA_SALAH`:** Kotak input berubah menjadi latar merah pekat tanpa subtext ➔ otomatis dicatat ke file staging terisolasi `auto_blacklist.txt`.
-- **`SUDAH_DIGUNAKAN`:** Kotak merah dengan subtext `"... sudah digunakan!"` ➔ terbukti valid di Roblox, otomatis dicatat ke `auto_kata_baru.txt`.
-- **`KATA_BENAR`:** Kotak teks lenyap seketika dan avatar karakter memancarkan kilatan hijau (*green flash*) ➔ otomatis dicatat ke `auto_kata_baru.txt`.
-- *Prinsip Human-in-the-Loop:* Kamus utama dan blacklist resmi pengguna **100% aman dan tidak tercemar**. Seluruh data deteksi otomatis tersimpan terpisah di folder staging untuk dapat diverifikasi.
+| Lapisan / Komponen | Teknologi & Library | Deskripsi Peran |
+| :--- | :--- | :--- |
+| **GUI Framework** | **PySide6 (Qt 6.5+)** | Antarmuka desktop modern, akselerasi perangkat keras, rendering lancar 60 FPS |
+| **Computer Vision** | **OpenCV (`cv2`)** | Grayscale thresholding, analisis kontur, dan pemotongan vertikal komponen terhubung |
+| **OCR Engines** | **Template Matching + RapidOCR ONNX** | Arsitektur *Dual-Engine*: Template Matching untuk 1–2 huruf (1–2 ms) & RapidOCR DBNet untuk 3 huruf |
+| **Screen Capture** | **MSS** | Tangkapan layar berkecepatan tinggi dengan latensi di bawah 10 ms |
+| **Image Processing** | **Pillow (PIL)** | Pewarnaan dinamis ikon vektor MDI melalui masking alfa (*C-level memory cache*) |
+| **Data Engine** | **Python Trie & Hash Set** | Pencarian prefix dan penyaringan blacklist/whitelist instan dalam kompleksitas $O(1)$ |
+| **Native Windows API** | **`ctypes` / Win32 API** | Penskalaan DPI presisi monitor 1920x1200 dan implementasi resizer border `WM_NCHITTEST` |
 
 ---
 
-## 🧪 Pengujian & CI Benchmark
+## 🧪 Pengujian & Jaminan Kualitas
 
-Setiap perubahan kode diverifikasi melalui automated test suite lengkap:
+Setiap pembaruan kode diverifikasi menggunakan rangkaian *automated regression test suite*:
+
 ```powershell
-# 1. Uji Akurasi OCR Layar (92 Sampel Nyata Roblox)
+# 1. Uji Akurasi OCR (Benchmark 92 Sampel Nyata Roblox)
 python test_accuracy.py
 
-# 2. Uji Unit Solver, Tier Prioritas & Custom Traps
+# 2. Uji Unit Solver, Tier Prioritas, Whitelist & Blacklist
 python test_solver.py
 
-# 3. Uji Deteksi Visual Sekuens Gameplay
+# 3. Uji Pengindeks Respon Visual Sekuens Gameplay
 python test_gameplay_indexer.py
 ```
-> Seluruh pengujian di atas dijalankan otomatis oleh **GitHub Actions** pada runner Windows setiap kali terjadi push atau pull request ke branch `main`.
+
+> **Standar Kelulusan CI:** Wajib **100% Pass** pada 92 sampel OCR Roblox dan seluruh pengujian unit solver harus berstatus **OK**.
 
 ---
 
-## ❓ Tanya Jawab & Kendala Umum (FAQ)
+## ❓ Tanya Jawab Umum (FAQ)
 
-### Q: Apakah akun Roblox saya aman dari ban?
-**A:** Sangat aman. Aplikasi bekerja 100% dari luar Roblox sebagai asisten overlay visual. Aplikasi hanya membaca piksel tangkapan layar dan berinteraksi melalui clipboard Windows standar. Tidak ada injeksi memori, pembacaan proses, atau manipulasi file game Roblox.
+### Q: Apakah akun Roblox saya aman dari sanksi / ban?
+**A:** **100% Aman.** SAKA Overlay beroperasi sepenuhnya di luar Roblox sebagai *overlay visual*. Aplikasi ini hanya membaca piksel layar dan berkomunikasi via clipboard Windows standar tanpa melakukan injeksi memori, pembacaan proses Roblox, atau modifikasi file game apa pun.
 
-### Q: Teks awalan di game tidak terbaca atau akurasinya berkurang?
-1. Buka menu **`⚙️`** ➔ klik **`👁️ Test Area Deteksi`** untuk memastikan area kotak seleksi pas mengelilingi kotak putih awalan huruf.
-2. Jika posisi jendela Roblox bergeser, pilih **`🎯 Set Area Deteksi`** dan tarik ulang kotak seleksi.
-3. Pastikan tidak ada jendela aplikasi lain atau avatar pemain yang menutupi kotak huruf di dalam game.
+### Q: Huruf awalan di game tidak terbaca oleh aplikasi?
+1. Buka tab **`⚙️ SYSTEM`** ➔ klik **`👁️ Uji Area Layar`** untuk memeriksa apakah kotak seleksi pas mengelilingi kotak putih game.
+2. Jika posisi jendela Roblox berpindah, gunakan tombol **`🎯 Tentukan Area Layar`** untuk mengatur ulang area tangkapan.
+3. Pastikan tidak ada jendela aplikasi lain atau karakter Roblox yang menutupi kotak huruf giliran.
 
-### Q: Ada huruf yang salah terbaca saat bermain?
-Tekan tombol **`F2`** di keyboard! Screenshot akan tersimpan seketika (< 5ms) ke folder `sample/kurang_tepat/` tanpa memunculkan popup yang mengganggu tempo bermain. Setelah selesai bermain, klik **`📝 Koreksi`** untuk melihat gambar diperbesar dan melabeli huruf yang benar.
+### Q: Bagaimana cara memperbarui aplikasi ke versi terbaru?
+Buka tab **`⚙️ SYSTEM`** ➔ lihat bagian **VERSI** ➔ klik **`🚀 Perbarui Sekarang`**. Modul updater bawaan akan menyinkronkan repositori Anda dengan commit terbaru secara otomatis.
 
-### Q: Aplikasi tidak mau terbuka saat klik `run.bat`?
-Pastikan Anda sudah menginstal **Python** (versi 3.10+) dan mencentang opsi *"Add Python to PATH"* saat instalasi awal.
+---
+
+<div align="center">
+  <p>Dibuat dengan ❤️ untuk komunitas Roblox Sambung Kata Indonesia.</p>
+</div>

@@ -23,19 +23,19 @@
 
 ```
 sambung-kata/
-├── app_gui.py           # GUI Utama (Tkinter Tactical Cyber Theme, Always-on-top, Hotkey F2)
-├── ui_theme.py          # Palet Warna Tactical Cyber Bamboo & PIL Vector Icon Generator
-├── ui_components.py     # Komponen Modular (TopTabStrip, SubTabStrip, MiniTickerBar, CyberSwitch)
-├── tab_views.py         # Kontainer Tampilan 4 Tab (TAGS, KAMUS, SYSTEM)
+├── app_qt.py            # GUI Utama (PySide6 Tactical Cyber Bamboo, Always-on-top, Hotkey Kustom)
+├── qt_theme.py          # Palet Warna Tactical Cyber Bamboo & QSS + Icon Loader
+├── qt_components.py     # Komponen Modular Qt (QtTopTabStrip, QtMiniTickerBar, QtCustomTitleBar)
+├── tab_views_qt.py      # Kontainer Tampilan 4 Tab (LIVE, TAGS, KAMUS, SYSTEM)
 ├── docs/
 │   └── REDESIGN_UI_SPEC.md # Spesifikasi Komprehensif Redesign UI
-├── main.py              # Entry point GUI (menjalankan app_gui.py)
+├── main.py              # Entry point GUI (menjalankan app_qt.py)
 ├── main_cli.py          # Entry point Terminal / Headless mode
 ├── ocr_engine.py        # Core Vision & OCR: Dual-Engine (Template Matching + RapidOCR)
 ├── gameplay_indexer.py  # Pemantau Gameplay & Auto-Indexer (Deteksi kata salah/sudah dipakai/benar)
 ├── updater.py           # Git Updater Otomatis (Prompt, Auto-update, Disabled, Commit log parser)
 ├── solver.py            # Mesin pencari kata berawalan prefix dengan sistem tier prioritas
-├── region_selector.py   # DPI-aware transparent overlay untuk seleksi ROI di monitor 1920x1200
+├── region_selector_qt.py # DPI-aware transparent overlay PySide6 untuk seleksi ROI layar
 ├── config.py            # Utilitas load/save konfigurasi JSON
 ├── config.json          # Menyimpan area ROI layar, interval scan, dan preferensi pengguna (tracked base)
 ├── config.local.json    # Override konfigurasi lokal pengguna: menyimpan preferensi tag, mode, area ROI (untracked / gitignored, kebal git update)

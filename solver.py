@@ -105,8 +105,8 @@ class SambungKataSolver:
         """
         Memasukkan kata ke whitelist dan menyimpannya ke whitelist.txt:
         - Jika kata ada di blacklist, otomatis dihapus dari blacklist.
-        - Kata langsung aktif di memori pencarian solver O(1) tanpa perlu menambah file kamus.
-        - Menjadi prioritas teratas di kategorinya saat dicari.
+        - Jika kata belum ada di kamus_lengkap.txt (custom_set), otomatis ditambahkan ke kamus_lengkap.txt.
+        - Kata langsung aktif di memori pencarian solver O(1) dan menjadi prioritas teratas di kategorinya.
         """
         w = word.strip().lower()
         if not w or not w.isalpha() or len(w) < 2:
@@ -129,6 +129,16 @@ class SambungKataSolver:
         except Exception as e:
             print(f"[!] Gagal menulis ke whitelist.txt: {e}")
             return False
+
+        # Jika belum ada di kamus (kamus_lengkap / KBBI / Contek), tambahkan otomatis ke kamus_lengkap.txt
+        if w not in self.custom_set and w not in self.kbbi_set and w not in self.contek_set:
+            self.custom_set.add(w)
+            if self.dictionary_path:
+                try:
+                    with open(self.dictionary_path, "a", encoding="utf-8") as f:
+                        f.write(f"{w}\n")
+                except Exception as e:
+                    print(f"[!] Gagal menulis kata whitelist ke kamus_lengkap.txt: {e}")
 
         # Pastikan kata juga langsung hidup di memori aktif solver
         if w not in self.word_set:
