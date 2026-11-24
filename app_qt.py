@@ -54,6 +54,8 @@ class SambungKataQtApp(QMainWindow):
     """
     Aplikasi Utama SAKA Overlay berbasis PySide6 (Tactical Cyber Bamboo Theme).
     """
+    f2_hotkey_triggered = Signal()
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SAKA Overlay")
@@ -181,12 +183,14 @@ class SambungKataQtApp(QMainWindow):
         self.scan_worker = ScanWorker(self.ocr, lambda: self.config.get("scan_interval_sec", 0.08))
         self.scan_worker.result_ready.connect(self._on_scan_result)
 
-        # Global Hotkey F2 (manual flag detection)
+        # Global Hotkey F2 (manual flag detection) - marshal ke Qt main thread via Signal
+        self.f2_hotkey_triggered.connect(self._on_f2_hotkey)
         try:
             import keyboard
-            keyboard.add_hotkey("F2", self._on_f2_hotkey)
+            keyboard.add_hotkey("F2", self.f2_hotkey_triggered.emit)
         except Exception:
-            pass
+            self.sc_f2 = QShortcut(QKeySequence("F2"), self)
+            self.sc_f2.activated.connect(self._on_f2_hotkey)
 
         # Posisikan window di sisi kanan layar (Default Right-Docked) & Muat Geometri Tersimpan
         self._init_window_geometry()
@@ -694,11 +698,85 @@ class SambungKataQtApp(QMainWindow):
         def _on_selected(area):
             if area:
                 self.config["screen_area"] = area
-                self.ocr.set_screen_area(area)
+                self.ocr.last_captured_image = None
+                self.ocr.last_detection_result = None
+                self.ocr.update_config(self.config)
                 self.save_config_debounced()
                 self.show_toast(f"Area Scanner disimpan: {area['width']}x{area['height']} px")
+                self.preview_selected_area(area)
         self._region_selector = QtRegionSelector(on_selected_callback=_on_selected, title="KLIK & DRAG MOUSE UNTUK MEMILIH AREA SCANNER")
         self._region_selector.show()
+
+    def preview_selected_area(self, area=None, title=None, bg_color=None):
+        """Menampilkan kotak transparan sekejap di layar untuk mengonfirmasi area deteksi."""
+        target_area = area or self.config.get("screen_area")
+        if not target_area or target_area.get("width", 0) <= 0 or target_area.get("height", 0) <= 0:
+            return
+        l, t = int(target_area.get("left", 0)), int(target_area.get("top", 0))
+        w, h = int(target_area.get("width", 100)), int(target_area.get("height", 50))
+        bg = bg_color or "#f38ba8"
+        t_text = title or f"AREA SCANNER ({w}x{h})"
+
+        # Konversi piksel fisik (MSS) -> piksel logis Qt agar posisi overlay presisi di layar DPI scaling
+        screen = QApplication.primaryScreen()
+        for s in QApplication.screens():
+            sdpr = s.devicePixelRatio() or 1.0
+            sg = s.geometry()
+            if (sg.x() * sdpr <= l < (sg.x() + sg.width()) * sdpr and
+                    sg.y() * sdpr <= t < (sg.y() + sg.height()) * sdpr):
+                screen = s
+                break
+        dpr = screen.devicePixelRatio() if screen else 1.0
+        l_qt = int(round(l / dpr))
+        t_qt = int(round(t / dpr))
+        w_qt = max(1, int(round(w / dpr)))
+        h_qt = max(1, int(round(h / dpr)))
+
+        if getattr(self, "_area_preview_win", None) is not None:
+            try:
+                self._area_preview_win.close()
+            except Exception:
+                pass
+
+        preview = QLabel(t_text)
+        preview.setAlignment(Qt.AlignCenter)
+        preview.setWindowFlags(
+            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.WindowTransparentForInput
+        )
+        preview.setAttribute(Qt.WA_ShowWithoutActivating, True)
+        preview.setWindowOpacity(0.45)
+        preview.setStyleSheet(
+            f"background-color: {bg}; color: #11111b; font-weight: bold; font-size: 10px; border: 2px solid #ffffff;"
+        )
+        preview.setGeometry(l_qt, t_qt, w_qt, h_qt)
+        preview.show()
+        self._area_preview_win = preview
+        QTimer.singleShot(1200, preview.close)
+
+    def test_region_scanner(self):
+        """Menguji Area Scanner dengan menampilkan preview area dan menjalankan 1x scan OCR."""
+        area = self.config.get("screen_area")
+        if not area or area.get("width", 0) <= 0 or area.get("height", 0) <= 0:
+            self.show_toast("Belum ada area layar yang diatur! Klik 'Atur Area Scanner' dulu.")
+            return
+
+        w = int(area.get("width", 0))
+        h = int(area.get("height", 0))
+
+        try:
+            self.ocr.update_config(self.config)
+            res = self.ocr.scan_once() or {}
+            text = res.get("text", "").strip()
+            conf_pct = int(res.get("confidence", 0.0) * 100)
+            self.preview_selected_area(area, title=f"TEST AREA ({w}x{h})", bg_color=THEME["primary"])
+            if text:
+                self._on_scan_result(res)
+                self.show_toast(f"Test Area ({w}x{h}): Terdeteksi '{text}' ({conf_pct}%)")
+            else:
+                self.show_toast(f"Test Area ({w}x{h}): Tidak ada teks terdeteksi")
+        except Exception as e:
+            self.preview_selected_area(area, title=f"TEST AREA ({w}x{h})", bg_color=THEME["primary"])
+            self.show_toast(f"Gagal test Area Scanner: {e}")
 
     # --- Mode Dev & Window Management ---
     def set_always_on_top(self, enabled: bool):
@@ -867,13 +945,23 @@ class SambungKataQtApp(QMainWindow):
 
     def _on_f2_hotkey(self):
         try:
-            saved = self.ocr.save_false_detection(self.last_detected_word)
+            conf = (self.last_detected_conf / 100.0) if self.last_detected_conf is not None else None
+            if self.ocr.last_detection_result:
+                conf = self.ocr.last_detection_result.get("confidence", conf)
+
+            saved = self.ocr.save_to_kurang_tepat(
+                detected_text=self.last_detected_word,
+                confidence=conf,
+                correct_text=None
+            )
             if saved:
                 self.show_toast(f"Sampel F2 tersimpan: {os.path.basename(saved)}")
                 if hasattr(self, "tab_system") and hasattr(self.tab_system, "refresh_counts"):
                     self.tab_system.refresh_counts()
+            else:
+                self.show_toast("Belum ada area layar yang diatur! Atur lewat System -> Atur Area Scanner")
         except Exception as e:
-            pass
+            self.show_toast(f"Gagal simpan sampel F2: {e}")
 
     # --- Sorting tags ---
     def on_sort_custom_categories_az(self):

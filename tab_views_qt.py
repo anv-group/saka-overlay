@@ -2949,6 +2949,9 @@ class QtSystemTabView(QWidget):
         sp_row.addWidget(self.combo_speed, 1)
         sc_layout.addLayout(sp_row)
 
+        roi_row = QHBoxLayout()
+        roi_row.setSpacing(6)
+
         btn_roi = QPushButton(" Atur Area Scanner")
         btn_roi.setIcon(get_qicon("settings", size=13, color=THEME["text_primary"]))
         btn_roi.setCursor(Qt.PointingHandCursor)
@@ -2958,7 +2961,7 @@ class QtSystemTabView(QWidget):
                 color: {THEME['text_primary']};
                 border: 1px solid {THEME['border']};
                 border-radius: 4px;
-                padding: 6px;
+                padding: 6px 8px;
                 font-weight: 600;
             }}
             QPushButton:hover {{
@@ -2966,7 +2969,30 @@ class QtSystemTabView(QWidget):
             }}
         """)
         btn_roi.clicked.connect(self.app.open_region_selector)
-        sc_layout.addWidget(btn_roi)
+        roi_row.addWidget(btn_roi, 1)
+
+        btn_test_roi = QPushButton(" Test Area")
+        btn_test_roi.setIcon(get_qicon("search", size=13, color=THEME["primary"]))
+        btn_test_roi.setCursor(Qt.PointingHandCursor)
+        btn_test_roi.setToolTip("Tampilkan posisi Area Scanner di layar & uji deteksi OCR 1x")
+        btn_test_roi.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['bg_hover']};
+                color: {THEME['primary']};
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 6px 10px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                border-color: {THEME['primary']};
+                background-color: {THEME['bg_card']};
+            }}
+        """)
+        btn_test_roi.clicked.connect(self.app.test_region_scanner)
+        roi_row.addWidget(btn_test_roi)
+
+        sc_layout.addLayout(roi_row)
 
         layout.addWidget(sc_box)
 

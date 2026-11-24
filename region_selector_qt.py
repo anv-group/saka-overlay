@@ -54,8 +54,9 @@ class QtRegionSelector(QWidget):
             painter.setPen(pen)
             painter.drawRect(rect)
 
-            # Label Ukuran Dimensi (W x H px)
-            dim_text = f"{rect.width()} x {rect.height()} px"
+            # Label Ukuran Dimensi (W x H px dalam piksel fisik layar untuk MSS)
+            dpr = self.devicePixelRatioF() or 1.0
+            dim_text = f"{round(rect.width() * dpr)} x {round(rect.height() * dpr)} px"
             painter.setPen(QColor("#ffff00"))
             dim_font = QFont("Segoe UI", 11, QFont.Bold)
             painter.setFont(dim_font)
@@ -84,11 +85,13 @@ class QtRegionSelector(QWidget):
                 self.close()
                 if rect.width() > 15 and rect.height() > 15:
                     screen_pos = self.mapToGlobal(rect.topLeft())
+                    screen = QApplication.screenAt(screen_pos) or self.screen() or QApplication.primaryScreen()
+                    dpr = screen.devicePixelRatio() if screen else 1.0
                     selected_area = {
-                        "left": int(screen_pos.x()),
-                        "top": int(screen_pos.y()),
-                        "width": int(rect.width()),
-                        "height": int(rect.height())
+                        "left": int(round(screen_pos.x() * dpr)),
+                        "top": int(round(screen_pos.y() * dpr)),
+                        "width": int(round(rect.width() * dpr)),
+                        "height": int(round(rect.height() * dpr))
                     }
                     if self.on_selected_callback:
                         self.on_selected_callback(selected_area)
