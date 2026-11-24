@@ -1,5 +1,5 @@
 @echo off
-title SAKA Overlay - Roblox Sambung Kata Assistant & Auto Solver
+title SAKA Overlay - Roblox Sambung Kata Assistant ^& Auto Solver
 cd /d "%~dp0"
 
 echo ===================================================

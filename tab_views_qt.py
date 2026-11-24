@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QDrag, QPixmap, QKeySequence, QShortcut
 from PySide6.QtCore import Qt, Signal, QTimer, QPoint, QMimeData, QEvent
-from qt_theme import THEME, get_qicon
+from qt_theme import THEME, get_qicon, get_badge_qicon, get_ban_qicon
 from qt_components import QtSubTabStrip, QtSegmentedPills
 
 # --- Word Card Widget ---
@@ -211,9 +211,9 @@ class QtLiveTabView(QWidget):
         self.btn_flag.clicked.connect(self.flag_clicked.emit)
         act_layout.addWidget(self.btn_flag)
 
-        # 2. Tombol Tambah Kata Baru ke Kamus (+) - Icon Only
+        # 2. Tombol Tambah Kata Baru ke Kamus (Buku +) - Icon Only
         self.btn_add_word = QPushButton()
-        self.btn_add_word.setIcon(get_qicon("plus", size=14, color=THEME["primary"]))
+        self.btn_add_word.setIcon(get_badge_qicon("book", "plus", size=16, color=THEME["primary"]))
         self.btn_add_word.setCursor(Qt.PointingHandCursor)
         self.btn_add_word.setFixedSize(30, 30)
         self.btn_add_word.setToolTip("Tambah Kata Baru ke Kamus Lengkap")
@@ -231,9 +231,9 @@ class QtLiveTabView(QWidget):
         self.btn_add_word.clicked.connect(self.add_word_clicked.emit)
         act_layout.addWidget(self.btn_add_word)
 
-        # 3. Tombol Tambah ke Whitelist (Bintang) - Icon Only
+        # 3. Tombol Tambah ke Whitelist (Bintang +) - Icon Only
         self.btn_add_wl = QPushButton()
-        self.btn_add_wl.setIcon(get_qicon("star_filled", size=14, color=THEME["warning"]))
+        self.btn_add_wl.setIcon(get_badge_qicon("star_filled", "plus", size=16, color=THEME["warning"]))
         self.btn_add_wl.setCursor(Qt.PointingHandCursor)
         self.btn_add_wl.setFixedSize(30, 30)
         self.btn_add_wl.setToolTip("Tambah Kata ke Whitelist (Prioritas Teratas #1) (Hotkey: F3)")
@@ -251,9 +251,9 @@ class QtLiveTabView(QWidget):
         self.btn_add_wl.clicked.connect(self.add_whitelist_clicked.emit)
         act_layout.addWidget(self.btn_add_wl)
 
-        # 4. Tombol Tambah ke Blocklist (Silang X) - Icon Only
+        # 4. Tombol Tambah ke Blocklist (Larangan +) - Icon Only
         self.btn_add_bl = QPushButton()
-        self.btn_add_bl.setIcon(get_qicon("cross", size=14, color=THEME["danger"]))
+        self.btn_add_bl.setIcon(get_badge_qicon(get_ban_qicon(size=13, color=THEME["danger"]), "plus", size=16, color=THEME["danger"]))
         self.btn_add_bl.setCursor(Qt.PointingHandCursor)
         self.btn_add_bl.setFixedSize(30, 30)
         self.btn_add_bl.setToolTip("Blokir Kata ke Blocklist (Kata Ditolak) (Hotkey: F4)")
@@ -426,6 +426,7 @@ class QtLiveTabView(QWidget):
         self.cards_layout = QVBoxLayout(self.cards_container)
         self.cards_layout.setContentsMargins(0, 0, 4, 0)
         self.cards_layout.setSpacing(4)
+        self.cards_layout.setAlignment(Qt.AlignTop)
 
         self.lbl_empty = QLabel("Belum ada kata terdeteksi.\nTekan MULAI untuk memindai otomatis.")
         self.lbl_empty.setAlignment(Qt.AlignCenter)
@@ -434,6 +435,8 @@ class QtLiveTabView(QWidget):
 
         self.scroll_area.setWidget(self.cards_container)
         layout.addWidget(self.scroll_area, 1)
+
+        self.update_hotkey_tooltips(self.app.config.get("hotkeys", {}))
 
     def update_hotkey_tooltips(self, hotkeys: dict):
         def _fmt(aid, desc):
@@ -445,7 +448,8 @@ class QtLiveTabView(QWidget):
         self.btn_add_wl.setToolTip(_fmt("add_whitelist", "Tambah Kata ke Whitelist (Prioritas Teratas #1)"))
         self.btn_add_bl.setToolTip(_fmt("add_blocklist", "Blokir Kata ke Blocklist (Kata Ditolak)"))
         self.btn_add_word.setToolTip(_fmt("add_kamus", "Tambah Kata Baru ke Kamus Lengkap"))
-        self.mode_pills.setToolTip(_fmt("cycle_mode", "Ganti Mode Permainan (Default / Santai / Brutal)"))
+        if hasattr(self, "mode_pills"):
+            self.mode_pills.setToolTip(_fmt("cycle_mode", "Ganti Mode Permainan (Default / Santai / Brutal)"))
 
     def _on_tag_scroll_wheel(self, event):
         delta = event.angleDelta().y() or event.angleDelta().x()
@@ -539,7 +543,7 @@ class QtLiveTabView(QWidget):
                 item.widget().deleteLater()
 
         btn_ico = QPushButton()
-        btn_ico.setIcon(get_qicon("tag", size=13, color=THEME["text_secondary"]))
+        btn_ico.setIcon(get_badge_qicon("tag", "plus", size=15, color=THEME["text_secondary"]))
         btn_ico.setFixedSize(26, 26)
         btn_ico.setCursor(Qt.PointingHandCursor)
         btn_ico.setToolTip("Tambah Tag Baru")

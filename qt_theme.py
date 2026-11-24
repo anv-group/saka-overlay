@@ -1,5 +1,5 @@
 import os
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtCore import Qt
 
 # Palet Warna Resmi Tactical Cyber Bamboo (sesuai DESIGN.md)
@@ -38,16 +38,16 @@ THEME = {
 ICONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icons")
 _QICON_CACHE = {}
 
-def get_qicon(name: str, size: int = 18, color: str = None) -> QIcon:
+def get_qicon(name: str, size: int = 18, color: str = None, angle: float = 0) -> QIcon:
     """
     Memuat icon PNG resmi Material Design dari assets/icons/, meresize dengan
     anti-aliasing halus, lalu mewarnainya (Dynamic Color Tinting) menggunakan
-    QPainter CompositionMode_SourceIn. Hasilnya di-cache permanen di memori.
+    QPainter CompositionMode_SourceIn. Mendukung rotasi opsional (angle).
     """
     if color is None:
         color = THEME["text_primary"]
 
-    cache_key = (name, size, color)
+    cache_key = (name, size, color, angle)
     if cache_key in _QICON_CACHE:
         return _QICON_CACHE[cache_key]
 
@@ -76,7 +76,89 @@ def get_qicon(name: str, size: int = 18, color: str = None) -> QIcon:
     painter.fillRect(tinted.rect(), QColor(color))
     painter.end()
 
+    if angle:
+        rotated = QPixmap(tinted.size())
+        rotated.fill(Qt.transparent)
+        rp = QPainter(rotated)
+        rp.setRenderHint(QPainter.Antialiasing)
+        rp.setRenderHint(QPainter.SmoothPixmapTransform)
+        cx, cy = tinted.width() / 2.0, tinted.height() / 2.0
+        rp.translate(cx, cy)
+        rp.rotate(angle)
+        rp.translate(-cx, -cy)
+        rp.drawPixmap(0, 0, tinted)
+        rp.end()
+        tinted = rotated
+
     ico = QIcon(tinted)
+    _QICON_CACHE[cache_key] = ico
+    return ico
+
+
+def get_badge_qicon(base_icon, badge_name: str = "plus", size: int = 16, color: str = None, badge_color: str = None) -> QIcon:
+    """Membuat ikon komposit (ikon utama dari nama aset atau QIcon + badge kecil di pojok kanan bawah) dengan cache."""
+    if color is None:
+        color = THEME["text_primary"]
+    if badge_color is None:
+        badge_color = color
+
+    base_key = base_icon if isinstance(base_icon, str) else base_icon.cacheKey()
+    cache_key = ("badge", base_key, badge_name, size, color, badge_color)
+    if cache_key in _QICON_CACHE:
+        return _QICON_CACHE[cache_key]
+
+    pix = QPixmap(size, size)
+    pix.fill(Qt.transparent)
+    painter = QPainter(pix)
+    painter.setRenderHint(QPainter.Antialiasing)
+
+    base_sz = max(10, size - 3)
+    src_icon = get_qicon(base_icon, size=base_sz, color=color) if isinstance(base_icon, str) else base_icon
+    base_pix = src_icon.pixmap(base_sz, base_sz)
+    painter.drawPixmap(0, 0, base_pix)
+
+    badge_sz = max(7, size // 2)
+    bx = size - badge_sz
+    by = size - badge_sz
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(QColor(THEME["bg_card"]))
+    painter.drawEllipse(bx - 1, by - 1, badge_sz + 2, badge_sz + 2)
+
+    badge_pix = get_qicon(badge_name, size=badge_sz, color=badge_color).pixmap(badge_sz, badge_sz)
+    painter.drawPixmap(bx, by, badge_pix)
+    painter.end()
+
+    ico = QIcon(pix)
+    _QICON_CACHE[cache_key] = ico
+    return ico
+
+
+def get_ban_qicon(size: int = 15, color: str = None) -> QIcon:
+    """Menggambar ikon vektor larangan (lingkaran + garis miring) untuk Blocklist."""
+    if color is None:
+        color = THEME["danger"]
+
+    cache_key = ("ban", size, color)
+    if cache_key in _QICON_CACHE:
+        return _QICON_CACHE[cache_key]
+
+    pix = QPixmap(size, size)
+    pix.fill(Qt.transparent)
+    painter = QPainter(pix)
+    painter.setRenderHint(QPainter.Antialiasing)
+
+    pen = QPen(QColor(color), max(1.6, size * 0.13), Qt.SolidLine, Qt.RoundCap)
+    painter.setPen(pen)
+    painter.setBrush(Qt.NoBrush)
+
+    pad = max(2, int(round(size * 0.14)))
+    d = size - (pad * 2)
+    painter.drawEllipse(pad, pad, d, d)
+    offset = int(round(d * 0.16))
+    painter.drawLine(pad + offset, pad + d - offset, pad + d - offset, pad + offset)
+    painter.end()
+
+    ico = QIcon(pix)
     _QICON_CACHE[cache_key] = ico
     return ico
 

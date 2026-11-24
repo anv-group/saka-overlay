@@ -450,21 +450,18 @@ class QtCustomTitleBar(QWidget):
         layout.addStretch(1)
 
         # Restart Button (Dev Mode)
-        self.btn_restart = QPushButton("⚡")
+        self.btn_restart = QPushButton()
+        self.btn_restart.setIcon(get_qicon("zap", size=13, color=THEME["text_secondary"]))
         self.btn_restart.setFixedSize(30, 32)
         self.btn_restart.setCursor(Qt.PointingHandCursor)
         self.btn_restart.setToolTip("Restart Aplikasi (Mode Dev)")
         self.btn_restart.setStyleSheet(f"""
             QPushButton {{
                 background: transparent;
-                color: {THEME["warning"]};
-                font-size: 13px;
-                font-weight: bold;
                 border: none;
             }}
             QPushButton:hover {{
-                background-color: {THEME["bg_card"]};
-                color: #fab387;
+                background-color: {THEME["bg_hover"]};
             }}
         """)
         if on_restart_func:
@@ -536,10 +533,10 @@ class QtCustomTitleBar(QWidget):
     def set_pinned(self, pinned: bool):
         self.is_pinned = pinned
         if pinned:
-            self.btn_pin.setIcon(get_qicon("pin", size=14, color=THEME["primary"]))
+            self.btn_pin.setIcon(get_qicon("pin", size=14, color=THEME["text_secondary"], angle=0))
             self.btn_pin.setToolTip("Lepas Pin (Always-on-Top Aktif)")
         else:
-            self.btn_pin.setIcon(get_qicon("pin", size=14, color=THEME["text_muted"]))
+            self.btn_pin.setIcon(get_qicon("pin", size=14, color=THEME["text_muted"], angle=45))
             self.btn_pin.setToolTip("Sematkan di Atas (Always-on-Top Nonaktif)")
 
     def mousePressEvent(self, event):
