@@ -1,6 +1,8 @@
 affix
 angsi
+apbd
 aslam
+asmr
 detox
 deux
 ersatz
@@ -41,6 +43,7 @@ nsa
 nsi
 nsia
 nsim
+ntol
 onyx
 oxone
 oxop
@@ -50,6 +53,7 @@ reflex
 remix
 sard
 ssmudra
+talaq
 uana
 uane
 ukat
