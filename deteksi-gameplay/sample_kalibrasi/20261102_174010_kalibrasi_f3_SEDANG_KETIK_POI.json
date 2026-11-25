@@ -1,0 +1,16 @@
+{
+    "timestamp": "20261102_174010",
+    "label": "kalibrasi_f3",
+    "state_detected": "SEDANG_KETIK",
+    "word_detected": "POI",
+    "details": {
+        "is_box_red": false,
+        "is_box_white": true,
+        "green_count": 2940,
+        "red_count": 171,
+        "raw_lines": [
+            "Poi"
+        ]
+    },
+    "note": ""
+}

@@ -1,0 +1,14 @@
+{
+    "timestamp": "20261103_005815",
+    "label": "kalibrasi_f3",
+    "state_detected": "IDLE",
+    "word_detected": "",
+    "details": {
+        "is_box_red": false,
+        "is_box_white": false,
+        "green_count": 320,
+        "red_count": 0,
+        "raw_lines": []
+    },
+    "note": ""
+}

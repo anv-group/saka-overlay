@@ -1,0 +1,4 @@
+ani  # [2026-11-02 17:11:06] Sudah digunakan ronde ini (Sampel: rec_2026-11-02_16-11-43_sec0035_frame1056_RED_SPIKE.png)
+sapi  # [2026-11-02 17:11:24] Sudah digunakan ronde ini (Sampel: rec_2026-11-02_16-11-43_sec0045_frame1350_RED_SPIKE.png)
+nila  # [2026-11-02 17:11:59] Sudah digunakan ronde ini (Sampel: rec_2026-11-02_16-11-43_sec0123_frame3696_RED_SPIKE.png)
+
