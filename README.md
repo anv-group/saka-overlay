@@ -1,8 +1,16 @@
 <div align="center">
-
-<img src="assets/logo_horizontal.png" alt="SAKA Overlay" width="420" />
-
+    <img src="assets/logo_horizontal.png" alt="SAKA Overlay" width="420" />
+  <br><br>
+    
+[![Roblox Sambung Kata](https://img.shields.io/badge/Roblox-Sambung%20Kata-1f1f1f?style=for-the-badge&logo=roblox&logoColor=white)](https://www.roblox.com/games/130342654546662/Sambung-Kata)
+[![Platform Windows](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0ODc1IDQ4NzUiPg0KICAgIDxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0wIDBoMjMxMXYyMzEwSDB6bTI1NjQgMGgyMzExdjIzMTBIMjU2NHpNMCAyNTY0aDIzMTF2MjMxMUgwem0yNTY0IDBoMjMxMXYyMzExSDI1NjQiIC8+DQo8L3N2Zz4=&logoColor=white)](https://www.microsoft.com/)  
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![PySide6](https://img.shields.io/badge/PySide6-Qt6-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://pypi.org/project/PySide6/)
+[![OpenCV](https://img.shields.io/badge/OpenCV-Computer%20Vision-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)](https://opencv.org/)
 </div>
+
+
+
 
 SAKA Overlay is a Windows overlay assistant for the Roblox game [Sambung Kata](https://www.roblox.com/games/130342654546662/Sambung-Kata). It reads the starting letters on your screen and suggests the best words to play.
 
