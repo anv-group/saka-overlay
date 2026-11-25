@@ -9,7 +9,7 @@ DEFAULT_HOTKEYS = {
     "flag_error": "F2",
     "add_whitelist": "F3",
     "add_blocklist": "F4",
-    "add_kamus": "",
+    "add_kamus": "F7",
     "add_tag": "F6",
     "cycle_mode": "",
 }
