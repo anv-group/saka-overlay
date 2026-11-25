@@ -26,21 +26,16 @@ SAKA Overlay adalah aplikasi overlay untuk game Roblox Sambung Kata. Aplikasi in
 
 ## Tampilan
 
-**LIVE:** awalan yang terbaca dan daftar rekomendasi kata.
-
-<img src="docs/screenshots/live_running.png" alt="Tab LIVE" width="320" />
-
-**MODE:** mengelola akhiran dan memilih mode permainan.
-
-<img src="docs/screenshots/mode_kelola.png" alt="Tab MODE" width="320" />
-
-**KAMUS:** whitelist, blocklist, dan eksplorer kata.
-
-<img src="docs/screenshots/kamus_whitelist.png" alt="Tab KAMUS" width="320" />
-
-**SYSTEM:** area scanner, tampilan, dan hotkey.
-
-<img src="docs/screenshots/system.png" alt="Tab SYSTEM" width="320" />
+<table>
+  <tr>
+    <td align="center"><b>LIVE:</b> awalan yang terbaca dan daftar rekomendasi kata.<br><br><img src="docs/screenshots/live_running.png" alt="Tab LIVE" width="320" /></td>
+    <td align="center"><b>MODE:</b> mengelola akhiran dan memilih mode permainan.<br><br><img src="docs/screenshots/mode_kelola.png" alt="Tab MODE" width="320" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>KAMUS:</b> whitelist, blocklist, dan eksplorer kata.<br><br><img src="docs/screenshots/kamus_whitelist.png" alt="Tab KAMUS" width="320" /></td>
+    <td align="center"><b>SYSTEM:</b> area scanner, tampilan, dan hotkey.<br><br><img src="docs/screenshots/system.png" alt="Tab SYSTEM" width="320" /></td>
+  </tr>
+</table>
 
 ## Instalasi
 
