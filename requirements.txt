@@ -6,3 +6,5 @@ winocr>=0.0.15
 pytesseract>=0.3.10
 keyboard>=0.13.5
 PySide6>=6.5.0
+requests>=2.31.0
+websockets>=12.0
