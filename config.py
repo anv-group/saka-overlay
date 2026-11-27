@@ -1,8 +1,20 @@
+import copy
 import os
 import json
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 LOCAL_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.local.json")
+
+MODE_SYNC_KEYS = (
+    "game_mode",
+    "mode_santai",
+    "brutal_mode_tags",
+    "saved_normal_tags",
+    "saved_default_tags",
+    "santai_auto_disabled_tags",
+    "tier0_sort_mode",
+    "custom_trap_endings",
+)
 
 DEFAULT_HOTKEYS = {
     "toggle_scan": "F1",
@@ -47,6 +59,10 @@ DEFAULT_CONFIG = {
     "tier0_sort_mode": "default",
     "two_tone_text": True,  # "default" (Panjang 4-7 & Abjad) atau "tag_order" (Sesuai Urutan Tag Kustom)
     "dev_mode": False,  # Mode Pengembang (Menampilkan tombol ⚡ Restart & fitur debug). Default OFF di git.
+    "storage_mode": "txt",  # "txt" (Default lokal/publik) atau "supabase" (Database privat real-time)
+    "supabase_url": "",
+    "supabase_anon_key": "",
+    "sync_nickname": "",
     "custom_trap_endings": [  # Kategori custom akhiran jebakan super (prioritas di atas X)
         {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"},
         {"suffix": "NGK", "name": "Akhiran NGK", "enabled": True, "color": "#f5c2e7"}
@@ -88,15 +104,72 @@ def load_config():
 
     return config
 
+def extract_mode_state(cfg: dict) -> dict:
+    """Mengambil salinan field pengaturan Tab MODE dari dict konfigurasi."""
+    state = {}
+    for k in MODE_SYNC_KEYS:
+        if k in cfg:
+            state[k] = copy.deepcopy(cfg[k])
+        elif k in DEFAULT_CONFIG:
+            state[k] = copy.deepcopy(DEFAULT_CONFIG[k])
+    return state
+
+
+def load_txt_mode_state() -> dict:
+    """Memuat pengaturan MODE lokal khusus Mode File TXT dari config.json + config.local.json."""
+    return extract_mode_state(load_config())
+
+
+def save_txt_mode_state(mode_state: dict) -> bool:
+    """Menyimpan pengaturan MODE (misal hasil Download DB -> Lokal) ke config.local.json untuk Mode File TXT."""
+    if not isinstance(mode_state, dict):
+        return False
+    try:
+        local_cfg = {}
+        if os.path.exists(LOCAL_CONFIG_FILE):
+            try:
+                with open(LOCAL_CONFIG_FILE, "r", encoding="utf-8") as f:
+                    local_cfg = json.load(f)
+            except Exception:
+                local_cfg = {}
+        for k in MODE_SYNC_KEYS:
+            if k in mode_state:
+                local_cfg[k] = copy.deepcopy(mode_state[k])
+        with open(LOCAL_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(local_cfg, f, indent=4)
+        return True
+    except Exception as e:
+        print(f"[!] Gagal menyimpan mode TXT lokal: {e}")
+        return False
+
+
 def save_config(cfg):
     """
     Menyimpan konfigurasi:
     1. Menyimpan ke config.json (file konfigurasi umum)
     2. Menyimpan pengaturan lokal spesifik pengguna ke config.local.json (kebal git update/pull)
+    Saat storage_mode == 'supabase', kunci MODE_SYNC_KEYS di config.local.json tetap
+    dipertahankan untuk Mode File TXT agar tidak tertimpa oleh profil database privat.
     """
     try:
+        is_db_mode = (cfg.get("storage_mode", "txt") == "supabase")
+
+        existing_main = {}
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    existing_main = json.load(f)
+            except Exception:
+                existing_main = {}
+
+        cfg_to_main = copy.deepcopy(cfg)
+        if is_db_mode:
+            for mk in MODE_SYNC_KEYS:
+                if mk in existing_main:
+                    cfg_to_main[mk] = existing_main[mk]
+
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, indent=4)
+            json.dump(cfg_to_main, f, indent=4)
 
         # Simpan preferensi lokal pengguna ke config.local.json (kebal git pull / update GitHub / checkout)
         local_keys = [
@@ -117,7 +190,11 @@ def save_config(cfg):
             "use_contek",
             "window_geometry",
             "report_hotkey",
-            "hotkeys"
+            "hotkeys",
+            "storage_mode",
+            "supabase_url",
+            "supabase_anon_key",
+            "sync_nickname"
         ]
         local_cfg = {}
         if os.path.exists(LOCAL_CONFIG_FILE):
@@ -128,6 +205,8 @@ def save_config(cfg):
                 local_cfg = {}
 
         for k in local_keys:
+            if is_db_mode and k in MODE_SYNC_KEYS and k in local_cfg:
+                continue
             if k in cfg:
                 local_cfg[k] = cfg[k]
 

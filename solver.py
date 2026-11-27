@@ -1,3 +1,4 @@
+import bisect
 import os
 
 # Huruf akhiran yang sangat sulit untuk lawan sambung
@@ -12,7 +13,9 @@ class SambungKataSolver:
         kbbi_path="kamus_kbbi.txt",
         contek_path="kamus_contek.txt",
         use_kbbi=True,
-        use_contek=True
+        use_contek=True,
+        storage_mode="txt",
+        db_mutation_callback=None
     ):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         self.dictionary_path = os.path.join(base_dir, dictionary_path) if not os.path.isabs(dictionary_path) else dictionary_path
@@ -23,10 +26,15 @@ class SambungKataSolver:
         
         self.use_kbbi = use_kbbi
         self.use_contek = use_contek
+        self.storage_mode = storage_mode if storage_mode in ("txt", "supabase") else "txt"
+        self.db_mutation_callback = db_mutation_callback
 
         self.kbbi_set = set()
         self.contek_set = set()
+        self.base_custom_set = set()
+        self.db_custom_set = set()
         self.custom_set = set()
+        self.db_records = {}
         self.word_set = set()
         self.words = []
         self.blacklisted_words = set()
@@ -35,8 +43,9 @@ class SambungKataSolver:
         self.custom_endings = []
         self.tier0_sort_mode = "default"  # "default" atau "tag_order"
 
-        self.load_blacklist()
-        self.load_whitelist()
+        if self.storage_mode == "txt":
+            self.load_blacklist()
+            self.load_whitelist()
         self.load_dictionary()
 
     def load_blacklist(self):
@@ -53,11 +62,65 @@ class SambungKataSolver:
             except Exception as e:
                 print(f"[!] Error membaca blacklist: {e}")
 
+    def _emit_db_mutation(self, action, word, record=None):
+        if self.storage_mode == "supabase" and callable(self.db_mutation_callback):
+            self.db_mutation_callback(action, word, record)
+
+    def _is_in_base_dictionary(self, w):
+        return (w in self.base_custom_set) or (w in self.kbbi_set) or (w in self.contek_set)
+
+    def _add_word_to_active_memory(self, w):
+        if not w or w in self.word_set:
+            return
+        self.word_set.add(w)
+        bisect.insort(self.words, w)
+        init1 = w[0]
+        if init1 not in self.words_by_initial:
+            self.words_by_initial[init1] = [w]
+        else:
+            bisect.insort(self.words_by_initial[init1], w)
+
+    def _should_stay_in_active_memory(self, w):
+        if self.use_kbbi and w in self.kbbi_set:
+            return True
+        if self.use_contek and w in self.contek_set:
+            return True
+        if w in self.custom_set or w in self.whitelisted_words:
+            return True
+        return False
+
+    def _remove_word_from_active_memory_if_unused(self, w):
+        if w in self.word_set and not self._should_stay_in_active_memory(w):
+            self.word_set.discard(w)
+            idx = bisect.bisect_left(self.words, w)
+            if idx < len(self.words) and self.words[idx] == w:
+                self.words.pop(idx)
+            init1 = w[0] if w else ""
+            bucket = self.words_by_initial.get(init1)
+            if bucket:
+                bidx = bisect.bisect_left(bucket, w)
+                if bidx < len(bucket) and bucket[bidx] == w:
+                    bucket.pop(bidx)
+
     def blacklist_word(self, word):
-        """Memasukkan kata ke blacklist dan menyimpannya ke blacklist.txt"""
+        """Memasukkan kata ke blacklist dan menyimpannya (ke blacklist.txt atau Database)"""
         w = word.strip().lower()
         if not w:
             return False
+
+        if self.storage_mode == "supabase":
+            if w in self.blacklisted_words and self.db_records.get(w, {}).get("status") == "blocklist":
+                return True
+            self.whitelisted_words.discard(w)
+            is_custom = bool(self.db_records.get(w, {}).get("is_custom", False) or (w in self.db_custom_set))
+            self.blacklisted_words.add(w)
+            rec = {"word": w, "status": "blocklist", "is_custom": is_custom}
+            self.db_records[w] = rec
+            if not is_custom:
+                self._remove_word_from_active_memory_if_unused(w)
+            self._emit_db_mutation("upsert", w, rec)
+            return True
+
         if w in self.blacklisted_words:
             return True
         self.blacklisted_words.add(w)
@@ -72,6 +135,23 @@ class SambungKataSolver:
     def unblacklist_word(self, word):
         """Menghapus kata dari blacklist (Undo)"""
         w = word.strip().lower()
+        if self.storage_mode == "supabase":
+            self.blacklisted_words.discard(w)
+            prev = self.db_records.get(w, {})
+            is_custom = bool(prev.get("is_custom", False) or (w in self.db_custom_set))
+            if is_custom:
+                rec = {"word": w, "status": "custom", "is_custom": True}
+                self.db_records[w] = rec
+                self.db_custom_set.add(w)
+                self.custom_set.add(w)
+                self._add_word_to_active_memory(w)
+                self._emit_db_mutation("upsert", w, rec)
+            else:
+                self.db_records.pop(w, None)
+                self._remove_word_from_active_memory_if_unused(w)
+                self._emit_db_mutation("delete", w, None)
+            return True
+
         if w in self.blacklisted_words:
             self.blacklisted_words.remove(w)
         try:
@@ -103,14 +183,31 @@ class SambungKataSolver:
 
     def whitelist_word(self, word):
         """
-        Memasukkan kata ke whitelist dan menyimpannya ke whitelist.txt:
+        Memasukkan kata ke whitelist dan menyimpannya (ke whitelist.txt atau Database):
         - Jika kata ada di blacklist, otomatis dihapus dari blacklist.
-        - Jika kata belum ada di kamus_lengkap.txt (custom_set), otomatis ditambahkan ke kamus_lengkap.txt.
+        - Jika kata belum ada di kamus dasar, di mode TXT ditambahkan ke kamus_lengkap.txt;
+          di mode Database ditandai is_custom=True di database privat.
         - Kata langsung aktif di memori pencarian solver O(1) dan menjadi prioritas teratas di kategorinya.
         """
         w = word.strip().lower()
         if not w or not w.isalpha() or len(w) < 2:
             return False
+
+        if self.storage_mode == "supabase":
+            if w in self.whitelisted_words and self.db_records.get(w, {}).get("status") == "whitelist":
+                return True
+            self.blacklisted_words.discard(w)
+            self.whitelisted_words.add(w)
+            prev = self.db_records.get(w, {})
+            is_custom = bool(prev.get("is_custom", False) or (w in self.db_custom_set) or not self._is_in_base_dictionary(w))
+            if is_custom:
+                self.db_custom_set.add(w)
+                self.custom_set.add(w)
+            self._add_word_to_active_memory(w)
+            rec = {"word": w, "status": "whitelist", "is_custom": is_custom}
+            self.db_records[w] = rec
+            self._emit_db_mutation("upsert", w, rec)
+            return True
 
         # Jika ada di blacklist, pulihkan
         if w in self.blacklisted_words:
@@ -132,6 +229,7 @@ class SambungKataSolver:
 
         # Jika belum ada di kamus (kamus_lengkap / KBBI / Contek), tambahkan otomatis ke kamus_lengkap.txt
         if w not in self.custom_set and w not in self.kbbi_set and w not in self.contek_set:
+            self.base_custom_set.add(w)
             self.custom_set.add(w)
             if self.dictionary_path:
                 try:
@@ -141,21 +239,29 @@ class SambungKataSolver:
                     print(f"[!] Gagal menulis kata whitelist ke kamus_lengkap.txt: {e}")
 
         # Pastikan kata juga langsung hidup di memori aktif solver
-        if w not in self.word_set:
-            self.word_set.add(w)
-            self.words.append(w)
-            self.words.sort()
-            init1 = w[0]
-            if init1 not in self.words_by_initial:
-                self.words_by_initial[init1] = []
-            self.words_by_initial[init1].append(w)
-            self.words_by_initial[init1].sort()
+        self._add_word_to_active_memory(w)
 
         return True
 
     def unwhitelist_word(self, word):
         """Menghapus kata dari whitelist"""
         w = word.strip().lower()
+        if self.storage_mode == "supabase":
+            self.whitelisted_words.discard(w)
+            prev = self.db_records.get(w, {})
+            is_custom = bool(prev.get("is_custom", False) or (w in self.db_custom_set))
+            if is_custom:
+                rec = {"word": w, "status": "custom", "is_custom": True}
+                self.db_records[w] = rec
+                self.db_custom_set.add(w)
+                self.custom_set.add(w)
+                self._emit_db_mutation("upsert", w, rec)
+            else:
+                self.db_records.pop(w, None)
+                self._remove_word_from_active_memory_if_unused(w)
+                self._emit_db_mutation("delete", w, None)
+            return True
+
         if w in self.whitelisted_words:
             self.whitelisted_words.remove(w)
         try:
@@ -166,9 +272,8 @@ class SambungKataSolver:
                 f.write("# Daftar kata yang di-whitelist (Terbukti valid di game Roblox & Prioritas Utama di kategorinya)\n")
                 for ww in sorted(self.whitelisted_words):
                     f.write(f"{ww}\n")
-            # Jika kata tidak ada di kamus asal (bukan bagian kbbi/contek/custom), rebuild memori aktif
-            if w not in self.kbbi_set and w not in self.contek_set and w not in self.custom_set:
-                self._rebuild_active_words()
+            # Jika kata tidak ada di kamus asal (bukan bagian kbbi/contek/custom), hapus dari memori aktif
+            self._remove_word_from_active_memory_if_unused(w)
             return True
         except Exception as e:
             print(f"[!] Gagal memperbarui whitelist.txt: {e}")
@@ -216,27 +321,24 @@ class SambungKataSolver:
         # 3. Muat kata custom / warisan dari kamus_lengkap.txt
         if os.path.exists(self.dictionary_path):
             lengkap_set = self._read_word_file(self.dictionary_path)
-            # Kata yang ada di kamus_lengkap tapi tidak ada di kbbi/contek dianggap custom
-            self.custom_set = lengkap_set - (self.kbbi_set | self.contek_set)
+            # Kata yang ada di kamus_lengkap tapi tidak ada di kbbi/contek dianggap custom dasar
+            self.base_custom_set = lengkap_set - (self.kbbi_set | self.contek_set)
         else:
-            self.custom_set = set()
+            self.base_custom_set = set()
 
+        self.custom_set = self.base_custom_set | self.db_custom_set
         self._rebuild_active_words()
         print(f"[*] Solver siap: KBBI={len(self.kbbi_set)}, Contek={len(self.contek_set)}, Total Aktif={len(self.words)} kata.")
 
-    def _rebuild_active_words(self):
-        """Membangun ulang daftar kata aktif sesuai sumber kamus yang dipilih"""
+    def _compute_active_word_set(self):
         active = set()
         if self.use_kbbi:
             active.update(self.kbbi_set)
         if self.use_contek:
             active.update(self.contek_set)
-        
-        # Kata custom dan kata whitelist selalu aktif
         active.update(self.custom_set)
         active.update(self.whitelisted_words)
 
-        # Keamanan: Jika kedua sumber dimatikan oleh user, aktifkan setidaknya satu
         if not active:
             if self.kbbi_set:
                 self.use_kbbi = True
@@ -244,10 +346,247 @@ class SambungKataSolver:
             elif self.contek_set:
                 self.use_contek = True
                 active.update(self.contek_set)
+        return active
 
+    def _rebuild_active_words(self):
+        """Membangun ulang daftar kata aktif sesuai sumber kamus yang dipilih"""
+        active = self._compute_active_word_set()
         self.word_set = active
         self.words = sorted(list(self.word_set))
         self._index_words()
+
+    def switch_storage_mode(self, mode, db_records=None):
+        """Berpindah secara instan antara Mode File TXT dan Mode Database tanpa restart."""
+        target = mode if mode in ("txt", "supabase") else "txt"
+        self.storage_mode = target
+        if target == "txt":
+            self.db_records = {}
+            self.db_custom_set = set()
+            self.custom_set = set(self.base_custom_set)
+            self.load_blacklist()
+            self.load_whitelist()
+            if self._compute_active_word_set() != self.word_set:
+                self._rebuild_active_words()
+        else:
+            self.apply_db_snapshot(db_records or {})
+
+    def apply_db_snapshot(self, records_dict):
+        """Menerapkan snapshot penuh dari database/cache ke memori solver secara efisien."""
+        self.db_records = {}
+        new_wl = set()
+        new_bl = set()
+        new_db_custom = set()
+
+        for raw_w, rec in (records_dict or {}).items():
+            if not isinstance(rec, dict):
+                continue
+            w = str(rec.get("word") or raw_w or "").strip().lower()
+            if not w or not w.isalpha() or len(w) < 2:
+                continue
+            st = str(rec.get("status") or "custom").strip().lower()
+            is_c = bool(rec.get("is_custom", False))
+            clean_rec = {
+                "word": w,
+                "status": st,
+                "is_custom": is_c,
+                "added_by": str(rec.get("added_by") or ""),
+                "updated_at": str(rec.get("updated_at") or ""),
+            }
+            self.db_records[w] = clean_rec
+            if st == "whitelist":
+                new_wl.add(w)
+                if is_c:
+                    new_db_custom.add(w)
+            elif st == "blocklist":
+                new_bl.add(w)
+                if is_c:
+                    new_db_custom.add(w)
+            else:
+                new_db_custom.add(w)
+
+        self.whitelisted_words = new_wl
+        self.blacklisted_words = new_bl
+        self.db_custom_set = new_db_custom
+        self.custom_set = self.base_custom_set | self.db_custom_set
+
+        if self._compute_active_word_set() != self.word_set:
+            self._rebuild_active_words()
+
+    def apply_db_event(self, event_type, record=None, old_record=None):
+        """Menerapkan event Realtime (INSERT/UPDATE/DELETE) ke memori solver dalam O(1)/O(log N)."""
+        ev = str(event_type or "").upper()
+        if ev in ("INSERT", "UPDATE") and isinstance(record, dict):
+            w = str(record.get("word") or "").strip().lower()
+            if not w or not w.isalpha() or len(w) < 2:
+                return ""
+            st = str(record.get("status") or "custom").strip().lower()
+            is_c = bool(record.get("is_custom", False))
+            self.db_records[w] = {
+                "word": w,
+                "status": st,
+                "is_custom": is_c,
+                "added_by": str(record.get("added_by") or ""),
+                "updated_at": str(record.get("updated_at") or ""),
+            }
+            if is_c:
+                self.db_custom_set.add(w)
+                self.custom_set.add(w)
+            else:
+                self.db_custom_set.discard(w)
+                if w not in self.base_custom_set:
+                    self.custom_set.discard(w)
+
+            if st == "whitelist":
+                self.blacklisted_words.discard(w)
+                self.whitelisted_words.add(w)
+                self._add_word_to_active_memory(w)
+            elif st == "blocklist":
+                self.whitelisted_words.discard(w)
+                self.blacklisted_words.add(w)
+                if not is_c:
+                    self._remove_word_from_active_memory_if_unused(w)
+                else:
+                    self._add_word_to_active_memory(w)
+            else:
+                self.whitelisted_words.discard(w)
+                self.blacklisted_words.discard(w)
+                self.db_custom_set.add(w)
+                self.custom_set.add(w)
+                self._add_word_to_active_memory(w)
+            return w
+
+        if ev == "DELETE":
+            src = old_record if isinstance(old_record, dict) and old_record.get("word") else record
+            w = str((src or {}).get("word") or "").strip().lower()
+            if not w:
+                return ""
+            self.db_records.pop(w, None)
+            self.whitelisted_words.discard(w)
+            self.blacklisted_words.discard(w)
+            self.db_custom_set.discard(w)
+            if w not in self.base_custom_set:
+                self.custom_set.discard(w)
+            self._remove_word_from_active_memory_if_unused(w)
+            return w
+        return ""
+
+    def export_txt_records_for_import(self, added_by=""):
+        """Membaca whitelist.txt & blacklist.txt lokal menjadi daftar record siap import ke Supabase."""
+        records_map = {}
+        if os.path.exists(self.blacklist_path):
+            try:
+                with open(self.blacklist_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        w = line.strip().lower()
+                        if w and not w.startswith("#") and w.isalpha() and len(w) >= 2:
+                            records_map[w] = {
+                                "word": w,
+                                "status": "blocklist",
+                                "is_custom": not self._is_in_base_dictionary(w),
+                                "added_by": added_by,
+                            }
+            except Exception:
+                pass
+
+        if os.path.exists(self.whitelist_path):
+            try:
+                with open(self.whitelist_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        w = line.strip().lower()
+                        if w and not w.startswith("#") and w.isalpha() and len(w) >= 2:
+                            records_map[w] = {
+                                "word": w,
+                                "status": "whitelist",
+                                "is_custom": not self._is_in_base_dictionary(w),
+                                "added_by": added_by,
+                            }
+            except Exception:
+                pass
+        return list(records_map.values())
+
+    def apply_db_records_to_txt_files(self, records: dict, overwrite_lists: bool = False):
+        """
+        Menyimpan daftar kata dari Database Privat ke file lokal:
+        - whitelist.txt & blacklist.txt (gabung atau timpa penuh)
+        - kata tambahan (is_custom / status='custom') ke kamus_lengkap.txt jika belum ada.
+        Mengembalikan (jumlah_wl, jumlah_bl, jumlah_kata_custom_baru).
+        """
+        wl_set = set()
+        bl_set = set()
+        if not overwrite_lists:
+            if os.path.exists(self.whitelist_path):
+                try:
+                    with open(self.whitelist_path, "r", encoding="utf-8") as f:
+                        for line in f:
+                            w = line.strip().lower()
+                            if w and not w.startswith("#") and w.isalpha() and len(w) >= 2:
+                                wl_set.add(w)
+                except Exception:
+                    pass
+            if os.path.exists(self.blacklist_path):
+                try:
+                    with open(self.blacklist_path, "r", encoding="utf-8") as f:
+                        for line in f:
+                            w = line.strip().lower()
+                            if w and not w.startswith("#"):
+                                bl_set.add(w)
+                except Exception:
+                    pass
+
+        existing_dict = set()
+        if os.path.exists(self.dictionary_path):
+            existing_dict = self._read_word_file(self.dictionary_path)
+
+        vowels = set("aiueo")
+        new_custom_words = []
+
+        for raw_w, rec in (records or {}).items():
+            if not isinstance(rec, dict):
+                continue
+            w = str(rec.get("word") or raw_w or "").strip().lower()
+            if not w or not w.isalpha() or len(w) < 2:
+                continue
+            st = str(rec.get("status") or "custom").strip().lower()
+            is_c = bool(rec.get("is_custom", False))
+
+            if st == "whitelist":
+                bl_set.discard(w)
+                wl_set.add(w)
+            elif st == "blocklist":
+                wl_set.discard(w)
+                bl_set.add(w)
+
+            if (is_c or st == "custom") and w not in existing_dict and w not in self.kbbi_set and w not in self.contek_set:
+                if any(v in w for v in vowels):
+                    existing_dict.add(w)
+                    new_custom_words.append(w)
+
+        wl_dir = os.path.dirname(self.whitelist_path)
+        if wl_dir and not os.path.exists(wl_dir):
+            os.makedirs(wl_dir, exist_ok=True)
+        with open(self.whitelist_path, "w", encoding="utf-8") as f:
+            f.write("# Daftar kata yang di-whitelist (Terbukti valid di game Roblox & Prioritas Utama di kategorinya)\n")
+            for ww in sorted(wl_set):
+                f.write(f"{ww}\n")
+
+        bl_dir = os.path.dirname(self.blacklist_path)
+        if bl_dir and not os.path.exists(bl_dir):
+            os.makedirs(bl_dir, exist_ok=True)
+        with open(self.blacklist_path, "w", encoding="utf-8") as f:
+            for bw in sorted(bl_set):
+                f.write(f"{bw}\n")
+
+        if new_custom_words and self.dictionary_path:
+            with open(self.dictionary_path, "a", encoding="utf-8") as f:
+                for cw in sorted(new_custom_words):
+                    f.write(f"{cw}\n")
+
+        if self.storage_mode == "txt":
+            self.load_blacklist()
+            self.load_whitelist()
+            self.load_dictionary()
+
+        return len(wl_set), len(bl_set), len(new_custom_words)
 
     def set_dict_sources(self, use_kbbi=True, use_contek=True):
         """
@@ -289,21 +628,25 @@ class SambungKataSolver:
 
         # Jika sebelumnya ada di blacklist, pulihkan dari blacklist
         if w in self.blacklisted_words:
-            self.unblacklist_word(w)
+            if self.storage_mode == "supabase":
+                self.blacklisted_words.discard(w)
+            else:
+                self.unblacklist_word(w)
+
+        if self.storage_mode == "supabase":
+            self.db_custom_set.add(w)
+            self.custom_set.add(w)
+            self._add_word_to_active_memory(w)
+            rec = {"word": w, "status": "custom", "is_custom": True}
+            self.db_records[w] = rec
+            self._emit_db_mutation("upsert", w, rec)
+            return True, f"Kata '{w.upper()}' berhasil ditambahkan ke Database Kamus!"
 
         # Tambahkan ke memori
+        self.base_custom_set.add(w)
         self.custom_set.add(w)
         self.contek_set.add(w)
-        self.word_set.add(w)
-        self.words.append(w)
-        self.words.sort()
-        
-        # Tambahkan ke index
-        init1 = w[0]
-        if init1 not in self.words_by_initial:
-            self.words_by_initial[init1] = []
-        self.words_by_initial[init1].append(w)
-        self.words_by_initial[init1].sort()
+        self._add_word_to_active_memory(w)
 
         # Simpan persisten ke kamus_lengkap.txt dan kamus_contek.txt
         try:
@@ -677,6 +1020,10 @@ class SambungKataSolver:
             elif source_filter == "both":
                 if not (w in self.kbbi_set and w in self.contek_set):
                     continue
+            elif source_filter == "custom":
+                custom_pool = self.db_custom_set if self.storage_mode == "supabase" else self.base_custom_set
+                if w not in custom_pool:
+                    continue
 
             # Filter Query Teks
             if q:
@@ -759,6 +1106,11 @@ class SambungKataSolver:
             else:
                 status_src = "Kamus"
 
+            is_db_custom = (w in self.db_custom_set)
+            added_by = ""
+            if self.storage_mode == "supabase" and w in self.db_records:
+                added_by = str(self.db_records[w].get("added_by") or "")
+
             results.append({
                 "original_index": idx,
                 "word": w.upper(),
@@ -767,7 +1119,9 @@ class SambungKataSolver:
                 "tag_id": tag_id,
                 "status": status_src,
                 "is_whitelisted": is_wl,
-                "is_blacklisted": is_bl
+                "is_blacklisted": is_bl,
+                "is_db_custom": is_db_custom,
+                "added_by": added_by,
             })
 
         return results, total_count
