@@ -750,6 +750,8 @@ class QtQuickAddDialog(QDialog):
                 self.app.solver.whitelist_word(w)
                 self.app.show_toast(f"'{w.upper()}' ditambahkan ke Whitelist")
                 self.app.tab_kamus.refresh_whitelist()
+                if hasattr(self.app, "tab_system") and hasattr(self.app.tab_system, "refresh_db_stats"):
+                    self.app.tab_system.refresh_db_stats()
                 if self.app.last_detected_word:
                     self.app.update_results(self.app.last_detected_word)
             else:
@@ -758,6 +760,8 @@ class QtQuickAddDialog(QDialog):
             self.app.solver.blacklist_word(w)
             self.app.show_toast(f"'{w.upper()}' diblokir ke Blocklist")
             self.app.tab_kamus.refresh_blocklist()
+            if hasattr(self.app, "tab_system") and hasattr(self.app.tab_system, "refresh_db_stats"):
+                self.app.tab_system.refresh_db_stats()
             if self.app.last_detected_word:
                 self.app.update_results(self.app.last_detected_word)
         elif self.mode == "kamus":
@@ -1736,6 +1740,8 @@ class QtBatchAddDialog(QDialog):
 
             if self.on_added_callback:
                 self.on_added_callback()
+            if hasattr(self.app, "tab_system") and hasattr(self.app.tab_system, "refresh_db_stats"):
+                self.app.tab_system.refresh_db_stats()
         except Exception as e:
             self.lbl_feedback.setText(f"Error: {e}")
             self.lbl_feedback.setStyleSheet(f"font-size: 11px; color: {THEME['danger']};")
@@ -2119,11 +2125,16 @@ class QtDictionaryTabView(QWidget):
 
         self.layout_wl_items.addStretch(1)
 
+    def _notify_stats_updated(self):
+        if hasattr(self.app, "tab_system") and hasattr(self.app.tab_system, "refresh_db_stats"):
+            self.app.tab_system.refresh_db_stats()
+
     def _remove_wl_word(self, word):
         self.app.solver.unwhitelist_word(word)
         if self.app.last_detected_word:
             self.app.update_results(self.app.last_detected_word)
         self.refresh_whitelist()
+        self._notify_stats_updated()
         self.app.show_toast(f"'{word.upper()}' dihapus dari Whitelist")
 
     # -------------------------------------------------------------
@@ -2328,6 +2339,7 @@ class QtDictionaryTabView(QWidget):
         if self.app.last_detected_word:
             self.app.update_results(self.app.last_detected_word)
         self.refresh_blocklist()
+        self._notify_stats_updated()
         self.app.show_toast(f"'{word.upper()}' dipulihkan dari Blocklist")
 
     # -------------------------------------------------------------
@@ -2815,6 +2827,7 @@ class QtDictionaryTabView(QWidget):
         if self.app.last_detected_word:
             self.app.update_results(self.app.last_detected_word)
         self._search_dictionary()
+        self._notify_stats_updated()
 
     def _toggle_exp_blocklist(self, word: str):
         w_lower = word.lower()
@@ -2827,6 +2840,7 @@ class QtDictionaryTabView(QWidget):
         if self.app.last_detected_word:
             self.app.update_results(self.app.last_detected_word)
         self._search_dictionary()
+        self._notify_stats_updated()
 
     def _delete_exp_custom_word(self, word: str):
         ok, msg = self.app.solver.delete_custom_word(word.lower())
@@ -2837,6 +2851,7 @@ class QtDictionaryTabView(QWidget):
             self.refresh_whitelist()
             self.refresh_blocklist()
             self._search_dictionary()
+            self._notify_stats_updated()
 
 
 # --- Dialog Pendataan Koreksi Sampel OCR ---

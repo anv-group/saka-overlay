@@ -446,6 +446,9 @@ class SambungKataQtApp(QMainWindow):
 
         if tab_id == "kamus":
             QTimer.singleShot(60, self.tab_kamus.focus_active_search)
+        elif tab_id == "system":
+            if hasattr(self, "tab_system") and hasattr(self.tab_system, "refresh_db_stats"):
+                self.tab_system.refresh_db_stats()
 
     def open_tags_tab(self):
         self.top_strip.select_tab("tags")
@@ -959,17 +962,25 @@ class SambungKataQtApp(QMainWindow):
         self.show_toast("Cache lokal database (db_cache.json) dihapus")
 
     def switch_to_txt_mode(self):
+        if getattr(self, "_save_timer", None) is not None and self._save_timer.isActive():
+            self._save_timer.stop()
         if self._mode_sync_timer.isActive():
             self._mode_sync_timer.stop()
         self.sync_manager.stop()
+        txt_mode = load_txt_mode_state()
+        for mk in MODE_SYNC_KEYS:
+            if mk in txt_mode:
+                self.config[mk] = txt_mode[mk]
         self.config["storage_mode"] = "txt"
         save_config(self.config)
         self.solver.switch_storage_mode("txt")
-        self._apply_mode_state_to_runtime(load_txt_mode_state())
+        self._apply_mode_state_to_runtime(txt_mode)
         self._on_db_status_changed("txt", "Mode File CSV aktif: membaca & menyimpan ke file .csv lokal.")
         self.show_toast("Beralih ke Mode File CSV (Default)")
 
     def activate_database_mode(self, url: str, anon_key: str, nickname: str = ""):
+        if getattr(self, "_save_timer", None) is not None and self._save_timer.isActive():
+            self._save_timer.stop()
         if self.config.get("storage_mode", "txt") == "txt":
             save_config(self.config)
         self.config["storage_mode"] = "supabase"

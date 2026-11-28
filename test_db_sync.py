@@ -385,6 +385,32 @@ class TestSolverDualMode(unittest.TestCase):
                 restored_txt = cfg_mod.load_txt_mode_state()
                 self.assertEqual(restored_txt["game_mode"], "default")
                 self.assertEqual(restored_txt["custom_trap_endings"][0]["suffix"], "NS")
+
+                # Simulasi penuh switch_to_txt_mode() di SambungKataQtApp setelah state DB di-apply ke runtime
+                from app_qt import SambungKataQtApp
+                from unittest import mock
+
+                class _DummyApp:
+                    def __init__(self, cfg):
+                        self.config = cfg
+                        self._mode_sync_timer = mock.MagicMock()
+                        self._mode_sync_timer.isActive.return_value = False
+                        self.sync_manager = mock.MagicMock()
+                        self.solver = mock.MagicMock()
+                    def _apply_mode_state_to_runtime(self, ms):
+                        for k in cfg_mod.MODE_SYNC_KEYS:
+                            if k in ms:
+                                self.config[k] = ms[k]
+                    def _on_db_status_changed(self, *a, **kw):
+                        pass
+                    def show_toast(self, *a, **kw):
+                        pass
+
+                dummy = _DummyApp(dict(db_cfg))
+                SambungKataQtApp.switch_to_txt_mode(dummy)
+                self.assertEqual(dummy.config["storage_mode"], "txt")
+                self.assertEqual(dummy.config["game_mode"], "default")
+                self.assertEqual(dummy.config["custom_trap_endings"][0]["suffix"], "NS")
             finally:
                 cfg_mod.CONFIG_FILE = orig_main
                 cfg_mod.DEFAULT_CONFIG_FILE = orig_default

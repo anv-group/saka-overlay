@@ -360,6 +360,53 @@ class TestSystemFeatures(unittest.TestCase):
         self.assertEqual([r.sfx for r in brutal_rows], ["AMSI"])
         self.assertEqual(brutal_rows[0].idx, 1)
 
+    def test_csv_local_stats_refresh_on_dictionary_mutations(self):
+        class DummySolver:
+            def __init__(self):
+                self.whitelisted_words = {"awal"}
+                self.blacklisted_words = {"blok"}
+                self.base_custom_set = {"kustom"}
+                self.db_custom_set = set()
+                self.storage_mode = "txt"
+            def unwhitelist_word(self, w):
+                self.whitelisted_words.discard(w)
+            def blacklist_word(self, w):
+                self.blacklisted_words.add(w)
+                return True
+            def search_dictionary(self, **kw):
+                return [], 0
+
+        class DummyUpdater:
+            def get_current_branch(self): return "main"
+            def get_available_branches(self): return ["main"]
+            def get_current_commit(self): return {"hash": "abc1234", "message": "init"}
+
+        class DummyApp:
+            def __init__(self):
+                self.config = {"storage_mode": "txt", "hotkeys": dict(cfg_mod.DEFAULT_HOTKEYS), "custom_trap_endings": []}
+                self.solver = DummySolver()
+                self.updater = DummyUpdater()
+                self.always_on_top = True
+                self.last_detected_word = ""
+                self.tab_system = None
+            def __getattr__(self, name):
+                return lambda *a, **kw: None
+
+        d_app = DummyApp()
+        sys_view = QtSystemTabView(d_app)
+        d_app.tab_system = sys_view
+        dict_view = QtDictionaryTabView(d_app)
+
+        sys_view.refresh_db_stats()
+        self.assertEqual(sys_view.lbl_stat_wl_val.text(), "1")
+        self.assertEqual(sys_view.lbl_stat_bl_val.text(), "1")
+        self.assertEqual(sys_view.lbl_stat_cm_val.text(), "1")
+
+        dict_view._remove_wl_word("awal")
+        dict_view._toggle_exp_blocklist("baru")
+        self.assertEqual(sys_view.lbl_stat_wl_val.text(), "0")
+        self.assertEqual(sys_view.lbl_stat_bl_val.text(), "2")
+
 
 class _FakeResp:
     def __init__(self, status_code=200, json_data=None, content=b"", headers=None):
