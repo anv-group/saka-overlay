@@ -3561,7 +3561,7 @@ class QtSystemTabView(QWidget):
         self.chk_dev_mode.toggled.connect(self.app.set_dev_mode)
         ui_layout.addWidget(self.chk_dev_mode)
 
-        lbl_dev_hint = QLabel("Menampilkan tombol ⚡ Restart di titlebar untuk memulai ulang aplikasi secara instan. Shortcut: Ctrl+Shift+D.")
+        lbl_dev_hint = QLabel("Menampilkan tombol Restart di titlebar untuk memulai ulang aplikasi secara instan.")
         lbl_dev_hint.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
         lbl_dev_hint.setWordWrap(True)
         ui_layout.addWidget(lbl_dev_hint)

@@ -220,10 +220,6 @@ class SambungKataQtApp(QMainWindow):
         self.title_bar.db_status_clicked.connect(self._jump_to_db_settings)
         self.main_layout.addWidget(self.title_bar)
 
-        # Shortcut Ctrl+Shift+D untuk Mode Dev
-        self.sc_dev = QShortcut(QKeySequence("Ctrl+Shift+D"), self)
-        self.sc_dev.activated.connect(self.toggle_dev_mode)
-
         # Top Navigation Strip
         self.top_strip = QtTopTabStrip()
         self.top_strip.tab_changed.connect(self._on_tab_changed)
