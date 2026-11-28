@@ -2206,6 +2206,7 @@ class QtDictionaryTabView(QWidget):
 
         self.combo_search_mode = QComboBox()
         self.combo_search_mode.addItems(["Awalan", "Akhiran", "Mengandung"])
+        self.combo_search_mode.setCurrentIndex(1)
         self.combo_search_mode.setFixedHeight(26)
         self.combo_search_mode.setFixedWidth(90)
         self.combo_search_mode.setStyleSheet(f"""
@@ -2614,6 +2615,26 @@ class QtDictionaryTabView(QWidget):
             btn_cross.clicked.connect(lambda ch=False, word=w: self._toggle_exp_blocklist(word))
             c_l.addWidget(btn_cross)
 
+            # Action 3: Hapus kata custom (hanya jika dari kamus custom)
+            if r.get("can_delete"):
+                btn_del_custom = QPushButton()
+                btn_del_custom.setFixedSize(24, 24)
+                btn_del_custom.setCursor(Qt.PointingHandCursor)
+                btn_del_custom.setIcon(get_qicon("trash", size=12, color=THEME["danger"]))
+                btn_del_custom.setToolTip("Hapus kata dari kamus custom")
+                btn_del_custom.setStyleSheet(f"""
+                    QPushButton {{
+                        background: transparent;
+                        border: none;
+                        border-radius: 3px;
+                    }}
+                    QPushButton:hover {{
+                        background-color: rgba(239, 68, 68, 0.18);
+                    }}
+                """)
+                btn_del_custom.clicked.connect(lambda ch=False, word=w: self._delete_exp_custom_word(word))
+                c_l.addWidget(btn_del_custom)
+
             self.layout_exp_items.addWidget(card)
 
         self.layout_exp_items.addStretch(1)
@@ -2641,6 +2662,16 @@ class QtDictionaryTabView(QWidget):
         if self.app.last_detected_word:
             self.app.update_results(self.app.last_detected_word)
         self._search_dictionary()
+
+    def _delete_exp_custom_word(self, word: str):
+        ok, msg = self.app.solver.delete_custom_word(word.lower())
+        self.app.show_toast(msg)
+        if ok:
+            if self.app.last_detected_word:
+                self.app.update_results(self.app.last_detected_word)
+            self.refresh_whitelist()
+            self.refresh_blocklist()
+            self._search_dictionary()
 
 
 # --- Dialog Pendataan Koreksi Sampel OCR ---

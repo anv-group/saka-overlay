@@ -1253,7 +1253,7 @@ class SambungKataQtApp(QMainWindow):
 
         dlg = QDialog(self)
         dlg.setWindowTitle("Edit Tag Akhiran" if tag_data else "Tambah Tag Baru")
-        dlg.setFixedSize(300, 140)
+        dlg.setFixedWidth(320)
         dlg.setStyleSheet(f"""
             QDialog {{
                 background-color: {THEME["bg_root"]};
@@ -1267,7 +1267,7 @@ class SambungKataQtApp(QMainWindow):
         """)
         d_layout = QVBoxLayout(dlg)
         d_layout.setContentsMargins(16, 14, 16, 14)
-        d_layout.setSpacing(10)
+        d_layout.setSpacing(8)
 
         lbl = QLabel("Huruf Akhiran (Suffix):")
         lbl.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {THEME['text_primary']};")
@@ -1290,6 +1290,16 @@ class SambungKataQtApp(QMainWindow):
             }}
         """)
         d_layout.addWidget(e_sfx)
+
+        lbl_err = QLabel("")
+        lbl_err.setWordWrap(True)
+        lbl_err.setStyleSheet(
+            f"font-size: 11px; font-weight: bold; color: {THEME['danger']}; "
+            f"background-color: rgba(239, 68, 68, 0.14); border: 1px solid {THEME['danger']}; "
+            f"border-radius: 4px; padding: 4px 8px;"
+        )
+        lbl_err.hide()
+        d_layout.addWidget(lbl_err)
 
         btn_box = QHBoxLayout()
         btn_box.addStretch(1)
@@ -1328,6 +1338,17 @@ class SambungKataQtApp(QMainWindow):
             if not sfx:
                 return
             cats = self.config.get("custom_trap_endings", [])
+            if any((c is not tag_data) and (str(c.get("suffix", "")).strip().upper() == sfx) for c in cats if isinstance(c, dict)):
+                msg_dup = f"Tag '{sfx}' sudah ada!"
+                lbl_err.setText(msg_dup)
+                lbl_err.show()
+                dlg.adjustSize()
+                self.show_toast(msg_dup)
+                e_sfx.selectAll()
+                e_sfx.setFocus()
+                return
+            lbl_err.hide()
+            dlg.adjustSize()
             if tag_data:
                 tag_data["suffix"] = sfx
             else:

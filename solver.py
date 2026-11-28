@@ -777,6 +777,63 @@ class SambungKataSolver:
         except Exception as e:
             return False, f"Gagal menulis ke file kamus custom: {e}"
 
+    def is_deletable_custom_word(self, word):
+        """Mengembalikan True hanya jika kata berasal dari kamus custom (bukan kamus dasar)."""
+        w = (word or "").strip().lower()
+        if not w or self._is_in_base_dictionary(w):
+            return False
+        if self.storage_mode == "supabase":
+            return w in self.db_custom_set
+        return w in self.custom_timestamps
+
+    def delete_custom_word(self, word):
+        """Menghapus kata custom dari kamus_custom.csv atau Database (tidak menyentuh KBBI/Contek)."""
+        w = (word or "").strip().lower()
+        if not w:
+            return False, "Kata kosong."
+        if not self.is_deletable_custom_word(w):
+            return False, f"Kata '{w.upper()}' bukan bagian dari kamus custom."
+
+        if self.storage_mode == "supabase":
+            self.db_records.pop(w, None)
+            self.db_custom_set.discard(w)
+            self.custom_set.discard(w)
+            self.custom_timestamps.pop(w, None)
+            self.whitelisted_words.discard(w)
+            self.whitelist_timestamps.pop(w, None)
+            self.blacklisted_words.discard(w)
+            self.blacklist_timestamps.pop(w, None)
+            self._remove_word_from_active_memory_if_unused(w)
+            self._emit_db_mutation("delete", w, None)
+            return True, f"Kata '{w.upper()}' berhasil dihapus dari kamus custom."
+
+        self.custom_timestamps.pop(w, None)
+        self.base_custom_set.discard(w)
+        self.custom_set.discard(w)
+        try:
+            self._write_word_csv(self.custom_dict_path, self.custom_timestamps)
+        except Exception as e:
+            return False, f"Gagal memperbarui file kamus custom: {e}"
+
+        if w in self.whitelisted_words:
+            self.whitelisted_words.discard(w)
+            self.whitelist_timestamps.pop(w, None)
+            try:
+                self._write_word_csv(self.whitelist_path, self.whitelist_timestamps)
+            except Exception as e:
+                print(f"[!] Gagal memperbarui {self.whitelist_path}: {e}")
+
+        if w in self.blacklisted_words:
+            self.blacklisted_words.discard(w)
+            self.blacklist_timestamps.pop(w, None)
+            try:
+                self._write_word_csv(self.blacklist_path, self.blacklist_timestamps)
+            except Exception as e:
+                print(f"[!] Gagal memperbarui {self.blacklist_path}: {e}")
+
+        self._remove_word_from_active_memory_if_unused(w)
+        return True, f"Kata '{w.upper()}' berhasil dihapus dari kamus custom."
+
     def _index_words(self):
         """Mengindeks kata berdasarkan 1 huruf pertama untuk pencarian instan O(1)"""
         self.words_by_initial = {}
@@ -805,10 +862,12 @@ class SambungKataSolver:
         self.custom_endings = []
         if not custom_endings:
             return
+        seen_suffixes = set()
         for item in custom_endings:
             if isinstance(item, str):
                 s = item.strip().lower()
-                if s:
+                if s and s not in seen_suffixes:
+                    seen_suffixes.add(s)
                     self.custom_endings.append({
                         "suffix": s,
                         "name": s.upper(),
@@ -817,7 +876,8 @@ class SambungKataSolver:
                     })
             elif isinstance(item, dict):
                 s = item.get("suffix", "").strip().lower()
-                if s:
+                if s and s not in seen_suffixes:
+                    seen_suffixes.add(s)
                     self.custom_endings.append({
                         "suffix": s,
                         "name": self._clean_tag_name(item.get("name"), s),
@@ -1206,6 +1266,7 @@ class SambungKataSolver:
                 "is_whitelisted": is_wl,
                 "is_blacklisted": is_bl,
                 "is_db_custom": is_db_custom,
+                "can_delete": self.is_deletable_custom_word(w),
                 "added_by": added_by,
                 "datetime": dt_str,
             })

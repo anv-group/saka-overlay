@@ -583,6 +583,24 @@ class TestSolverDualMode(unittest.TestCase):
             self.assertLess(words_new.index("BUXA"), words_new.index("BUOLD"))
             self.assertLess(words_new.index("BUOLD"), words_new.index("BUKU"))
 
+            # Hapus kata kamus custom (tidak bisa hapus kata dasar KBBI/Contek)
+            ok_del_base, _ = solver.delete_custom_word("buku")
+            self.assertFalse(ok_del_base)
+            self.assertTrue(solver.has_word("buku"))
+
+            ok_del_custom, _ = solver.delete_custom_word("buxa")
+            self.assertTrue(ok_del_custom)
+            self.assertFalse(solver.has_word("buxa"))
+            self.assertNotIn("buxa", solver._read_word_csv(custom_csv))
+
+            # Deduplikasi tag custom di set_custom_endings
+            solver.set_custom_endings([
+                {"suffix": "NS", "name": "NS", "enabled": True},
+                {"suffix": "ns", "name": "NS2", "enabled": False},
+                {"suffix": "MP", "name": "MP", "enabled": True},
+            ])
+            self.assertEqual([c["suffix"] for c in solver.custom_endings], ["ns", "mp"])
+
     def test_explorer_custom_filter_added_by_and_cache_clear(self):
         with tempfile.TemporaryDirectory() as td:
             solver = self._make_temp_solver(td, storage_mode="supabase")
