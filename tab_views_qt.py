@@ -3624,7 +3624,7 @@ class QtSystemTabView(QWidget):
         db_hdr.addWidget(lbl_db)
         db_hdr.addStretch(1)
 
-        self.lbl_db_badge = QLabel("MODE TXT")
+        self.lbl_db_badge = QLabel("MODE CSV")
         self.lbl_db_badge.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 10px; font-weight: bold;")
         db_hdr.addWidget(self.lbl_db_badge)
 
@@ -3673,7 +3673,7 @@ class QtSystemTabView(QWidget):
         # Toggle Mode Penyimpanan
         mode_row = QHBoxLayout()
         mode_row.setSpacing(6)
-        self.btn_mode_txt = QPushButton(" Lokal (File TXT)")
+        self.btn_mode_txt = QPushButton(" Lokal (File CSV)")
         self.btn_mode_txt.setIcon(get_qicon("book", size=12, color=THEME["text_primary"]))
         self.btn_mode_txt.setCursor(Qt.PointingHandCursor)
         self.btn_mode_txt.setFixedHeight(28)
@@ -3688,7 +3688,7 @@ class QtSystemTabView(QWidget):
         mode_row.addWidget(self.btn_mode_db, 1)
         db_layout.addLayout(mode_row)
 
-        self.lbl_db_status = QLabel("Mode File TXT aktif: membaca & menyimpan ke file .txt lokal/publik.")
+        self.lbl_db_status = QLabel("Mode File CSV aktif: membaca & menyimpan ke file .csv lokal.")
         self.lbl_db_status.setWordWrap(True)
         self.lbl_db_status.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
         db_layout.addWidget(self.lbl_db_status)
@@ -3740,9 +3740,9 @@ class QtSystemTabView(QWidget):
         stats_root.addLayout(metrics_row)
 
         # Panel User Online (Presence)
-        online_box = QFrame()
-        online_box.setStyleSheet(stat_box_qss)
-        online_l = QHBoxLayout(online_box)
+        self.online_box = QFrame()
+        self.online_box.setStyleSheet(stat_box_qss)
+        online_l = QHBoxLayout(self.online_box)
         online_l.setContentsMargins(8, 5, 8, 5)
         lbl_on_title = QLabel("User Online")
         lbl_on_title.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 10px; font-weight: 600;")
@@ -3752,12 +3752,12 @@ class QtSystemTabView(QWidget):
         self.lbl_stat_online.setStyleSheet(f"color: {THEME['primary']}; font-size: 10px; font-weight: bold;")
         online_l.addWidget(lbl_on_title)
         online_l.addWidget(self.lbl_stat_online, 1)
-        stats_root.addWidget(online_box)
+        stats_root.addWidget(self.online_box)
 
         # Panel Sync Terakhir
-        sync_box = QFrame()
-        sync_box.setStyleSheet(stat_box_qss)
-        sync_l = QHBoxLayout(sync_box)
+        self.sync_box = QFrame()
+        self.sync_box.setStyleSheet(stat_box_qss)
+        sync_l = QHBoxLayout(self.sync_box)
         sync_l.setContentsMargins(8, 5, 8, 5)
         lbl_st_title = QLabel("Sync Terakhir")
         lbl_st_title.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 10px; font-weight: 600;")
@@ -3766,12 +3766,12 @@ class QtSystemTabView(QWidget):
         sync_l.addWidget(lbl_st_title)
         sync_l.addStretch(1)
         sync_l.addWidget(self.lbl_stat_sync_time)
-        stats_root.addWidget(sync_box)
+        stats_root.addWidget(self.sync_box)
 
         # Panel Aktivitas Terakhir
-        act_box = QFrame()
-        act_box.setStyleSheet(stat_box_qss)
-        act_l = QHBoxLayout(act_box)
+        self.act_box = QFrame()
+        self.act_box.setStyleSheet(stat_box_qss)
+        act_l = QHBoxLayout(self.act_box)
         act_l.setContentsMargins(8, 5, 8, 5)
         lbl_act_title = QLabel("Aktivitas")
         lbl_act_title.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 10px; font-weight: 600;")
@@ -3781,9 +3781,9 @@ class QtSystemTabView(QWidget):
         self.lbl_stat_last_act.setStyleSheet(f"color: {THEME['text_primary']}; font-size: 10px; font-weight: 600;")
         act_l.addWidget(lbl_act_title)
         act_l.addWidget(self.lbl_stat_last_act, 1)
-        stats_root.addWidget(act_box)
+        stats_root.addWidget(self.act_box)
 
-        self.db_stats_panel.setVisible(False)
+        self.db_stats_panel.setVisible(True)
         db_layout.addWidget(self.db_stats_panel)
 
         # Panel Konfigurasi Supabase (tampil saat Database (Self-hosted) dipilih)
@@ -3943,14 +3943,14 @@ class QtSystemTabView(QWidget):
 
         self.btn_db_import = _make_transfer_btn(
             "cloud_upload", THEME["warning"], "Upload Lokal", "DB",
-            "Upload daftar kata (.txt) & pengaturan MODE lokal ke Database Privat",
+            "Upload daftar kata (.csv) & pengaturan MODE lokal ke Database Privat",
         )
         self.btn_db_import.clicked.connect(self._on_import_txt_clicked)
         transfer_row.addWidget(self.btn_db_import, 1)
 
         self.btn_db_download = _make_transfer_btn(
             "cloud_download", THEME["info"], "Download DB", "Lokal",
-            "Download daftar kata & pengaturan MODE dari Database Privat ke file lokal (.txt & config.local.json)",
+            "Download daftar kata & pengaturan MODE dari Database Privat ke file lokal (.csv & config.local.json)",
         )
         self.btn_db_download.clicked.connect(self._on_download_db_clicked)
         transfer_row.addWidget(self.btn_db_download, 1)
@@ -3987,10 +3987,25 @@ class QtSystemTabView(QWidget):
         lbl_kor.setStyleSheet(f"color: {THEME['primary']}; font-weight: bold; font-size: 11px;")
         kor_layout.addWidget(lbl_kor)
 
-        self.lbl_koreksi_counts = QLabel("Memuat data sampel...")
-        self.lbl_koreksi_counts.setWordWrap(True)
-        self.lbl_koreksi_counts.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px; font-weight: 500;")
-        kor_layout.addWidget(self.lbl_koreksi_counts)
+        def _make_sample_count_row(icon_name: str, icon_color: str):
+            row_w = QWidget()
+            row_w.setStyleSheet("background: transparent; border: none;")
+            row_l = QHBoxLayout(row_w)
+            row_l.setContentsMargins(0, 0, 0, 0)
+            row_l.setSpacing(6)
+            ico_lbl = QLabel()
+            ico_lbl.setPixmap(get_qicon(icon_name, size=12, color=icon_color).pixmap(12, 12))
+            ico_lbl.setFixedSize(14, 14)
+            row_l.addWidget(ico_lbl)
+            txt_lbl = QLabel("Memuat data sampel...")
+            txt_lbl.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px; font-weight: 500;")
+            row_l.addWidget(txt_lbl, 1)
+            return row_w, txt_lbl
+
+        kt_row, self.lbl_koreksi_kt = _make_sample_count_row("flag", THEME["danger"])
+        td_row, self.lbl_koreksi_td = _make_sample_count_row("eye_off", THEME["warning"])
+        kor_layout.addWidget(kt_row)
+        kor_layout.addWidget(td_row)
 
         self.btn_open_kor = QPushButton(" Buka Pendataan Koreksi")
         self.btn_open_kor.setIcon(get_qicon("edit", size=13, color=THEME["text_dark"]))
@@ -4351,8 +4366,10 @@ class QtSystemTabView(QWidget):
         folder_td = os.path.abspath("sample/tidak_dikenali")
         cnt_kt = len([f for f in os.listdir(folder_kt) if f.endswith(".png") and "seharusnya" not in f]) if os.path.exists(folder_kt) else 0
         cnt_td = len([f for f in os.listdir(folder_td) if f.endswith(".png") and "seharusnya" not in f and os.path.isfile(os.path.join(folder_td, f))]) if os.path.exists(folder_td) else 0
-        if hasattr(self, "lbl_koreksi_counts"):
-            self.lbl_koreksi_counts.setText(f"🚩 Kurang Tepat: {cnt_kt} belum dikoreksi\n⚠️ Tidak Dikenali: {cnt_td} belum dikoreksi")
+        if hasattr(self, "lbl_koreksi_kt"):
+            self.lbl_koreksi_kt.setText(f"Kurang Tepat: {cnt_kt} belum dikoreksi")
+        if hasattr(self, "lbl_koreksi_td"):
+            self.lbl_koreksi_td.setText(f"Tidak Dikenali: {cnt_td} belum dikoreksi")
 
     def refresh_git_info(self):
         curr_b = self.app.updater.get_current_branch()
@@ -4460,14 +4477,14 @@ class QtSystemTabView(QWidget):
 
     def refresh_db_status(self, state_code: str, detail: str = ""):
         badge_map = {
-            "txt": ("MODE TXT", THEME["text_secondary"]),
+            "txt": ("MODE CSV", THEME["text_secondary"]),
             "connecting": ("MENYAMBUNG", THEME["warning"]),
             "syncing": ("SINKRONISASI", THEME["warning"]),
             "live": ("Terhubung", THEME["primary"]),
             "offline": ("OFFLINE", THEME["warning"]),
             "error": ("ERROR", THEME["danger"]),
         }
-        txt, col = badge_map.get(state_code, ("MODE TXT", THEME["text_secondary"]))
+        txt, col = badge_map.get(state_code, ("MODE CSV", THEME["text_secondary"]))
         self.lbl_db_badge.setText(txt)
         self.lbl_db_badge.setStyleSheet(f"color: {col}; font-size: 10px; font-weight: bold;")
         if detail:
@@ -4480,14 +4497,23 @@ class QtSystemTabView(QWidget):
 
     def refresh_db_stats(self, last_sync_str: str = None, last_event_note: str = None):
         is_db = (self.app.config.get("storage_mode", "txt") == "supabase")
-        self.db_stats_panel.setVisible(is_db)
+        self.db_stats_panel.setVisible(True)
         if hasattr(self, "btn_db_resync"):
             self.btn_db_resync.setVisible(is_db)
+        for w_box in (getattr(self, "online_box", None), getattr(self, "sync_box", None), getattr(self, "act_box", None)):
+            if w_box is not None:
+                w_box.setVisible(is_db)
+
+        solver = getattr(self.app, "solver", None)
+        wl_cnt = len(getattr(solver, "whitelisted_words", [])) if solver else 0
+        bl_cnt = len(getattr(solver, "blacklisted_words", [])) if solver else 0
+        cm_cnt = len(getattr(solver, "db_custom_set" if is_db else "base_custom_set", [])) if solver else 0
+        self.lbl_stat_wl_val.setText(str(wl_cnt))
+        self.lbl_stat_bl_val.setText(str(bl_cnt))
+        self.lbl_stat_cm_val.setText(str(cm_cnt))
+
         if not is_db:
             return
-        wl_cnt = len(self.app.solver.whitelisted_words)
-        bl_cnt = len(self.app.solver.blacklisted_words)
-        cm_cnt = len(self.app.solver.db_custom_set)
         sync_t = last_sync_str if last_sync_str is not None else getattr(self.app, "_last_db_sync_time", "-")
         ev_note = last_event_note if last_event_note is not None else getattr(self.app, "_last_db_event_note", "")
         on_cnt = getattr(self.app, "_online_users_count", 0)
@@ -4500,9 +4526,6 @@ class QtSystemTabView(QWidget):
             self.lbl_stat_online.setText("0 Online")
             self.lbl_stat_online.setStyleSheet(f"color: {THEME['text_muted']}; font-size: 10px; font-weight: 600;")
 
-        self.lbl_stat_wl_val.setText(str(wl_cnt))
-        self.lbl_stat_bl_val.setText(str(bl_cnt))
-        self.lbl_stat_cm_val.setText(str(cm_cnt))
         self.lbl_stat_sync_time.setText(sync_t or "-")
         self.lbl_stat_last_act.setText(ev_note or "-")
 

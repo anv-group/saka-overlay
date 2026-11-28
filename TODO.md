@@ -11,18 +11,19 @@
 ## System & Updater
 
 - [ ] Test updater.
+- [x] Change emoji in SAMPEL panel to something else to avoid using emojis
+- [x] SYSTEM -> DATABASE SINKRONISASI, TXT sudah tidak lagi akurat karena sekarang mengguanakan CSV.
 - [x] Notifier for new update.
 - [x] One instance only by default unless enabled.
 - [ ] Add logging (info, debug)
-- [ ] Change emoji in SAMPEL panel to something else
 - [x] Tombol Cek Update kurang feedback: tambahkan feedback seperti `"Mengecek <branch>"` atau yang lain.
 
 ## UI & UX
 
-- [ ] Web UI yang bisa dibuka di device lain di local network yang sama.
 - [ ] More themes (like One Dark Pro, etc.)
-- [ ] Bottom status bar for database status, replacing db status icon in title bar
 - [ ] Tab KAMUS -> Eksplorer untuk Opsi Semua, KBBI, Contek, KBBI + Contek, Kamus+ dibuat model klik untuk enable/disable seperti checkbox daripada opsi pilihan salah satu seperti radiobox
+- [ ] Bottom status bar for database status, replacing db status icon in title bar
+- [ ] Web UI yang bisa dibuka di device lain di local network yang sama.
 - [x] Jika ada perubahan DB, icon di title bar flashing atau indikasi lainnya.
 - [x] Pada tab SETTINGS, tampilkan juga commit message, tidak hanya commit hash.
 - [x] Pada UI pendataan koreksi:

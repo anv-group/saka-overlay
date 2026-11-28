@@ -317,7 +317,7 @@ class SambungKataQtApp(QMainWindow):
             else:
                 self._on_db_status_changed("error", "Mode Database aktif, tetapi URL / Anon Key belum diisi.")
         else:
-            self._on_db_status_changed("txt", "Mode File TXT (Default Publik)")
+            self._on_db_status_changed("txt", "Mode File CSV (Default Lokal)")
 
         # Setup Scan Worker
         self.scan_worker = ScanWorker(self.ocr, lambda: self.config.get("scan_interval_sec", 0.08))
@@ -738,6 +738,8 @@ class SambungKataQtApp(QMainWindow):
             self.tab_kamus.refresh_blocklist()
             if getattr(self.tab_kamus.sub_strip, "active_sub", "") == "explorer":
                 self.tab_kamus._search_dictionary()
+        if hasattr(self, "tab_system") and hasattr(self.tab_system, "refresh_db_stats"):
+            self.tab_system.refresh_db_stats()
 
     # --- Database Sinkronisasi & Mode Handlers ---
     def _jump_to_db_settings(self):
@@ -968,8 +970,8 @@ class SambungKataQtApp(QMainWindow):
         save_config(self.config)
         self.solver.switch_storage_mode("txt")
         self._apply_mode_state_to_runtime(load_txt_mode_state())
-        self._on_db_status_changed("txt", "Mode File TXT aktif: membaca & menyimpan ke file .txt lokal/publik.")
-        self.show_toast("Beralih ke Mode File TXT (Default)")
+        self._on_db_status_changed("txt", "Mode File CSV aktif: membaca & menyimpan ke file .csv lokal.")
+        self.show_toast("Beralih ke Mode File CSV (Default)")
 
     def activate_database_mode(self, url: str, anon_key: str, nickname: str = ""):
         if self.config.get("storage_mode", "txt") == "txt":
@@ -1144,7 +1146,7 @@ class SambungKataQtApp(QMainWindow):
         chk_words.toggled.connect(chk_overwrite.setEnabled)
         dl.addWidget(chk_overwrite)
 
-        chk_mode = QCheckBox("Pengaturan MODE (simpan Tag, Urutan, Brutal ke Mode TXT lokal)")
+        chk_mode = QCheckBox("Pengaturan MODE (simpan Tag, Urutan, Brutal ke Mode CSV lokal)")
         chk_mode.setChecked(True)
         dl.addWidget(chk_mode)
 
