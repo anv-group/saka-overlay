@@ -50,7 +50,6 @@ class SambungKataSolver:
         self.tier0_sort_mode = "default"  # "default" atau "tag_order"
 
         if self.storage_mode == "txt":
-            self._migrate_legacy_txt_to_csv()
             self.load_blacklist()
             self.load_whitelist()
         self.load_dictionary()
@@ -115,30 +114,6 @@ class SambungKataSolver:
             for w in sorted(word_ts_map.keys()):
                 writer.writerow([w, word_ts_map.get(w, "") or ""])
         os.replace(tmp_path, fpath)
-
-    def _migrate_pair_txt_to_csv(self, csv_path, validate_vowels=False):
-        """Migrasi 1 file .txt saudara menjadi .csv (datetime='') lalu menghapus .txt lama."""
-        if not csv_path or not csv_path.lower().endswith(".csv"):
-            return
-        legacy_txt = csv_path[:-4] + ".txt"
-        if not os.path.exists(legacy_txt):
-            return
-        legacy_items = self._read_word_csv(legacy_txt, validate_vowels=validate_vowels)
-        csv_items = self._read_word_csv(csv_path, validate_vowels=validate_vowels) if os.path.exists(csv_path) else {}
-        merged = dict(csv_items)
-        for w, dt_str in legacy_items.items():
-            if w not in merged:
-                merged[w] = dt_str
-        self._write_word_csv(csv_path, merged)
-        try:
-            os.remove(legacy_txt)
-        except Exception as e:
-            print(f"[!] Gagal menghapus file lama {legacy_txt}: {e}")
-
-    def _migrate_legacy_txt_to_csv(self):
-        """Migrasi otomatis whitelist.txt & blacklist.txt ke .csv lalu hapus file .txt lama."""
-        self._migrate_pair_txt_to_csv(self.whitelist_path, validate_vowels=False)
-        self._migrate_pair_txt_to_csv(self.blacklist_path, validate_vowels=False)
 
     def load_blacklist(self):
         """Memuat daftar kata yang di-blacklist dari blacklist.csv"""
@@ -474,7 +449,6 @@ class SambungKataSolver:
         if target == "txt":
             self.db_records = {}
             self.db_custom_set = set()
-            self._migrate_legacy_txt_to_csv()
             self.load_blacklist()
             self.load_whitelist()
             custom_csv_items = self._read_word_csv(self.custom_dict_path, validate_vowels=True)

@@ -537,14 +537,12 @@ class TestSolverDualMode(unittest.TestCase):
                 cfg_mod.CONFIG_FILE = orig_main
                 cfg_mod.DEFAULT_CONFIG_FILE = orig_default
 
-    def test_csv_migration_readonly_dicts_duplicate_guard_and_newest_sort(self):
+    def test_csv_readonly_dicts_duplicate_guard_and_newest_sort(self):
         with tempfile.TemporaryDirectory() as td:
             kamus = os.path.join(td, "kamus_lengkap.txt")
             kbbi = os.path.join(td, "kamus_kbbi.txt")
             contek = os.path.join(td, "kamus_contek.txt")
             custom_csv = os.path.join(td, "kamus_custom.csv")
-            wl_txt = os.path.join(td, "whitelist.txt")
-            bl_txt = os.path.join(td, "blacklist.txt")
             wl_csv = os.path.join(td, "whitelist.csv")
             bl_csv = os.path.join(td, "blacklist.csv")
 
@@ -554,10 +552,10 @@ class TestSolverDualMode(unittest.TestCase):
                 f.write("buka\nparadox\n")
             with open(kamus, "w", encoding="utf-8") as f:
                 f.write("buku\nbukit\nbuka\nparadox\n")
-            with open(wl_txt, "w", encoding="utf-8") as f:
-                f.write("# header\nbuka\n")
-            with open(bl_txt, "w", encoding="utf-8") as f:
-                f.write("bukit\n")
+            with open(wl_csv, "w", encoding="utf-8") as f:
+                f.write("word,datetime\nbuka,\n")
+            with open(bl_csv, "w", encoding="utf-8") as f:
+                f.write("word,datetime\nbukit,\n")
 
             def _read_txt(p):
                 with open(p, encoding="utf-8") as f:
@@ -579,11 +577,6 @@ class TestSolverDualMode(unittest.TestCase):
                 storage_mode="txt",
             )
 
-            # Migrasi otomatis: .txt lama dihapus, .csv terbuat dengan datetime kosong ""
-            self.assertFalse(os.path.exists(wl_txt))
-            self.assertFalse(os.path.exists(bl_txt))
-            self.assertTrue(os.path.exists(wl_csv))
-            self.assertTrue(os.path.exists(bl_csv))
             self.assertEqual(solver.get_word_datetime("buka", scope="whitelist"), "")
             self.assertEqual(solver.get_word_datetime("bukit", scope="blacklist"), "")
 
