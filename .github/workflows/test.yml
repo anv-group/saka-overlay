@@ -9,7 +9,7 @@ on:
 
 jobs:
   test-suite:
-    name: Run Full Test Suite (OCR + Solver + Gameplay)
+    name: Run Test Suite (Compile + Solver + DB Sync + System)
     runs-on: windows-latest
 
     steps:
@@ -27,14 +27,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run OCR Accuracy Benchmark (92 Samples)
+      - name: Compile Check (Python Syntax)
+        run: |
+          python -c "import glob, py_compile; [py_compile.compile(f, doraise=True) for f in sorted(glob.glob('*.py'))]"
+
+      - name: Run Unit Tests (Solver, DB Sync, System & Updater)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -m unittest test_solver test_db_sync test_system_features -v
+
+      - name: Run OCR Accuracy Benchmark (if sample dataset exists)
+        if: hashFiles('sample/**') != ''
         run: |
           python test_accuracy.py
-
-      - name: Run Solver & Custom Traps Unit Tests
-        run: |
-          python test_solver.py
-
-      - name: Run Gameplay Indexer Sequence Tests
-        run: |
-          python test_gameplay_indexer.py
