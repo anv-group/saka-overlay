@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import threading
 from datetime import datetime
 import cv2
 import numpy as np
@@ -25,7 +26,7 @@ except ImportError:
 class OCREngine:
     def __init__(self, config=None):
         self.config = config or {}
-        self.sct = mss.mss()
+        self._sct_local = threading.local()
         self.engine = RapidOCR(params={'Global': {'use_angle_cls': False}}) if HAS_RAPIDOCR else None
         self.templates = {}
         self.last_saved_time = 0
@@ -80,6 +81,25 @@ class OCREngine:
         missing = [c for c in all_letters if c not in self.templates]
         if missing:
             self._generate_synthetic_templates(missing)
+
+        self._build_template_matrix()
+
+    def _build_template_matrix(self):
+        """Precompute matriks template ternormalisasi (N x 784) untuk vectorized NCC."""
+        chars = []
+        vecs = []
+        for ch, tmpl in self.templates.items():
+            if ch == "I":
+                continue
+            v = tmpl.astype(np.float32).ravel()
+            v -= v.mean()
+            norm = float(np.linalg.norm(v))
+            if norm > 1e-6:
+                v /= norm
+                chars.append(ch)
+                vecs.append(v)
+        self._tmpl_chars = chars
+        self._tmpl_matrix = np.vstack(vecs) if vecs else np.empty((0, 784), dtype=np.float32)
 
     def _extract_glyph_from_single(self, img_gray):
         _, thresh = cv2.threshold(img_gray, 180, 255, cv2.THRESH_BINARY)
@@ -156,21 +176,38 @@ class OCREngine:
         Mencocokkan satu potongan huruf dengan template dan mengembalikan:
         (best_char, confidence_score, alternatives_list)
         """
-        # Huruf 'I' di font Roblox adalah garis lurus tipis (lebar <= 12px)
-        if orig_w <= 12:
+        h_c, w_c = crop.shape
+        # Huruf 'I' di font Roblox adalah garis lurus tipis (lebar <= 12px atau rasio <= 0.36)
+        if orig_w <= 12 or (h_c >= 20 and (orig_w / h_c) <= 0.36):
             return "I", 0.99, []
 
-        norm = cv2.resize(crop, (28, 28), interpolation=cv2.INTER_AREA)
-        scores = {}
-        for ch, tmpl in self.templates.items():
-            if ch == "I":
-                continue
-            score = cv2.matchTemplate(norm, tmpl, cv2.TM_CCOEFF_NORMED)[0][0]
-            scores[ch] = float(score)
-
-        sorted_scores = sorted(scores.items(), key=lambda item: item[1], reverse=True)
-        best_ch, best_score = sorted_scores[0]
-        alternatives = [ch for ch, s in sorted_scores[1:4] if s > 0.52 and ch != best_ch]
+        norm_img = cv2.resize(crop, (28, 28), interpolation=cv2.INTER_AREA)
+        if self._tmpl_matrix.shape[0] > 0:
+            v = norm_img.astype(np.float32).ravel()
+            v -= v.mean()
+            v_norm = float(np.linalg.norm(v))
+            if v_norm > 1e-6:
+                sims = self._tmpl_matrix @ (v / v_norm)
+                order = np.argsort(sims)[::-1]
+                best_ch = self._tmpl_chars[int(order[0])]
+                best_score = float(sims[int(order[0])])
+                alternatives = [
+                    self._tmpl_chars[int(idx)]
+                    for idx in order[1:4]
+                    if float(sims[int(idx)]) > 0.52 and self._tmpl_chars[int(idx)] != best_ch
+                ]
+            else:
+                best_ch, best_score, alternatives = "I", 0.0, []
+        else:
+            scores = {}
+            for ch, tmpl in self.templates.items():
+                if ch == "I":
+                    continue
+                score = cv2.matchTemplate(norm_img, tmpl, cv2.TM_CCOEFF_NORMED)[0][0]
+                scores[ch] = float(score)
+            sorted_scores = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+            best_ch, best_score = sorted_scores[0]
+            alternatives = [ch for ch, s in sorted_scores[1:4] if s > 0.52 and ch != best_ch]
 
         # ----------------- Aturan Disambiguasi Fitur Struktur -----------------
         # 1. Pembeda B vs D vs E vs O vs U:
@@ -216,21 +253,35 @@ class OCREngine:
                     best_ch = "G"
                     best_score = max(best_score, 0.94)
 
-        # 3. Pembeda Q vs O: Huruf Q memiliki ekor di kanan bawah (tinggi > 39px atau tail density tinggi)
+        # 3. Pembeda Q vs O: Huruf Q memiliki ekor di kanan bawah (tail density tinggi atau rasio tinggi >= 1.15)
         if best_ch in ["O", "Q"] or "Q" in alternatives:
             h, w = crop.shape
             tail = crop[int(h*0.80):, int(w*0.70):]
-            if h >= 41 or tail.mean() > 115:
+            if tail.mean() > 115 or (h >= 41 and (h / max(1, w)) >= 1.15):
                 best_ch = "Q"
                 best_score = max(best_score, 0.92)
 
-        # 4. Pembeda W vs U: Huruf W jauh lebih lebar (lebar >= 32px) dibanding U (lebar <= 27px)
-        if best_ch in ["U", "W"] or "W" in alternatives:
-            if orig_w >= 32:
+        # 4. Pembeda W vs U (scale-invariant): U berongga di tengah & melengkung di bawah; W punya puncak tengah & rasio lebar >= 1.02
+        if best_ch in ["U", "W"]:
+            h, w = crop.shape
+            mid_peak = crop[int(h*0.25):int(h*0.65), int(w*0.42):int(w*0.58)].mean()
+            bot_mid = crop[int(h*0.70):, int(w*0.42):int(w*0.58)].mean()
+            if mid_peak < 25 and bot_mid > 80:
+                best_ch = "U"
+                best_score = max(best_score, 0.94)
+            elif (orig_w / max(1, h)) >= 1.02 and mid_peak > 40:
                 best_ch = "W"
                 best_score = max(best_score, 0.92)
 
         return best_ch, best_score, alternatives
+
+    def _get_sct(self):
+        """Mengembalikan instance mss per-thread agar aman dipakai di QThread worker Windows."""
+        sct = getattr(self._sct_local, "sct", None)
+        if sct is None:
+            sct = mss.mss()
+            self._sct_local.sct = sct
+        return sct
 
     def capture_screen_area(self, area):
         """Mengambil screenshot dari area layar ROI"""
@@ -240,8 +291,8 @@ class OCREngine:
             "width": int(area["width"]),
             "height": int(area["height"])
         }
-        sct_img = self.sct.grab(bbox)
-        img_np = np.array(sct_img)
+        sct_img = self._get_sct().grab(bbox)
+        img_np = np.asarray(sct_img)
         img_bgr = cv2.cvtColor(img_np, cv2.COLOR_BGRA2BGR)
         return img_bgr
 
@@ -282,7 +333,7 @@ class OCREngine:
         - pad 20: Margin lebar untuk kata kompak seperti DIH
         """
         best_res = None
-        for pad in [8, 0, 15, 20]:
+        for pad in [8, 0, 20]:
             if pad == 0:
                 target = box
             else:
@@ -296,13 +347,13 @@ class OCREngine:
                 clean = "".join([repl.get(c, c) for c in raw.upper()])
                 clean = re.sub(r'[^A-Z]', '', clean)
                 # Early exit jika kata 3 huruf atau kata valid panjang dengan confidence tinggi
-                if (len(clean) == 3 and conf >= 0.50) or (len(clean) >= 2 and conf >= 0.70):
+                if (len(clean) == 3 and conf >= 0.50) or (len(clean) >= 2 and conf >= 0.65):
                     return clean, conf
                 if best_res is None or len(clean) > len(best_res[0]) or (len(clean) == len(best_res[0]) and conf > best_res[1]):
                     best_res = (clean, conf)
         return best_res if best_res else ("", 0.0)
 
-    def recognize_game_prompt(self, img_bgr, auto_save=True):
+    def recognize_game_prompt(self, img_bgr, auto_save=True, gray=None):
         """
         Mendeteksi teks awalan dengan mengembalikan:
         dict: {
@@ -313,13 +364,24 @@ class OCREngine:
             'saved_path': str or None
         }
         """
-        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        if gray is None:
+            gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
         
         # Cari kontur kotak putih di dalam gambar
         _, thresh = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY)
         cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         best_c = max(cnts, key=cv2.contourArea) if cnts else None
+        # Jika tidak ada kotak putih sama sekali dan area gelap (< 75), hindari menjalankan RapidOCR 4x
+        if best_c is None and int(gray.max()) < 75:
+            return {
+                "text": "",
+                "confidence": 0.0,
+                "is_low_confidence": False,
+                "alternatives": [],
+                "saved_path": None
+            }
+
         # Jika kotak terpotong (bh < 44) karena gradient/shading atas tombol Roblox
         if best_c is not None:
             bx, by, bw, bh = cv2.boundingRect(best_c)
@@ -333,13 +395,16 @@ class OCREngine:
                         best_c = best_low
 
         box = img_bgr
+        box_gray = gray
         if best_c is not None:
             area = cv2.contourArea(best_c)
             if area > 300:
                 x, y, w, h = cv2.boundingRect(best_c)
-                box = img_bgr[max(0, y+1):min(img_bgr.shape[0], y+h-1), max(0, x):min(img_bgr.shape[1], x+w)]
+                y0, y1 = max(0, y + 1), min(img_bgr.shape[0], y + h - 1)
+                x0, x1 = max(0, x), min(img_bgr.shape[1], x + w)
+                box = img_bgr[y0:y1, x0:x1]
+                box_gray = gray[y0:y1, x0:x1]
 
-        box_gray = cv2.cvtColor(box, cv2.COLOR_BGR2GRAY)
         bh, bw = box_gray.shape
 
         if bh > 12 and bw > 12:
@@ -356,31 +421,41 @@ class OCREngine:
                 comps = [(stats[i, 0], stats[i, 2], i) for i in range(1, n) if stats[i, 4] > 25 and stats[i, 3] > 10]
                 comps.sort()
 
+            # Jika kotak putih kosong tanpa komponen karakter sama sekali, langsung return kosong (hindari RapidOCR 4x)
+            if len(comps) == 0:
+                return {
+                    "text": "",
+                    "confidence": 0.0,
+                    "is_low_confidence": False,
+                    "alternatives": [],
+                    "saved_path": None
+                }
+
             # Slicing cerdas untuk huruf yang bersentuhan (misal 'KA' di 'KAR' atau 'AKAN')
             if len(comps) < 4 and any(48 <= c[1] <= 68 for c in comps):
                 split_comps = []
                 for c in comps:
                     cx, cw, idx = c[0], c[1], c[2]
                     if 48 <= cw <= 68:
-                        mask = (lab == idx).astype(np.uint8)
-                        ty, tx = np.where(mask > 0)
-                        x_min, x_max = tx.min(), tx.max()
-                        proj = np.sum(mask > 0, axis=0)
-                        search_start = x_min + int(cw * 0.3)
-                        search_end = x_min + int(cw * 0.7)
-                        dip_idx = search_start + int(np.argmin(proj[search_start:search_end]))
-                        split_comps.append((x_min, dip_idx - x_min, idx, (x_min, dip_idx)))
-                        split_comps.append((dip_idx, x_max - dip_idx, idx, (dip_idx, x_max)))
+                        sx, sy, sw, sh = int(stats[idx, 0]), int(stats[idx, 1]), int(stats[idx, 2]), int(stats[idx, 3])
+                        sub_mask = (lab[sy:sy+sh, sx:sx+sw] == idx)
+                        proj = np.sum(sub_mask, axis=0)
+                        s_start = int(cw * 0.3)
+                        s_end = int(cw * 0.7)
+                        dip_rel = s_start + int(np.argmin(proj[s_start:s_end]))
+                        dip_idx = sx + dip_rel
+                        split_comps.append((sx, dip_rel, idx, (sx, dip_idx)))
+                        split_comps.append((dip_idx, (sx + sw) - dip_idx, idx, (dip_idx, sx + sw)))
                     else:
                         split_comps.append((cx, cw, idx, None))
                 comps = split_comps
 
-            # Tentukan apakah 1, 2, atau 3-4 huruf terpisah bersih
+            # Tentukan apakah 1, 2, atau 3+ huruf terpisah bersih
             # Catatan: Huruf 'W' memiliki lebar hingga 43px, 'M' hingga 38px.
             is_separated = False
             if len(comps) in [1, 2] and all(c[1] < 48 for c in comps):
                 is_separated = True
-            elif len(comps) in [3, 4] and all(c[1] < 44 for c in comps):
+            elif len(comps) >= 3 and all(c[1] < 48 for c in comps):
                 is_separated = True
 
             if is_separated:
@@ -389,15 +464,21 @@ class OCREngine:
                 alts = []
                 for c in comps:
                     idx = c[2]
-                    mask = (lab == idx).astype(np.uint8) * 255
+                    sx, sy, sw, sh = int(stats[idx, 0]), int(stats[idx, 1]), int(stats[idx, 2]), int(stats[idx, 3])
                     if len(c) >= 4 and c[3] is not None:
                         x0, x1 = c[3]
-                        crop = mask[:, x0:x1]
+                        sub = (lab[sy:sy+sh, x0:x1] == idx)
+                        rows = np.any(sub, axis=1)
+                        cols = np.any(sub, axis=0)
+                        if np.any(rows) and np.any(cols):
+                            r0, r1 = np.where(rows)[0][[0, -1]]
+                            c0, c1 = np.where(cols)[0][[0, -1]]
+                            crop = sub[r0:r1+1, c0:c1+1].astype(np.uint8) * 255
+                        else:
+                            crop = None
                     else:
-                        crop = mask
-                    ty, tx = np.where(crop > 0)
-                    if len(ty) > 0:
-                        crop = crop[ty.min():ty.max()+1, tx.min():tx.max()+1]
+                        crop = (lab[sy:sy+sh, sx:sx+sw] == idx).astype(np.uint8) * 255
+                    if crop is not None and crop.size > 0:
                         ch, score, alt = self._match_single_crop(crop, crop.shape[1])
                         chars.append(ch)
                         scores.append(score)
@@ -485,18 +566,33 @@ class OCREngine:
         area = self.config.get("screen_area")
         if not area:
             return {"text": "", "confidence": 0.0, "is_low_confidence": False, "alternatives": []}
-        img_bgr = self.capture_screen_area(area)
+        bbox = {
+            "top": int(area["top"]),
+            "left": int(area["left"]),
+            "width": int(area["width"]),
+            "height": int(area["height"])
+        }
+        sct_img = self._get_sct().grab(bbox)
+        img_bgra = np.asarray(sct_img)
+
+        # Fast frame-diff check langsung dari BGRA -> GRAY sebelum konversi BGR
+        gray = cv2.cvtColor(img_bgra, cv2.COLOR_BGRA2GRAY)
+        if (
+            getattr(self, "last_frame_gray", None) is not None
+            and self.last_frame_gray.shape == gray.shape
+            and self.last_detection_result is not None
+            and self.last_captured_image is not None
+        ):
+            diff = cv2.absdiff(gray, self.last_frame_gray)
+            # Hitung piksel yang berubah nyata (> 25 intensitas) agar perubahan huruf tipis (misal I -> L) tetap terdeteksi
+            _, diff_bin = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+            if cv2.countNonZero(diff_bin) < 12:
+                return self.last_detection_result
+
+        self.last_frame_gray = gray
+        img_bgr = cv2.cvtColor(img_bgra, cv2.COLOR_BGRA2BGR)
         self.last_captured_image = img_bgr
 
-        # Fast frame-diff check: jika ROI tidak berubah sama sekali (< 1.0 diff)
-        # langsung kembalikan hasil sebelumnya (hanya butuh 0.02ms, hemat CPU)
-        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-        if getattr(self, "last_frame_gray", None) is not None and self.last_frame_gray.shape == gray.shape:
-            diff = cv2.absdiff(gray, self.last_frame_gray)
-            if np.mean(diff) < 1.0 and self.last_detection_result is not None:
-                return self.last_detection_result
-        self.last_frame_gray = gray
-
-        res = self.recognize_game_prompt(img_bgr)
+        res = self.recognize_game_prompt(img_bgr, gray=gray)
         self.last_detection_result = res
         return res
