@@ -63,9 +63,9 @@ DEFAULT_CONFIG = {
     "supabase_url": "",
     "supabase_anon_key": "",
     "sync_nickname": "",
-    "custom_trap_endings": [  # Kategori custom akhiran jebakan super (prioritas di atas X)
-        {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"},
-        {"suffix": "NGK", "name": "Akhiran NGK", "enabled": True, "color": "#f5c2e7"}
+    "custom_trap_endings": [  # Kategori custom akhiran jebakan super
+        {"suffix": "NS", "name": "NS", "enabled": True, "color": "#cba6f7"},
+        {"suffix": "NGK", "name": "NGK", "enabled": True, "color": "#f5c2e7"}
     ]
 }
 

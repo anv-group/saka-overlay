@@ -123,17 +123,12 @@ class QtWordCardWidget(QFrame):
             self.btn_star.setToolTip("Tambah ke Whitelist")
 
         if tipe == "CUSTOM_TRAP":
-            b_name = item.get("badge_name") or f"Akhiran {item.get('suffix', '').upper()}"
+            b_name = item.get("badge_name") or item.get("suffix", "").upper()
+            if b_name.lower().startswith("akhiran "):
+                b_name = b_name[8:].strip()
             bg = item.get("color", THEME["primary"])
             self.badge_tier.setText(b_name)
             self.badge_tier.setStyleSheet(f"background-color: {bg}; color: {THEME['text_dark']}; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; border: none;")
-        elif tipe == "JEBAKAN_X":
-            self.badge_tier.setText("Jebakan X")
-            self.badge_tier.setStyleSheet(f"background-color: {THEME['danger']}; color: {THEME['text_dark']}; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; border: none;")
-        elif tipe == "JEBAKAN_SULIT":
-            clean_desc = deskripsi.replace(" (Sulit)", "").replace("(Sulit)", "").strip()
-            self.badge_tier.setText(clean_desc.title())
-            self.badge_tier.setStyleSheet(f"background-color: #fab387; color: {THEME['text_dark']}; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; border: none;")
         else:
             self.badge_tier.setText("Santai" if deskripsi == "Kata Santai" else "Normal")
             bg = "#a6e3a1" if deskripsi == "Kata Santai" else THEME["border_focus"]

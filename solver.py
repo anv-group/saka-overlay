@@ -1,8 +1,6 @@
 import bisect
 import os
-
-# Huruf akhiran yang sangat sulit untuk lawan sambung
-HURUF_SULIT_AKHIRAN = ["x", "z", "q", "v", "j", "w", "f"]
+import re
 
 class SambungKataSolver:
     def __init__(
@@ -668,13 +666,19 @@ class SambungKataSolver:
                 self.words_by_initial[init1] = []
             self.words_by_initial[init1].append(w)
 
+    @staticmethod
+    def _clean_tag_name(name, suffix):
+        sfx = (suffix or "").strip().upper()
+        cleaned = re.sub(r"(?i)^akhiran\s+", "", str(name or "")).strip()
+        return cleaned or sfx
+
     def set_custom_endings(self, custom_endings):
         """
-        Mengatur daftar akhiran kustom (Custom Traps) dengan prioritas super (di atas X).
+        Mengatur daftar akhiran kustom (Custom Traps) sebagai satu-satunya sistem tag prioritas.
         Format:
         [
-            {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"},
-            {"suffix": "NGK", "name": "Akhiran NGK", "enabled": True, "color": "#f5c2e7"}
+            {"suffix": "NS", "name": "NS", "enabled": True, "color": "#cba6f7"},
+            {"suffix": "NGK", "name": "NGK", "enabled": True, "color": "#f5c2e7"}
         ]
         atau list of string: ["NS", "NGK"]
         """
@@ -687,7 +691,7 @@ class SambungKataSolver:
                 if s:
                     self.custom_endings.append({
                         "suffix": s,
-                        "name": f"Akhiran {s.upper()}",
+                        "name": s.upper(),
                         "enabled": True,
                         "color": "#cba6f7"
                     })
@@ -696,7 +700,7 @@ class SambungKataSolver:
                 if s:
                     self.custom_endings.append({
                         "suffix": s,
-                        "name": item.get("name") or f"Akhiran {s.upper()}",
+                        "name": self._clean_tag_name(item.get("name"), s),
                         "enabled": bool(item.get("enabled", True)),
                         "color": item.get("color", "#cba6f7")
                     })
@@ -728,17 +732,9 @@ class SambungKataSolver:
         - Jika prefix 'EX'  -> mencari kata berawalan 'ex' (exit, extra, expert, dll)
         - Jika prefix 'IX'  -> mencari kata berawalan 'ix' (ixora, ixodes, dll)
         
-        Prioritas Jawaban (Mode Normal):
-        0. Kata berakhiran Kategori Custom / Custom Traps (🔥 Super Jebakan, misal NS, NGK)
-        1. Kata berakhiran 'X' (💥 Jebakan Mematikan)
-        2. Kata berakhiran huruf sulit 'Z', 'Q', 'V', 'J', 'W', 'F' (⚡ Jebakan Sulit)
-        3. Kata normal/seadanya (🛡️ Bertahan)
-
-        Prioritas Jawaban (Mode Santai - tanpa X, Q, F):
-        0. Kata berakhiran Kategori Custom yang tidak mengandung X, Q, F
-        1. Kata berakhiran 'Z', 'V', 'J', 'W' (⚡ Jebakan Sulit Alternatif)
-        2. Kata santai/normal yang nyaman diketik
-        (Semua kata berakhiran X, Q, F atau mengandung X, Q dihilangkan)
+        Prioritas Jawaban (Pure Custom Tags):
+        0. Kata berakhiran Kategori Custom / Custom Traps (misal NS, NGK, X, dll.)
+        1. Kata normal/santai/brutal sesuai mode (BIASA)
         """
         prefix = "".join([c for c in awalan_prefix.lower() if c.isalpha()])
         if not prefix:
@@ -783,7 +779,7 @@ class SambungKataSolver:
                         continue
                     active_custom.append({
                         "suffix": s,
-                        "name": f"Akhiran {s.upper()}",
+                        "name": s.upper(),
                         "enabled": True,
                         "color": "#cba6f7",
                         "tag_index": idx
@@ -799,21 +795,16 @@ class SambungKataSolver:
 
         vowels = set("aiueo")
         jebakan_custom = []
-        jebakan_x = []
-        jebakan_sulit = []
         kata_biasa = []
 
         if mode_santai:
             # Mode Santai: Kecualikan X, Q, dan F
             for w in candidates:
-                # Wajib memiliki vokal
                 if not any(v in w for v in vowels):
                     continue
-                # Jangan gunakan kata yang berakhiran X, Q, F atau mengandung X, Q
                 if w[-1] in ("x", "q", "f") or "x" in w or "q" in w:
                     continue
-                
-                # Cek akhiran custom
+
                 matched_rule = None
                 for rule in match_rules:
                     sfx = rule.get("suffix", "").lower()
@@ -823,18 +814,14 @@ class SambungKataSolver:
 
                 if matched_rule:
                     jebakan_custom.append((w, matched_rule))
-                elif w[-1] in ("z", "v", "j", "w"):
-                    jebakan_sulit.append(w)
                 else:
                     kata_biasa.append(w)
         else:
-            # Mode Normal / Push Index / Brutal
+            # Mode Normal / Brutal (Pure Custom Tags)
             for w in candidates:
-                # Saring kata singkatan aneh (harus memiliki setidaknya 1 huruf vokal jika > 3 huruf)
                 if len(w) >= 4 and not any(v in w for v in vowels):
                     continue
 
-                # Cek akhiran custom (Prioritas Super / Paling Atas)
                 matched_rule = None
                 for rule in match_rules:
                     sfx = rule.get("suffix", "").lower()
@@ -844,10 +831,6 @@ class SambungKataSolver:
 
                 if matched_rule:
                     jebakan_custom.append((w, matched_rule))
-                elif w[-1] == "x":
-                    jebakan_x.append(w)
-                elif w[-1] in HURUF_SULIT_AKHIRAN:
-                    jebakan_sulit.append(w)
                 else:
                     kata_biasa.append(w)
 
@@ -897,39 +880,23 @@ class SambungKataSolver:
                     prio = 3
                 return (is_wl, prio, l)
             jebakan_custom.sort(key=sort_key_custom)
-        jebakan_x.sort(key=sort_key)
-        jebakan_sulit.sort(key=sort_key)
         kata_biasa.sort(key=sort_key)
 
         hasil = []
-        
-        # Buat representasi objek untuk masing-masing tier
-        list_x = [{
-            "kata": w,
-            "tipe": "JEBAKAN_X",
-            "deskripsi": "Akhiran X (Mematikan)",
-            "is_whitelisted": (w in self.whitelisted_words)
-        } for w in jebakan_x]
 
         list_custom = []
         for w, rule in jebakan_custom:
             sfx = rule["suffix"].upper()
+            b_name = self._clean_tag_name(rule.get("name"), sfx)
             list_custom.append({
                 "kata": w,
                 "tipe": "CUSTOM_TRAP",
                 "suffix": sfx,
-                "badge_name": rule.get("name") or f"AKHIRAN {sfx}",
+                "badge_name": b_name,
                 "color": rule.get("color", "#cba6f7"),
-                "deskripsi": f"Akhiran {sfx} (Super Jebakan)",
+                "deskripsi": b_name,
                 "is_whitelisted": (w in self.whitelisted_words)
             })
-
-        list_sulit = [{
-            "kata": w,
-            "tipe": "JEBAKAN_SULIT",
-            "deskripsi": f"Akhiran {w[-1].upper()}",
-            "is_whitelisted": (w in self.whitelisted_words)
-        } for w in jebakan_sulit]
 
         list_biasa = []
         for w in kata_biasa:
@@ -946,16 +913,10 @@ class SambungKataSolver:
                 "is_whitelisted": (w in self.whitelisted_words)
             })
 
-        # TIER 0: Custom Traps (#1 Prioritas Super)
+        # TIER 0: Pure Custom Traps
         hasil.extend(list_custom)
 
-        # TIER 1: Jebakan X (#2 Prioritas Mematikan)
-        hasil.extend(list_x)
-
-        # TIER 2: Jebakan Sulit (#3 Prioritas Konsonan Sulit)
-        hasil.extend(list_sulit)
-
-        # TIER 3: Kata Biasa (#4 Normal / Bertahan)
+        # TIER 1: Kata Biasa (Normal / Santai / Brutal)
         hasil.extend(list_biasa)
 
         return hasil[:limit]
@@ -1060,30 +1021,22 @@ class SambungKataSolver:
             if isinstance(c, dict):
                 sfx = c.get("suffix", "").lower()
                 if sfx:
-                    custom_lookup[sfx] = c.get("name") or f"Akhiran {sfx.upper()}"
+                    custom_lookup[sfx] = self._clean_tag_name(c.get("name"), sfx)
             elif isinstance(c, str) and c.strip():
                 sfx = c.strip().lower()
-                custom_lookup[sfx] = f"Akhiran {sfx.upper()}"
+                custom_lookup[sfx] = sfx.upper()
 
         results = []
         for idx, w in enumerate(trimmed, 1):
-            tag_label = ""
-            tag_id = "sfx_Normal"
             matched_custom = None
             for sfx in custom_lookup:
                 if w.endswith(sfx):
-                    matched_custom = sfx.upper()
+                    matched_custom = custom_lookup[sfx]
                     break
 
             if matched_custom:
                 tag_label = matched_custom
                 tag_id = f"sfx_{matched_custom}"
-            elif w.endswith("x"):
-                tag_label = "💥 X"
-                tag_id = "sfx_X"
-            elif any(w.endswith(ch) for ch in ("z", "q", "v", "j", "w", "f")):
-                tag_label = f"⚡ {w[-1].upper()}"
-                tag_id = f"sfx_{w[-1].upper()}"
             else:
                 tag_label = "Normal"
                 tag_id = "sfx_Normal"

@@ -30,25 +30,15 @@ class TestSambungKataSolver(unittest.TestCase):
         for item in hasil:
             self.assertTrue(item["kata"].upper().startswith("BU"))
 
-    def test_jebakan_x_priority(self):
-        """Memastikan kata berakhiran X berada di tier prioritas atas"""
-        hasil = self.solver.cari_jawaban("BO", limit=10)
-        jebakan_x = [x for x in hasil if x["tipe"] == "JEBAKAN_X"]
-        self.assertTrue(len(jebakan_x) > 0)
-        self.assertTrue(jebakan_x[0]["kata"].endswith("x"))
-        self.assertEqual(jebakan_x[0]["tipe"], "JEBAKAN_X")
-
-    def test_jebakan_sulit_priority(self):
-        """Memastikan kata berakhiran konsonan sulit (Z, Q, V, J, W, F) ditandai benar tanpa suffix '(Sulit)'"""
-        hasil = self.solver.cari_jawaban("A", limit=20)
-        jebakan_sulit = [x for x in hasil if x["tipe"] == "JEBAKAN_SULIT"]
-        self.assertTrue(len(jebakan_sulit) > 0)
-        for item in jebakan_sulit:
-            self.assertIn(item["kata"][-1].upper(), ["Z", "Q", "V", "J", "W", "F"])
-            self.assertNotIn("(Sulit)", item["deskripsi"])
+    def test_pure_custom_tags_no_builtin_traps(self):
+        """Memastikan tidak ada tag bawaan JEBAKAN_X / JEBAKAN_SULIT (pure custom tags)"""
+        for mode_kw in ({}, {"mode_santai": True}, {"mode_brutal": True}):
+            hasil = self.solver.cari_jawaban("S", limit=40, custom_endings=[], **mode_kw)
+            self.assertTrue(len(hasil) > 0)
+            self.assertFalse(any(x["tipe"] in ("JEBAKAN_X", "JEBAKAN_SULIT") for x in hasil))
 
     def test_custom_ending_traps(self):
-        """Memastikan custom ending categories (seperti NS, NGK) berprioritas super (Tier 0)"""
+        """Memastikan custom ending categories (seperti NS, NGK) berprioritas super tanpa prefix 'Akhiran '"""
         custom_rules = [
             {"suffix": "NS", "name": "Akhiran NS", "color": "#cba6f7", "enabled": True}
         ]
@@ -57,11 +47,11 @@ class TestSambungKataSolver(unittest.TestCase):
         custom_traps = [x for x in hasil if x["tipe"] == "CUSTOM_TRAP"]
         self.assertTrue(len(custom_traps) > 0)
         self.assertTrue(custom_traps[0]["kata"].upper().endswith("NS"))
-        self.assertEqual(custom_traps[0]["badge_name"], "Akhiran NS")
+        self.assertEqual(custom_traps[0]["badge_name"], "NS")
 
         # Uji jika dinonaktifkan (enabled=False)
         custom_disabled = [
-            {"suffix": "NS", "name": "Akhiran NS", "color": "#cba6f7", "enabled": False}
+            {"suffix": "NS", "name": "NS", "color": "#cba6f7", "enabled": False}
         ]
         hasil_dis = self.solver.cari_jawaban("LE", limit=10, custom_endings=custom_disabled)
         custom_dis_traps = [x for x in hasil_dis if x["tipe"] == "CUSTOM_TRAP"]
@@ -111,6 +101,10 @@ class TestSambungKataSolver(unittest.TestCase):
         self.assertTrue(len(kso_items) > 0)
         self.assertTrue(kso_items[0]["kata"].lower().endswith("kso"))
 
+        # Pastikan tidak ada tambahan jebakan bawaan (JEBAKAN_X / JEBAKAN_SULIT) di Mode Brutal
+        hasil_s = self.solver.cari_jawaban("S", limit=40, mode_brutal=True, custom_endings=brutal_rules)
+        self.assertFalse(any(x["tipe"] in ("JEBAKAN_X", "JEBAKAN_SULIT") for x in hasil_s))
+
     def test_blacklist_mechanism(self):
         """Memastikan kata yang diblacklist tidak muncul dan dapat dipulihkan"""
         kata_uji = "buku"
@@ -127,31 +121,21 @@ class TestSambungKataSolver(unittest.TestCase):
 
     def test_whitelist_mechanism_and_category_priority(self):
         """Memastikan kata di whitelist menjadi prioritas teratas di kategorinya dan aktif di memori"""
-        kata_x = "sex"
-        # Whitelist kata 'sex'
-        self.solver.whitelist_word(kata_x)
-        self.assertTrue(self.solver.is_whitelisted(kata_x))
-
-        hasil = self.solver.cari_jawaban("S", limit=15)
-        x_items = [x for x in hasil if x["tipe"] == "JEBAKAN_X"]
-        self.assertTrue(len(x_items) > 0)
-        # Kata yang di-whitelist harus berada di urutan teratas pada kategori X
-        self.assertEqual(x_items[0]["kata"].lower(), kata_x)
-        self.assertTrue(x_items[0]["is_whitelisted"])
-
-        # Uji kata baru yang belum ada di kamus
-        kata_baru = "zzwhitelisttest"
+        custom_x = [{"suffix": "X", "name": "X", "enabled": True, "color": "#f38ba8"}]
+        kata_baru = "zzwhitelistx"
         self.assertFalse(self.solver.has_word(kata_baru))
         self.solver.whitelist_word(kata_baru)
+        self.assertTrue(self.solver.is_whitelisted(kata_baru))
         self.assertTrue(self.solver.has_word(kata_baru))
-        
-        hasil_baru = self.solver.cari_jawaban("ZZ", limit=5)
-        self.assertTrue(any(x["kata"] == kata_baru for x in hasil_baru))
+
+        hasil = self.solver.cari_jawaban("ZZ", limit=15, custom_endings=custom_x)
+        trap_items = [x for x in hasil if x["tipe"] == "CUSTOM_TRAP"]
+        self.assertTrue(len(trap_items) > 0)
+        self.assertEqual(trap_items[0]["kata"].lower(), kata_baru)
+        self.assertTrue(trap_items[0]["is_whitelisted"])
 
         # Bersihkan setelah pengujian
-        self.solver.unwhitelist_word(kata_x)
         self.solver.unwhitelist_word(kata_baru)
-        self.assertFalse(self.solver.is_whitelisted(kata_x))
         self.assertFalse(self.solver.is_whitelisted(kata_baru))
         self.assertTrue(self.solver.has_word(kata_baru))
 
