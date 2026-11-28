@@ -49,3 +49,7 @@ config.local.json
 db_cache.json
 
 TODO.md
+
+# Local OCR samples & reference docs
+sample/
+docs/referrence/
