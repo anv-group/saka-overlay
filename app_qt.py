@@ -2,10 +2,12 @@ import sys
 import os
 import time
 import json
+import threading
+from collections import Counter
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QStackedWidget, QDialog, QLineEdit,
-    QColorDialog, QMessageBox, QFrame
+    QColorDialog, QMessageBox, QFrame, QCheckBox
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize, QRect
 from PySide6.QtGui import QIcon, QPixmap, QCursor, QKeySequence, QShortcut
@@ -15,10 +17,14 @@ from qt_theme import THEME, GLOBAL_QSS, get_qicon
 from qt_components import QtTopTabStrip, QtMiniTickerBar, QtCustomTitleBar
 from tab_views_qt import QtLiveTabView, QtTagsTabView, QtDictionaryTabView, QtSystemTabView, QtKoreksiDialog
 
-from config import load_config, save_config, DEFAULT_HOTKEYS
+from config import (
+    load_config, save_config, DEFAULT_HOTKEYS,
+    MODE_SYNC_KEYS, extract_mode_state, load_txt_mode_state, save_txt_mode_state
+)
 from solver import SambungKataSolver
 from ocr_engine import OCREngine
 from updater import GitUpdater
+from db_sync import SupabaseSyncManager, SupabaseRestClient, SettingsTableUnavailableError
 
 
 class ScanWorker(QThread):
@@ -55,6 +61,9 @@ class SambungKataQtApp(QMainWindow):
     Aplikasi Utama SAKA Overlay berbasis PySide6 (Tactical Cyber Bamboo Theme).
     """
     hotkey_triggered = Signal(str)
+    _db_test_done = Signal(bool, str, object)
+    _db_import_done = Signal(bool, str, str, str, str)
+    _db_download_done = Signal(bool, str, object)
 
     def __init__(self):
         super().__init__()
@@ -79,6 +88,12 @@ class SambungKataQtApp(QMainWindow):
         if "saved_default_tags" not in self.config:
             cats = self.config.get("custom_trap_endings", [])
             self.config["saved_default_tags"] = [c.get("suffix", "").upper() for c in cats if c.get("enabled", True)]
+
+        storage_mode = self.config.get("storage_mode", "txt")
+        self.sync_manager = SupabaseSyncManager(
+            cache_path=os.path.join(base_dir, "db_cache.json"),
+            parent=self
+        )
         self.solver = SambungKataSolver(
             dictionary_path=os.path.join(base_dir, "kamus_lengkap.txt"),
             blacklist_path=os.path.join(base_dir, "blacklist.txt"),
@@ -86,9 +101,19 @@ class SambungKataQtApp(QMainWindow):
             kbbi_path=os.path.join(base_dir, "kamus_kbbi.txt"),
             contek_path=os.path.join(base_dir, "kamus_contek.txt"),
             use_kbbi=self.config.get("use_kbbi", False),
-            use_contek=self.config.get("use_contek", True)
+            use_contek=self.config.get("use_contek", True),
+            storage_mode=storage_mode,
+            db_mutation_callback=self._on_solver_db_mutation
         )
+        if storage_mode == "supabase":
+            self.solver.apply_db_snapshot(self.sync_manager.load_cached_records())
+            cached_mode = self.sync_manager.load_cached_mode_state()
+            if isinstance(cached_mode, dict):
+                for mk in MODE_SYNC_KEYS:
+                    if mk in cached_mode:
+                        self.config[mk] = cached_mode[mk]
         self.solver.set_custom_endings(self.config.get("custom_trap_endings", []))
+        self.solver.set_tier0_sort_mode(self.config.get("tier0_sort_mode", "default"))
 
         self.ocr = OCREngine(config=self.config)
         self.updater = GitUpdater(repo_dir=base_dir)
@@ -115,6 +140,7 @@ class SambungKataQtApp(QMainWindow):
         self.title_bar = QtCustomTitleBar(self, logo_path, on_restart_func=self.restart_app)
         self.title_bar.set_dev_mode(self.dev_mode)
         self.title_bar.set_pinned(self.always_on_top)
+        self.title_bar.db_status_clicked.connect(self._jump_to_db_settings)
         self.main_layout.addWidget(self.title_bar)
 
         # Shortcut Ctrl+Shift+D untuk Mode Dev
@@ -178,6 +204,43 @@ class SambungKataQtApp(QMainWindow):
         # Initial populate
         self.tab_live.refresh_quick_tags(self.config.get("custom_trap_endings", []))
         self.tab_live.mode_pills.set_mode(self.config.get("game_mode", "default"))
+
+        self._last_db_sync_time = "-"
+        self._last_db_event_note = ""
+        self._online_users_count = 0
+        self._online_users_names = []
+        self._presence_initialized = False
+        self._prev_online_names = []
+
+        # Setup Database Sync Signals
+        self._mode_sync_timer = QTimer(self)
+        self._mode_sync_timer.setSingleShot(True)
+        self._mode_sync_timer.timeout.connect(self._flush_local_mode_to_db)
+
+        self._db_test_done.connect(lambda ok, msg, cb: cb(ok, msg))
+        self._db_import_done.connect(self._on_import_finished)
+        self._db_download_done.connect(self._on_download_finished)
+        self.sync_manager.snapshot_loaded.connect(self._on_db_snapshot_loaded)
+        self.sync_manager.remote_event_received.connect(self._on_db_remote_event)
+        self.sync_manager.mode_state_loaded.connect(self._on_db_mode_state_loaded)
+        self.sync_manager.remote_mode_event_received.connect(self._on_db_remote_mode_event)
+        self.sync_manager.presence_updated.connect(self._on_db_presence_updated)
+        self.sync_manager.settings_table_missing.connect(
+            lambda _msg: self.show_toast("SQL lama: klik 'Salin SQL' & Run ulang di Supabase untuk sync Tab MODE", 4500)
+        )
+        self.sync_manager.status_changed.connect(self._on_db_status_changed)
+        self.sync_manager.operation_failed.connect(lambda msg: self.show_toast(f"Sync DB: {msg}", 3500))
+
+        if storage_mode == "supabase":
+            sb_url = self.config.get("supabase_url", "").strip()
+            sb_key = self.config.get("supabase_anon_key", "").strip()
+            sb_nick = self.config.get("sync_nickname", "").strip()
+            if sb_url and sb_key:
+                self.sync_manager.start(sb_url, sb_key, sb_nick)
+            else:
+                self._on_db_status_changed("error", "Mode Database aktif, tetapi URL / Anon Key belum diisi.")
+        else:
+            self._on_db_status_changed("txt", "Mode File TXT (Default Publik)")
 
         # Setup Scan Worker
         self.scan_worker = ScanWorker(self.ocr, lambda: self.config.get("scan_interval_sec", 0.08))
@@ -311,7 +374,7 @@ class SambungKataQtApp(QMainWindow):
             cats[idx], cats[new_idx] = cats[new_idx], cats[idx]
             self.config["custom_trap_endings"] = cats
             self.solver.set_custom_endings(cats)
-            self.save_config_debounced()
+            self._on_local_mode_mutated()
             self.tab_tags.refresh_custom_list()
             self.tab_live.refresh_quick_tags(cats)
             if self.last_detected_word:
@@ -342,7 +405,7 @@ class SambungKataQtApp(QMainWindow):
             elif cur_m == "brutal":
                 self.config["brutal_mode_tags"] = [c.get("suffix", "").upper() for c in cats if c.get("enabled", True)]
 
-            self.save_config_debounced()
+            self._on_local_mode_mutated()
 
             # In-place row update (Preserve exact scroll position without jumps!)
             if idx < self.tab_tags.layout_custom_items.count():
@@ -375,7 +438,7 @@ class SambungKataQtApp(QMainWindow):
         else:
             b_tags.add(suffix)
         self.config["brutal_mode_tags"] = list(b_tags)
-        self.save_config_debounced()
+        self._on_local_mode_mutated()
 
         if self.config.get("game_mode") == "brutal":
             cats = self.config.get("custom_trap_endings", [])
@@ -450,7 +513,7 @@ class SambungKataQtApp(QMainWindow):
         self.config["game_mode"] = mode
         self.config["custom_trap_endings"] = cats
         self.solver.set_custom_endings(cats)
-        self.save_config_debounced()
+        self._on_local_mode_mutated()
 
         self.tab_live.refresh_quick_tags(cats)
         self.tab_live.mode_pills.set_mode(mode)
@@ -472,7 +535,8 @@ class SambungKataQtApp(QMainWindow):
         curr = self.config.get("tier0_sort_mode", "default")
         nxt = "tag_order" if curr == "default" else "default"
         self.config["tier0_sort_mode"] = nxt
-        self.save_config_debounced()
+        self.solver.set_tier0_sort_mode(nxt)
+        self._on_local_mode_mutated()
         self.tab_live.update_sort_button(nxt)
         if self.last_detected_word:
             self.update_results(self.last_detected_word)
@@ -569,15 +633,516 @@ class SambungKataQtApp(QMainWindow):
         self._exec_dialog_with_focus(dlg, dlg.edit_word)
         self._active_quick_add = None
 
+    def _get_active_live_prefix(self) -> str:
+        if getattr(self, "manual_override_active", False):
+            manual_q = "".join([c for c in self.tab_live.edit_search.text().upper() if c.isalpha()])
+            if manual_q:
+                return manual_q
+        return self.last_detected_word
+
+    def _refresh_all_word_views(self):
+        active_prefix = self._get_active_live_prefix()
+        if active_prefix:
+            conf = 100 if self.manual_override_active else self.last_detected_conf
+            self.update_results(active_prefix, conf)
+        if hasattr(self, "tab_kamus"):
+            self.tab_kamus.refresh_whitelist()
+            self.tab_kamus.refresh_blocklist()
+            if getattr(self.tab_kamus.sub_strip, "active_sub", "") == "explorer":
+                self.tab_kamus._search_dictionary()
+
+    # --- Database Sinkronisasi & Mode Handlers ---
+    def _jump_to_db_settings(self):
+        self.top_strip.select_tab("system")
+        if hasattr(self, "tab_system") and hasattr(self.tab_system, "db_box"):
+            QTimer.singleShot(50, lambda: self.tab_system.scroll.ensureWidgetVisible(self.tab_system.db_box))
+
+    def _on_solver_db_mutation(self, action: str, word: str, record: dict = None):
+        if self.config.get("storage_mode", "txt") == "supabase":
+            self.sync_manager.enqueue_mutation(action, word, record)
+            self._last_db_sync_time = time.strftime("%H:%M:%S")
+            st = str((record or {}).get("status") or ("hapus" if action == "delete" else "")).lower()
+            self._last_db_event_note = f"Lokal: {word.upper()} ({st})"
+            if hasattr(self, "title_bar"):
+                self.title_bar.flash_db_activity("local")
+            if hasattr(self, "tab_system") and hasattr(self.tab_system, "refresh_db_stats"):
+                self.tab_system.refresh_db_stats()
+
+    def _on_db_status_changed(self, state_code: str, detail: str):
+        self._last_db_state_code = state_code
+        self._last_db_state_detail = detail
+        if state_code in ("txt", "offline", "error"):
+            self._online_users_count = 0
+            self._online_users_names = []
+            self._presence_initialized = False
+            self._prev_online_names = []
+        self._update_titlebar_db_tooltip()
+        if hasattr(self, "tab_system") and hasattr(self.tab_system, "refresh_db_status"):
+            self.tab_system.refresh_db_status(state_code, detail)
+
+    def _update_titlebar_db_tooltip(self):
+        if not hasattr(self, "title_bar"):
+            return
+        state_code = getattr(self, "_last_db_state_code", "txt")
+        detail = getattr(self, "_last_db_state_detail", "")
+        if state_code == "live":
+            if self._online_users_count > 0:
+                names = ", ".join(self._online_users_names)
+                tip_info = f"{self._online_users_count} online ({names})"
+            else:
+                tip_info = ""
+        elif state_code == "error":
+            tip_info = detail
+        else:
+            tip_info = ""
+        self.title_bar.set_db_status(state_code, tip_info)
+
+    def _on_db_presence_updated(self, count: int, names: list):
+        new_names = list(names or [])
+        if not self._presence_initialized:
+            if count > 0:
+                self._presence_initialized = True
+                self._prev_online_names = list(new_names)
+        else:
+            prev_c = Counter(self._prev_online_names)
+            curr_c = Counter(new_names)
+            joined = list((curr_c - prev_c).elements())
+            left = list((prev_c - curr_c).elements())
+            if len(joined) == 1 and not left:
+                self.show_toast(f"{joined[0]} terhubung ke database", 2000)
+            elif len(left) == 1 and not joined:
+                self.show_toast(f"{left[0]} keluar dari database", 2000)
+            self._prev_online_names = list(new_names)
+
+        self._online_users_count = int(count)
+        self._online_users_names = new_names
+        self._update_titlebar_db_tooltip()
+        if hasattr(self, "tab_system") and hasattr(self.tab_system, "refresh_db_stats"):
+            self.tab_system.refresh_db_stats()
+
+    def _on_db_snapshot_loaded(self, records: dict, is_delta: bool):
+        if self.config.get("storage_mode", "txt") != "supabase":
+            return
+        self.solver.apply_db_snapshot(records)
+        self._last_db_sync_time = time.strftime("%H:%M:%S")
+        self._last_db_event_note = "Snapshot server"
+        self._refresh_all_word_views()
+        if is_delta and hasattr(self, "title_bar"):
+            self.title_bar.flash_db_activity("remote")
+        if hasattr(self, "tab_system") and hasattr(self.tab_system, "refresh_db_stats"):
+            self.tab_system.refresh_db_stats()
+
+    def _on_db_remote_event(self, ev_type: str, record: dict, old_record: dict, is_self: bool):
+        if self.config.get("storage_mode", "txt") != "supabase":
+            return
+        w = self.solver.apply_db_event(ev_type, record, old_record)
+        self._refresh_all_word_views()
+        if w:
+            self._last_db_sync_time = time.strftime("%H:%M:%S")
+            author = (record or {}).get("added_by", "").strip()
+            by_str = f" ({author})" if author else ""
+            if ev_type == "DELETE":
+                self._last_db_event_note = f"{w.upper()} dihapus{by_str}"
+                if not is_self:
+                    self.show_toast(f"Sync{by_str}: '{w.upper()}' dihapus", 2200)
+            else:
+                st = str((record or {}).get("status") or "").upper()
+                label_map = {"WHITELIST": "Whitelist", "BLOCKLIST": "Blocklist", "CUSTOM": "Kamus"}
+                lbl = label_map.get(st, st)
+                self._last_db_event_note = f"{w.upper()} -> {lbl}{by_str}"
+                if not is_self:
+                    self.show_toast(f"Sync{by_str}: '{w.upper()}' -> {lbl}", 2200)
+            if not is_self and hasattr(self, "title_bar"):
+                self.title_bar.flash_db_activity("remote")
+            if hasattr(self, "tab_system") and hasattr(self.tab_system, "refresh_db_stats"):
+                self.tab_system.refresh_db_stats()
+
+    def _on_local_mode_mutated(self):
+        if self.config.get("storage_mode", "txt") == "supabase":
+            self._mode_sync_timer.start(200)
+        else:
+            self.save_config_debounced()
+
+    def _flush_local_mode_to_db(self):
+        if self.config.get("storage_mode", "txt") != "supabase":
+            return
+        mode_state = extract_mode_state(self.config)
+        self.sync_manager.enqueue_mode_state(mode_state)
+        self._last_db_sync_time = time.strftime("%H:%M:%S")
+        self._last_db_event_note = "Lokal: Mode/Tag"
+        if hasattr(self, "title_bar"):
+            self.title_bar.flash_db_activity("local")
+        if hasattr(self, "tab_system") and hasattr(self.tab_system, "refresh_db_stats"):
+            self.tab_system.refresh_db_stats()
+
+    def _apply_mode_state_to_runtime(self, mode_state: dict):
+        if not isinstance(mode_state, dict):
+            return
+        for mk in MODE_SYNC_KEYS:
+            if mk in mode_state:
+                self.config[mk] = mode_state[mk]
+
+        cats = self.config.get("custom_trap_endings", [])
+        cur_mode = self.config.get("game_mode", "default")
+        sort_m = self.config.get("tier0_sort_mode", "default")
+
+        self.solver.set_custom_endings(cats)
+        self.solver.set_tier0_sort_mode(sort_m)
+
+        if hasattr(self, "tab_live"):
+            self.tab_live.refresh_quick_tags(cats)
+            self.tab_live.mode_pills.set_mode(cur_mode)
+            self.tab_live.update_sort_button(sort_m)
+        if hasattr(self, "tab_tags"):
+            self.tab_tags.refresh_custom_list()
+            self.tab_tags.refresh_brutal_list()
+        self._refresh_all_word_views()
+
+    def _on_db_mode_state_loaded(self, mode_state: dict, updated_by: str):
+        if self.config.get("storage_mode", "txt") != "supabase":
+            return
+        if self._mode_sync_timer.isActive():
+            return
+        self._apply_mode_state_to_runtime(mode_state)
+        self._last_db_sync_time = time.strftime("%H:%M:%S")
+        by_str = f" ({updated_by})" if updated_by else ""
+        self._last_db_event_note = f"Mode/Tag{by_str}"
+        if hasattr(self, "tab_system") and hasattr(self.tab_system, "refresh_db_stats"):
+            self.tab_system.refresh_db_stats()
+
+    def _on_db_remote_mode_event(self, mode_state: dict, updated_by: str, is_self: bool):
+        if self.config.get("storage_mode", "txt") != "supabase":
+            return
+        if is_self or self._mode_sync_timer.isActive():
+            return
+        self._apply_mode_state_to_runtime(mode_state)
+        self._last_db_sync_time = time.strftime("%H:%M:%S")
+        by_str = f" ({updated_by})" if updated_by else ""
+        self._last_db_event_note = f"Mode/Tag diperbarui{by_str}"
+        self.show_toast(f"Sync{by_str}: Tag/Mode diperbarui", 2200)
+        if hasattr(self, "title_bar"):
+            self.title_bar.flash_db_activity("remote")
+        if hasattr(self, "tab_system") and hasattr(self.tab_system, "refresh_db_stats"):
+            self.tab_system.refresh_db_stats()
+
+    def update_sync_nickname(self, nickname: str):
+        nick = (nickname or "").strip()
+        if nick == self.config.get("sync_nickname", ""):
+            return
+        self.config["sync_nickname"] = nick
+        self.save_config_debounced()
+        self.sync_manager.update_nickname(nick)
+        if self.config.get("storage_mode") == "supabase":
+            self.show_toast(f"Nickname diperbarui: {nick or 'Anonim'}")
+
+    def force_resync_database(self):
+        if self.config.get("storage_mode", "txt") != "supabase":
+            return
+        url = self.config.get("supabase_url", "").strip()
+        key = self.config.get("supabase_anon_key", "").strip()
+        nick = self.config.get("sync_nickname", "").strip()
+        if not url or not key:
+            self.show_toast("URL atau Anon Key belum diisi.")
+            return
+        if self.sync_manager._running:
+            self.sync_manager.request_resync()
+        else:
+            self.sync_manager.start(url, key, nick)
+        self.show_toast("Menyinkronkan ulang data dari server...")
+
+    def clear_database_cache(self):
+        reply = QMessageBox.question(
+            self,
+            "Hapus Cache Lokal Database",
+            "Hapus file cache lokal (db_cache.json)?\n\n"
+            "Jika Mode Database sedang aktif, data akan diambil ulang dari server.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        self.sync_manager.clear_cache()
+        if self.config.get("storage_mode", "txt") == "supabase":
+            self.solver.apply_db_snapshot({})
+            self._refresh_all_word_views()
+            url = self.config.get("supabase_url", "").strip()
+            key = self.config.get("supabase_anon_key", "").strip()
+            nick = self.config.get("sync_nickname", "").strip()
+            if url and key:
+                self.sync_manager.start(url, key, nick)
+        self.show_toast("Cache lokal database (db_cache.json) dihapus")
+
+    def switch_to_txt_mode(self):
+        if self._mode_sync_timer.isActive():
+            self._mode_sync_timer.stop()
+        self.sync_manager.stop()
+        self.config["storage_mode"] = "txt"
+        save_config(self.config)
+        self.solver.switch_storage_mode("txt")
+        self._apply_mode_state_to_runtime(load_txt_mode_state())
+        self._on_db_status_changed("txt", "Mode File TXT aktif: membaca & menyimpan ke file .txt lokal/publik.")
+        self.show_toast("Beralih ke Mode File TXT (Default)")
+
+    def activate_database_mode(self, url: str, anon_key: str, nickname: str = ""):
+        if self.config.get("storage_mode", "txt") == "txt":
+            save_config(self.config)
+        self.config["storage_mode"] = "supabase"
+        self.config["supabase_url"] = url
+        self.config["supabase_anon_key"] = anon_key
+        self.config["sync_nickname"] = nickname
+        save_config(self.config)
+
+        cached = self.sync_manager.load_cached_records()
+        self.solver.switch_storage_mode("supabase", cached)
+        cached_mode = self.sync_manager.load_cached_mode_state()
+        if isinstance(cached_mode, dict):
+            self._apply_mode_state_to_runtime(cached_mode)
+        else:
+            self._refresh_all_word_views()
+        self.sync_manager.start(url, anon_key, nickname)
+
+    def test_database_connection(self, url: str, anon_key: str, callback):
+        def _worker():
+            try:
+                client = SupabaseRestClient(url, anon_key)
+                ok, msg = client.test_connection()
+            except Exception as exc:
+                ok, msg = False, str(exc)
+            self._db_test_done.emit(ok, msg, callback)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def import_txt_to_database(self, url: str, anon_key: str, nickname: str = ""):
+        records = self.solver.export_txt_records_for_import(added_by=nickname)
+        local_mode = load_txt_mode_state()
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Upload Lokal -> Database")
+        dlg.setFixedWidth(360)
+        dlg.setStyleSheet(f"""
+            QDialog {{
+                background-color: {THEME['bg_card']};
+                border: 1px solid {THEME['border']};
+                border-radius: 6px;
+            }}
+            QLabel {{ color: {THEME['text_primary']}; border: none; background: transparent; }}
+            QCheckBox {{ color: {THEME['text_primary']}; font-size: 11px; spacing: 8px; background: transparent; }}
+            QCheckBox::indicator {{
+                width: 15px; height: 15px;
+                border: 1px solid {THEME['border']};
+                border-radius: 3px;
+                background-color: {THEME['bg_root']};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {THEME['primary']};
+                border-color: {THEME['primary']};
+            }}
+        """)
+        dl = QVBoxLayout(dlg)
+        dl.setContentsMargins(14, 12, 14, 12)
+        dl.setSpacing(10)
+
+        lbl_info = QLabel("Pilih data lokal yang ingin di-upload ke Database Privat:")
+        lbl_info.setWordWrap(True)
+        lbl_info.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
+        dl.addWidget(lbl_info)
+
+        chk_words = QCheckBox(f"Daftar Kata (whitelist.txt & blacklist.txt: {len(records)} kata)")
+        chk_words.setChecked(bool(records))
+        chk_words.setEnabled(bool(records))
+        dl.addWidget(chk_words)
+
+        tag_cnt = len(local_mode.get("custom_trap_endings", []))
+        chk_mode = QCheckBox(f"Pengaturan MODE ({tag_cnt} Tag, Urutan, On/Off, Brutal, Mode)")
+        chk_mode.setChecked(True)
+        dl.addWidget(chk_mode)
+
+        lbl_note = QLabel("(File .txt dan pengaturan Mode TXT lokal tidak akan diubah.)")
+        lbl_note.setStyleSheet(f"color: {THEME['text_muted']}; font-size: 10px;")
+        dl.addWidget(lbl_note)
+
+        brow = QHBoxLayout()
+        brow.addStretch(1)
+        btn_no = QPushButton("Batal")
+        btn_no.setCursor(Qt.PointingHandCursor)
+        btn_no.setStyleSheet(f"background-color: {THEME['bg_hover']}; color: {THEME['text_primary']}; border: 1px solid {THEME['border']}; border-radius: 4px; padding: 5px 12px; font-size: 11px;")
+        btn_no.clicked.connect(dlg.reject)
+        brow.addWidget(btn_no)
+
+        btn_yes = QPushButton("Upload Sekarang")
+        btn_yes.setCursor(Qt.PointingHandCursor)
+        btn_yes.setStyleSheet(f"background-color: {THEME['primary']}; color: {THEME['text_dark']}; border: none; border-radius: 4px; padding: 5px 14px; font-size: 11px; font-weight: bold;")
+        btn_yes.clicked.connect(dlg.accept)
+        brow.addWidget(btn_yes)
+        dl.addLayout(brow)
+
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        do_words = chk_words.isChecked() and bool(records)
+        do_mode = chk_mode.isChecked()
+        if not do_words and not do_mode:
+            self.show_toast("Tidak ada data yang dipilih untuk di-upload.")
+            return
+
+        self.show_toast("Mengupload data lokal ke database...")
+
+        def _worker():
+            try:
+                client = SupabaseRestClient(url, anon_key)
+                parts = []
+                if do_words:
+                    count = client.upsert_batch(records)
+                    parts.append(f"{count} kata")
+                if do_mode:
+                    client.upsert_mode_state(local_mode, updated_by=nickname)
+                    parts.append("pengaturan MODE")
+                summary = " & ".join(parts)
+                self._db_import_done.emit(True, summary, url, anon_key, nickname)
+            except Exception as exc:
+                self._db_import_done.emit(False, str(exc), url, anon_key, nickname)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_import_finished(self, ok: bool, summary: str, url: str, anon_key: str, nickname: str):
+        if ok:
+            self.show_toast(f"Berhasil mengupload {summary} ke database!")
+            if self.config.get("storage_mode") == "supabase":
+                self.sync_manager.start(url, anon_key, nickname)
+            else:
+                self.activate_database_mode(url, anon_key, nickname)
+        else:
+            QMessageBox.warning(self, "Upload Gagal", f"Gagal mengupload data lokal ke database:\n{summary}")
+
+    def download_database_to_txt(self, url: str, anon_key: str):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Download Database -> Lokal")
+        dlg.setFixedWidth(365)
+        dlg.setStyleSheet(f"""
+            QDialog {{
+                background-color: {THEME['bg_card']};
+                border: 1px solid {THEME['border']};
+                border-radius: 6px;
+            }}
+            QLabel {{ color: {THEME['text_primary']}; border: none; background: transparent; }}
+            QCheckBox {{ color: {THEME['text_primary']}; font-size: 11px; spacing: 8px; background: transparent; }}
+            QCheckBox::indicator {{
+                width: 15px; height: 15px;
+                border: 1px solid {THEME['border']};
+                border-radius: 3px;
+                background-color: {THEME['bg_root']};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {THEME['primary']};
+                border-color: {THEME['primary']};
+            }}
+        """)
+        dl = QVBoxLayout(dlg)
+        dl.setContentsMargins(14, 12, 14, 12)
+        dl.setSpacing(10)
+
+        lbl_info = QLabel("Pilih data dari Database Privat untuk disimpan ke file lokal:")
+        lbl_info.setWordWrap(True)
+        lbl_info.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
+        dl.addWidget(lbl_info)
+
+        chk_words = QCheckBox("Daftar Kata (simpan ke whitelist.txt, blacklist.txt, & kamus)")
+        chk_words.setChecked(True)
+        dl.addWidget(chk_words)
+
+        chk_overwrite = QCheckBox("Timpa penuh whitelist.txt & blacklist.txt (hapus yang tidak ada di DB)")
+        chk_overwrite.setChecked(False)
+        chk_overwrite.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 10px; padding-left: 18px; spacing: 6px; background: transparent;")
+        chk_words.toggled.connect(chk_overwrite.setEnabled)
+        dl.addWidget(chk_overwrite)
+
+        chk_mode = QCheckBox("Pengaturan MODE (simpan Tag, Urutan, Brutal ke Mode TXT lokal)")
+        chk_mode.setChecked(True)
+        dl.addWidget(chk_mode)
+
+        brow = QHBoxLayout()
+        brow.addStretch(1)
+        btn_no = QPushButton("Batal")
+        btn_no.setCursor(Qt.PointingHandCursor)
+        btn_no.setStyleSheet(f"background-color: {THEME['bg_hover']}; color: {THEME['text_primary']}; border: 1px solid {THEME['border']}; border-radius: 4px; padding: 5px 12px; font-size: 11px;")
+        btn_no.clicked.connect(dlg.reject)
+        brow.addWidget(btn_no)
+
+        btn_yes = QPushButton("Download Sekarang")
+        btn_yes.setCursor(Qt.PointingHandCursor)
+        btn_yes.setStyleSheet(f"background-color: {THEME['primary']}; color: {THEME['text_dark']}; border: none; border-radius: 4px; padding: 5px 14px; font-size: 11px; font-weight: bold;")
+        btn_yes.clicked.connect(dlg.accept)
+        brow.addWidget(btn_yes)
+        dl.addLayout(brow)
+
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        do_words = chk_words.isChecked()
+        do_overwrite = chk_overwrite.isChecked()
+        do_mode = chk_mode.isChecked()
+        if not do_words and not do_mode:
+            self.show_toast("Tidak ada data yang dipilih untuk di-download.")
+            return
+
+        self.show_toast("Mengambil data dari database ke lokal...")
+
+        def _worker():
+            try:
+                client = SupabaseRestClient(url, anon_key)
+                payload = {
+                    "do_words": do_words,
+                    "do_overwrite": do_overwrite,
+                    "do_mode": do_mode,
+                    "records": None,
+                    "mode_state": None,
+                }
+                if do_words:
+                    payload["records"] = client.fetch_all_records()
+                if do_mode:
+                    try:
+                        ms, _ = client.fetch_mode_state()
+                        payload["mode_state"] = ms
+                    except SettingsTableUnavailableError:
+                        payload["mode_state"] = None
+                self._db_download_done.emit(True, "", payload)
+            except Exception as exc:
+                self._db_download_done.emit(False, str(exc), None)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_download_finished(self, ok: bool, err: str, payload):
+        if not ok:
+            QMessageBox.warning(self, "Download Gagal", f"Gagal mendownload data dari database:\n{err}")
+            return
+
+        parts = []
+        if payload.get("do_words") and isinstance(payload.get("records"), dict):
+            wl_n, bl_n, cm_n = self.solver.apply_db_records_to_txt_files(
+                payload["records"], overwrite_lists=bool(payload.get("do_overwrite"))
+            )
+            parts.append(f"WL:{wl_n}, BL:{bl_n}, Kamus+:{cm_n}")
+        if payload.get("do_mode") and isinstance(payload.get("mode_state"), dict):
+            save_txt_mode_state(payload["mode_state"])
+            if self.config.get("storage_mode", "txt") == "txt":
+                self._apply_mode_state_to_runtime(load_txt_mode_state())
+            parts.append("MODE")
+
+        if self.config.get("storage_mode", "txt") == "txt":
+            self._refresh_all_word_views()
+
+        if parts:
+            self.show_toast(f"Download DB -> Lokal selesai ({' | '.join(parts)})", 3200)
+        else:
+            self.show_toast("Tidak ada data baru di database untuk disimpan ke lokal.")
+
     def on_add_word_quick(self, word: str):
         if not word:
             return False, "Kata kosong"
         ok, msg = self.solver.add_word(word)
         if ok:
             self.show_toast(f"'{word.upper()}' berhasil ditambahkan ke Kamus! ")
-            if self.last_detected_word:
-                self.update_results(self.last_detected_word)
-            self.tab_kamus.refresh_whitelist()
+            self._refresh_all_word_views()
         else:
             self.show_toast(f"Gagal: {msg}")
         return ok, msg
@@ -593,8 +1158,7 @@ class SambungKataQtApp(QMainWindow):
         else:
             self.solver.whitelist_word(w)
             self.show_toast(f"'{word.upper()}' ditambahkan ke Whitelist")
-        if self.last_detected_word:
-            self.update_results(self.last_detected_word)
+        self._refresh_all_word_views()
 
     def on_block_word(self, word: str):
         if not word:
@@ -602,8 +1166,7 @@ class SambungKataQtApp(QMainWindow):
         w = word.strip().lower()
         self.solver.blacklist_word(w)
         self.show_toast(f"'{word.upper()}' diblokir ke Blocklist")
-        if self.last_detected_word:
-            self.update_results(self.last_detected_word)
+        self._refresh_all_word_views()
 
     def on_copy_word(self, word: str):
         if not word:
@@ -618,7 +1181,7 @@ class SambungKataQtApp(QMainWindow):
     def set_brutal_tags_batch(self, b_tags: list):
         b_set = set(b_tags)
         self.config["brutal_mode_tags"] = b_tags
-        self.save_config_debounced()
+        self._on_local_mode_mutated()
 
         if self.config.get("game_mode") == "brutal":
             cats = self.config.get("custom_trap_endings", [])
@@ -652,7 +1215,7 @@ class SambungKataQtApp(QMainWindow):
                 cats.pop(idx)
                 self.config["custom_trap_endings"] = cats
                 self.solver.set_custom_endings(cats)
-                self.save_config_debounced()
+                self._on_local_mode_mutated()
                 self.tab_tags.refresh_custom_list()
                 self.tab_live.refresh_quick_tags(cats)
                 if self.last_detected_word:
@@ -666,7 +1229,7 @@ class SambungKataQtApp(QMainWindow):
             cats.insert(target_idx, item)
             self.config["custom_trap_endings"] = cats
             self.solver.set_custom_endings(cats)
-            self.save_config_debounced()
+            self._on_local_mode_mutated()
             self.tab_tags.refresh_custom_list()
             self.tab_live.refresh_quick_tags(cats)
             if self.last_detected_word:
@@ -768,7 +1331,7 @@ class SambungKataQtApp(QMainWindow):
                 cats.append({"suffix": sfx, "enabled": True, "color": chosen_color})
             self.config["custom_trap_endings"] = cats
             self.solver.set_custom_endings(cats)
-            self.save_config_debounced()
+            self._on_local_mode_mutated()
             self.tab_tags.refresh_custom_list()
             self.tab_live.refresh_quick_tags(cats)
             dlg.accept()
@@ -1171,7 +1734,7 @@ class SambungKataQtApp(QMainWindow):
     def _after_sort_tags(self, cats, desc):
         self.config["custom_trap_endings"] = cats
         self.solver.set_custom_endings(cats)
-        self.save_config_debounced()
+        self._on_local_mode_mutated()
         self.tab_tags.refresh_custom_list()
         self.tab_live.refresh_quick_tags(cats)
         if self.last_detected_word:
@@ -1260,6 +1823,11 @@ class SambungKataQtApp(QMainWindow):
     def closeEvent(self, event):
         if self.is_scanning:
             self.scan_worker.stop()
+        if hasattr(self, "_mode_sync_timer") and self._mode_sync_timer.isActive():
+            self._mode_sync_timer.stop()
+            self._flush_local_mode_to_db()
+        if hasattr(self, "sync_manager"):
+            self.sync_manager.stop()
         save_config(self.config)
         event.accept()
 

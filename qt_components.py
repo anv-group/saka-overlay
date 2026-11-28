@@ -3,7 +3,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QFrame
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from qt_theme import THEME, get_qicon
 
 class QtTopTabStrip(QWidget):
@@ -306,7 +306,7 @@ class QtMiniTickerBar(QFrame):
 
             # Tag Badge di Ujung Kanan
             if tipe == "CUSTOM_TRAP":
-                b_name = top_item.get("badge_name") or f"Akhiran {top_item.get('suffix', '').upper()}"
+                b_name = top_item.get("suffix", "").upper() or top_item.get("badge_name", "")
                 bg = top_item.get("color", THEME["primary"])
                 self.badge_tag.setText(b_name)
                 self.badge_tag.setStyleSheet(f"background-color: {bg}; color: {THEME['text_dark']}; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; border: none;")
@@ -335,7 +335,7 @@ class QtMiniTickerBar(QFrame):
 
 class QtSegmentedPills(QWidget):
     """
-    Segmented Cyber Pill Mode Switch (DEFAULT, SANTAI, BRUTAL)
+    Segmented Cyber Pill Mode Switch (NORMAL, SANTAI, BRUTAL, SEMUA)
     """
     mode_changed = Signal(str)
 
@@ -351,7 +351,8 @@ class QtSegmentedPills(QWidget):
         modes = [
             ("default", "NORMAL", "zap"),
             ("santai", "SANTAI", "book"),
-            ("brutal", "BRUTAL", "danger")
+            ("brutal", "BRUTAL", "danger"),
+            ("semua", "SEMUA", "tags")
         ]
 
         for mid, label, _ in modes:
@@ -381,6 +382,17 @@ class QtSegmentedPills(QWidget):
                             background-color: {THEME["danger_bg"]};
                             color: {THEME["danger"]};
                             border: 1px solid {THEME["danger"]};
+                            border-radius: 4px;
+                            font-weight: bold;
+                            font-size: 11px;
+                        }}
+                    """)
+                elif mid == "semua":
+                    btn.setStyleSheet(f"""
+                        QPushButton {{
+                            background-color: rgba(6, 182, 212, 0.16);
+                            color: {THEME["info"]};
+                            border: 1px solid {THEME["info"]};
                             border-radius: 4px;
                             font-weight: bold;
                             font-size: 11px;
@@ -416,8 +428,10 @@ class QtSegmentedPills(QWidget):
 class QtCustomTitleBar(QWidget):
     """
     Custom Frameless Window Titlebar dengan Logo Horizontal SAKA Overlay,
-    Tombol Restart (Mode Dev), Minimize, dan Close.
+    Badge Status Database/Mode, Tombol Restart (Mode Dev), Minimize, dan Close.
     """
+    db_status_clicked = Signal()
+
     def __init__(self, parent_window, logo_path, on_restart_func=None):
         super().__init__(parent_window)
         self.win = parent_window
@@ -472,6 +486,22 @@ class QtCustomTitleBar(QWidget):
         layout.addWidget(self.lbl_logo)
 
         layout.addStretch(1)
+
+        # Sync / Storage Mode Badge (Icon-only compact indicator -> System DB settings)
+        self._db_state_code = "txt"
+        self._db_detail = ""
+        self._db_flash_kind = ""
+        self._db_flash_step = 0
+        self._db_flash_timer = QTimer(self)
+        self._db_flash_timer.setInterval(220)
+        self._db_flash_timer.timeout.connect(self._on_db_flash_tick)
+
+        self.btn_db_status = QPushButton()
+        self.btn_db_status.setFixedSize(24, 22)
+        self.btn_db_status.setCursor(Qt.PointingHandCursor)
+        self.btn_db_status.clicked.connect(self.db_status_clicked.emit)
+        layout.addWidget(self.btn_db_status)
+        self.set_db_status("txt", "Mode File TXT (Default Publik)")
 
         # Restart Button (Dev Mode)
         self.btn_restart = QPushButton()
@@ -553,6 +583,83 @@ class QtCustomTitleBar(QWidget):
 
     def set_dev_mode(self, enabled: bool):
         self.btn_restart.setVisible(enabled)
+
+    _DB_STATUS_SPECS = {
+        "txt": ("TXT", "book", THEME["text_secondary"], THEME["bg_card"], THEME["border"]),
+        "connecting": ("DB SYNC", "refresh", THEME["warning"], THEME["bg_card"], THEME["warning"]),
+        "syncing": ("DB SYNC", "refresh", THEME["warning"], THEME["bg_card"], THEME["warning"]),
+        "live": ("Terhubung", "link", THEME["primary"], THEME["bg_card"], THEME["primary"]),
+        "offline": ("DB OFFLINE", "cloud_download", THEME["warning"], THEME["bg_card"], THEME["warning"]),
+        "error": ("DB ERR", "cross", THEME["danger"], THEME["danger_bg"], THEME["danger"]),
+    }
+
+    def set_db_status(self, state_code: str, detail: str = ""):
+        self._db_state_code = state_code if state_code in self._DB_STATUS_SPECS else "txt"
+        self._db_detail = detail
+        label, _, _, _, _ = self._DB_STATUS_SPECS[self._db_state_code]
+        tip_text = f"{label}, {detail}" if detail else label
+        self.btn_db_status.setToolTip(tip_text)
+        self.btn_db_status.setVisible(self._db_state_code != "txt")
+
+        if self._db_state_code in ("txt", "offline", "error"):
+            self._stop_db_flash()
+            self._apply_db_status_visual()
+        elif not self._db_flash_timer.isActive():
+            self._apply_db_status_visual()
+
+    def _apply_db_btn_style(self, icon_name: str, fg: str, bg: str, bdr: str):
+        self.btn_db_status.setText("")
+        self.btn_db_status.setIcon(get_qicon(icon_name, size=12, color=fg))
+        self.btn_db_status.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {bg};
+                border: 1px solid {bdr};
+                border-radius: 11px;
+                padding: 0px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME["bg_hover"]};
+            }}
+        """)
+
+    def _apply_db_status_visual(self):
+        _, icon_name, fg, bg, bdr = self._DB_STATUS_SPECS.get(
+            self._db_state_code, self._DB_STATUS_SPECS["txt"]
+        )
+        self._apply_db_btn_style(icon_name, fg, bg, bdr)
+
+    def flash_db_activity(self, kind: str = "remote"):
+        """Mengedipkan ikon DB di title bar saat ada perubahan remote (cyan) atau lokal (warning)."""
+        if self._db_state_code not in ("live", "syncing", "connecting"):
+            return
+        self._db_flash_kind = "remote" if kind == "remote" else "local"
+        self._db_flash_step = 0
+        self._apply_db_flash_step()
+        self._db_flash_timer.start(220)
+
+    def _stop_db_flash(self):
+        if self._db_flash_timer.isActive():
+            self._db_flash_timer.stop()
+        self._db_flash_kind = ""
+        self._db_flash_step = 0
+
+    def _on_db_flash_tick(self):
+        self._db_flash_step += 1
+        if self._db_flash_step >= 5:
+            self._stop_db_flash()
+            self._apply_db_status_visual()
+        else:
+            self._apply_db_flash_step()
+
+    def _apply_db_flash_step(self):
+        if self._db_flash_step % 2 == 0:
+            if self._db_flash_kind == "remote":
+                fg, bdr, bg = THEME["accent_cyan"], THEME["accent_cyan"], "#0b2830"
+            else:
+                fg, bdr, bg = THEME["warning"], THEME["warning"], "#2b2009"
+        else:
+            fg, bdr, bg = THEME["text_muted"], THEME["border"], THEME["bg_card"]
+        self._apply_db_btn_style("link", fg, bg, bdr)
 
     def set_pinned(self, pinned: bool):
         self.is_pinned = pinned

@@ -3,7 +3,7 @@ import webbrowser
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
     QScrollArea, QFrame, QComboBox, QSizePolicy, QMessageBox, QCheckBox, QDialog, QMenu,
-    QButtonGroup, QRadioButton
+    QButtonGroup, QRadioButton, QApplication, QInputDialog
 )
 from PySide6.QtGui import QDrag, QPixmap, QKeySequence, QShortcut
 from PySide6.QtCore import Qt, Signal, QTimer, QPoint, QMimeData, QEvent
@@ -1784,6 +1784,20 @@ class QtDictionaryTabView(QWidget):
 
             r_l.addStretch(1)
 
+            if self.app.config.get("storage_mode", "txt") == "supabase":
+                rec = self.app.solver.db_records.get(w, {})
+                added_by = (rec.get("added_by") or "").strip()
+                if added_by:
+                    by_lbl = QLabel(added_by)
+                    by_lbl.setFixedHeight(18)
+                    by_lbl.setToolTip(f"Ditambahkan oleh {added_by}")
+                    by_lbl.setStyleSheet(
+                        f"background-color: {THEME['bg_root']}; color: {THEME['text_secondary']}; "
+                        f"border: 1px solid {THEME['border']}; font-size: 9px; font-weight: 600; "
+                        f"padding: 1px 5px; border-radius: 3px;"
+                    )
+                    r_l.addWidget(by_lbl)
+
             # Indikator akhiran persis di paling kanan (seperti LIVE)
             for c in cats:
                 sfx = c.get("suffix", "").upper()
@@ -1969,6 +1983,20 @@ class QtDictionaryTabView(QWidget):
 
             r_l.addStretch(1)
 
+            if self.app.config.get("storage_mode", "txt") == "supabase":
+                rec = self.app.solver.db_records.get(w, {})
+                added_by = (rec.get("added_by") or "").strip()
+                if added_by:
+                    by_lbl = QLabel(added_by)
+                    by_lbl.setFixedHeight(18)
+                    by_lbl.setToolTip(f"Ditambahkan oleh {added_by}")
+                    by_lbl.setStyleSheet(
+                        f"background-color: {THEME['bg_root']}; color: {THEME['text_secondary']}; "
+                        f"border: 1px solid {THEME['border']}; font-size: 9px; font-weight: 600; "
+                        f"padding: 1px 5px; border-radius: 3px;"
+                    )
+                    r_l.addWidget(by_lbl)
+
             # Indikator akhiran persis di paling kanan (seperti LIVE)
             for c in cats:
                 sfx = c.get("suffix", "").upper()
@@ -2109,12 +2137,14 @@ class QtDictionaryTabView(QWidget):
         self.btn_src_kbbi = QPushButton("KBBI")
         self.btn_src_contek = QPushButton("Contek")
         self.btn_src_both = QPushButton("KBBI + Contek")
+        self.btn_src_custom = QPushButton("Kamus+")
 
         for b, sf in [
             (self.btn_src_all, "all"),
             (self.btn_src_kbbi, "kbbi"),
             (self.btn_src_contek, "contek"),
-            (self.btn_src_both, "both")
+            (self.btn_src_both, "both"),
+            (self.btn_src_custom, "custom"),
         ]:
             b.setFixedHeight(22)
             b.setCursor(Qt.PointingHandCursor)
@@ -2198,6 +2228,12 @@ class QtDictionaryTabView(QWidget):
         else:
             self.btn_src_both.setStyleSheet(f"background-color: {THEME['bg_card']}; color: #556b58; font-size: 10px; border: 1px solid {THEME['border']}; border-radius: 3px; padding: 1px 8px;")
 
+        if hasattr(self, "btn_src_custom"):
+            if self.src_filter == "custom":
+                self.btn_src_custom.setStyleSheet(f"background-color: rgba(245, 158, 11, 0.22); color: {THEME['warning']}; font-size: 10px; font-weight: bold; border: 1px solid {THEME['warning']}; border-radius: 3px; padding: 1px 8px;")
+            else:
+                self.btn_src_custom.setStyleSheet(f"background-color: {THEME['bg_card']}; color: #556b58; font-size: 10px; border: 1px solid {THEME['border']}; border-radius: 3px; padding: 1px 8px;")
+
         if hasattr(self, "btn_mode_toggle"):
             if self.is_exclusive_source:
                 self.btn_mode_toggle.setStyleSheet("background-color: rgba(243, 139, 168, 0.18); color: #f38ba8; font-size: 10px; font-weight: bold; border: 1px solid #f38ba8; border-radius: 3px; padding: 1px 6px;")
@@ -2251,7 +2287,7 @@ class QtDictionaryTabView(QWidget):
 
     def _search_dictionary(self):
         query = self.edit_exp_search.text().strip().lower()
-        if not query:
+        if not query and self.src_filter != "custom":
             self._show_explorer_welcome()
             return
 
@@ -2302,6 +2338,9 @@ class QtDictionaryTabView(QWidget):
             if "KBBI" in status_text and "Contek" in status_text:
                 bar_color = "#c084fc"  # Ungu
                 bar_tip = "Sumber: KBBI + Contek (Keduanya)"
+            elif r.get("is_db_custom"):
+                bar_color = THEME["warning"]
+                bar_tip = "Sumber: Database Kamus+ (Tambahan Grup)"
             elif "KBBI" in status_text:
                 bar_color = "#38d976"  # Ijo
                 bar_tip = "Sumber: Kamus Besar Bahasa Indonesia (KBBI VI)"
@@ -2348,6 +2387,18 @@ class QtDictionaryTabView(QWidget):
             c_l.addWidget(lbl_w)
 
             c_l.addStretch(1)
+
+            exp_added_by = (r.get("added_by") or "").strip()
+            if exp_added_by:
+                by_lbl = QLabel(exp_added_by)
+                by_lbl.setFixedHeight(18)
+                by_lbl.setToolTip(f"Ditambahkan oleh {exp_added_by}")
+                by_lbl.setStyleSheet(
+                    f"background-color: {THEME['bg_root']}; color: {THEME['text_secondary']}; "
+                    f"border: 1px solid {THEME['border']}; font-size: 9px; font-weight: 600; "
+                    f"padding: 1px 5px; border-radius: 3px;"
+                )
+                c_l.addWidget(by_lbl)
 
             # Tag Suffix Badge (pentok kanan persis LIVE)
             for c in cats:
@@ -3321,6 +3372,371 @@ class QtSystemTabView(QWidget):
 
         layout.addWidget(ui_box)
 
+        # 2b. Sinkronisasi Database Privat (Mode TXT vs Supabase)
+        self.db_box = QFrame()
+        self.db_box.setObjectName("DbBox")
+        self.db_box.setStyleSheet(f"""
+            #DbBox {{
+                background-color: {THEME['bg_card']};
+                border: 1px solid {THEME['border']};
+                border-radius: 6px;
+            }}
+            #DbBox QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """)
+        db_layout = QVBoxLayout(self.db_box)
+        db_layout.setContentsMargins(12, 10, 12, 10)
+        db_layout.setSpacing(8)
+
+        db_hdr = QHBoxLayout()
+        lbl_db = QLabel("DATABASE SINKRONISASI")
+        lbl_db.setStyleSheet(f"color: {THEME['primary']}; font-weight: bold; font-size: 11px;")
+        db_hdr.addWidget(lbl_db)
+        db_hdr.addStretch(1)
+
+        self.lbl_db_badge = QLabel("MODE TXT")
+        self.lbl_db_badge.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 10px; font-weight: bold;")
+        db_hdr.addWidget(self.lbl_db_badge)
+
+        self.btn_db_resync = QPushButton()
+        self.btn_db_resync.setIcon(get_qicon("refresh", size=11, color=THEME["text_secondary"]))
+        self.btn_db_resync.setFixedSize(22, 22)
+        self.btn_db_resync.setCursor(Qt.PointingHandCursor)
+        self.btn_db_resync.setToolTip("Sync ulang data terbaru dari database")
+        self.btn_db_resync.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['bg_root']};
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 0px;
+            }}
+            QPushButton:hover {{
+                border-color: {THEME['primary']};
+                background-color: {THEME['bg_hover']};
+            }}
+        """)
+        self.btn_db_resync.clicked.connect(self.app.force_resync_database)
+        self.btn_db_resync.setVisible(self.app.config.get("storage_mode", "txt") == "supabase")
+        db_hdr.addWidget(self.btn_db_resync)
+
+        self.btn_db_clear_cache = QPushButton()
+        self.btn_db_clear_cache.setIcon(get_qicon("trash", size=11, color=THEME["text_muted"]))
+        self.btn_db_clear_cache.setFixedSize(22, 22)
+        self.btn_db_clear_cache.setCursor(Qt.PointingHandCursor)
+        self.btn_db_clear_cache.setToolTip("Hapus cache lokal database (db_cache.json)")
+        self.btn_db_clear_cache.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['bg_root']};
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 0px;
+            }}
+            QPushButton:hover {{
+                border-color: {THEME['danger']};
+                background-color: {THEME['danger_bg']};
+            }}
+        """)
+        self.btn_db_clear_cache.clicked.connect(self.app.clear_database_cache)
+        db_hdr.addWidget(self.btn_db_clear_cache)
+        db_layout.addLayout(db_hdr)
+
+        # Toggle Mode Penyimpanan
+        mode_row = QHBoxLayout()
+        mode_row.setSpacing(6)
+        self.btn_mode_txt = QPushButton(" Lokal (File TXT)")
+        self.btn_mode_txt.setIcon(get_qicon("book", size=12, color=THEME["text_primary"]))
+        self.btn_mode_txt.setCursor(Qt.PointingHandCursor)
+        self.btn_mode_txt.setFixedHeight(28)
+        self.btn_mode_txt.clicked.connect(self._on_select_txt_mode)
+        mode_row.addWidget(self.btn_mode_txt, 1)
+
+        self.btn_mode_db = QPushButton(" Database (Self-hosted)")
+        self.btn_mode_db.setIcon(get_qicon("supabase", size=12, color=THEME["text_primary"]))
+        self.btn_mode_db.setCursor(Qt.PointingHandCursor)
+        self.btn_mode_db.setFixedHeight(28)
+        self.btn_mode_db.clicked.connect(self._on_select_db_mode)
+        mode_row.addWidget(self.btn_mode_db, 1)
+        db_layout.addLayout(mode_row)
+
+        self.lbl_db_status = QLabel("Mode File TXT aktif: membaca & menyimpan ke file .txt lokal/publik.")
+        self.lbl_db_status.setWordWrap(True)
+        self.lbl_db_status.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
+        db_layout.addWidget(self.lbl_db_status)
+
+        # Indikator Panel Terpisah: 3 Panel Horizontal (WL/BL/Kamus+), Panel Sync Terakhir, Panel Aktivitas Terakhir
+        self.db_stats_panel = QWidget()
+        self.db_stats_panel.setObjectName("DbStatsPanel")
+        self.db_stats_panel.setStyleSheet("#DbStatsPanel { background: transparent; border: none; }")
+        stats_root = QVBoxLayout(self.db_stats_panel)
+        stats_root.setContentsMargins(0, 2, 0, 2)
+        stats_root.setSpacing(5)
+
+        stat_box_qss = f"""
+            QFrame {{
+                background-color: {THEME['bg_root']};
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+            }}
+            QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """
+
+        def _make_metric_panel(title: str, val_color: str):
+            box = QFrame()
+            box.setStyleSheet(stat_box_qss)
+            bl = QVBoxLayout(box)
+            bl.setContentsMargins(6, 5, 6, 5)
+            bl.setSpacing(1)
+            lbl_t = QLabel(title)
+            lbl_t.setAlignment(Qt.AlignCenter)
+            lbl_t.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 9px; font-weight: bold;")
+            lbl_v = QLabel("0")
+            lbl_v.setAlignment(Qt.AlignCenter)
+            lbl_v.setStyleSheet(f"color: {val_color}; font-size: 13px; font-weight: bold;")
+            bl.addWidget(lbl_t)
+            bl.addWidget(lbl_v)
+            return box, lbl_v
+
+        metrics_row = QHBoxLayout()
+        metrics_row.setSpacing(6)
+        p_wl, self.lbl_stat_wl_val = _make_metric_panel("WHITELIST", THEME["warning"])
+        p_bl, self.lbl_stat_bl_val = _make_metric_panel("BLOCKLIST", THEME["danger"])
+        p_cm, self.lbl_stat_cm_val = _make_metric_panel("KAMUS+", THEME["primary"])
+        metrics_row.addWidget(p_wl, 1)
+        metrics_row.addWidget(p_bl, 1)
+        metrics_row.addWidget(p_cm, 1)
+        stats_root.addLayout(metrics_row)
+
+        # Panel User Online (Presence)
+        online_box = QFrame()
+        online_box.setStyleSheet(stat_box_qss)
+        online_l = QHBoxLayout(online_box)
+        online_l.setContentsMargins(8, 5, 8, 5)
+        lbl_on_title = QLabel("User Online")
+        lbl_on_title.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 10px; font-weight: 600;")
+        self.lbl_stat_online = QLabel("0 Online")
+        self.lbl_stat_online.setWordWrap(True)
+        self.lbl_stat_online.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.lbl_stat_online.setStyleSheet(f"color: {THEME['primary']}; font-size: 10px; font-weight: bold;")
+        online_l.addWidget(lbl_on_title)
+        online_l.addWidget(self.lbl_stat_online, 1)
+        stats_root.addWidget(online_box)
+
+        # Panel Sync Terakhir
+        sync_box = QFrame()
+        sync_box.setStyleSheet(stat_box_qss)
+        sync_l = QHBoxLayout(sync_box)
+        sync_l.setContentsMargins(8, 5, 8, 5)
+        lbl_st_title = QLabel("Sync Terakhir")
+        lbl_st_title.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 10px; font-weight: 600;")
+        self.lbl_stat_sync_time = QLabel("-")
+        self.lbl_stat_sync_time.setStyleSheet(f"color: {THEME['text_primary']}; font-size: 10px; font-weight: bold;")
+        sync_l.addWidget(lbl_st_title)
+        sync_l.addStretch(1)
+        sync_l.addWidget(self.lbl_stat_sync_time)
+        stats_root.addWidget(sync_box)
+
+        # Panel Aktivitas Terakhir
+        act_box = QFrame()
+        act_box.setStyleSheet(stat_box_qss)
+        act_l = QHBoxLayout(act_box)
+        act_l.setContentsMargins(8, 5, 8, 5)
+        lbl_act_title = QLabel("Aktivitas")
+        lbl_act_title.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 10px; font-weight: 600;")
+        self.lbl_stat_last_act = QLabel("-")
+        self.lbl_stat_last_act.setWordWrap(True)
+        self.lbl_stat_last_act.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.lbl_stat_last_act.setStyleSheet(f"color: {THEME['text_primary']}; font-size: 10px; font-weight: 600;")
+        act_l.addWidget(lbl_act_title)
+        act_l.addWidget(self.lbl_stat_last_act, 1)
+        stats_root.addWidget(act_box)
+
+        self.db_stats_panel.setVisible(False)
+        db_layout.addWidget(self.db_stats_panel)
+
+        # Panel Konfigurasi Supabase (tampil saat Database (Self-hosted) dipilih)
+        self.db_config_panel = QWidget()
+        self.db_config_panel.setObjectName("DbConfigPanel")
+        self.db_config_panel.setStyleSheet("#DbConfigPanel { background: transparent; border: none; }")
+        cfg_l = QVBoxLayout(self.db_config_panel)
+        cfg_l.setContentsMargins(0, 4, 0, 0)
+        cfg_l.setSpacing(6)
+
+        input_qss = f"""
+            QLineEdit {{
+                background-color: {THEME['bg_root']};
+                color: {THEME['text_primary']};
+                font-size: 11px;
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 5px 8px;
+            }}
+            QLineEdit:focus {{
+                border-color: {THEME['primary']};
+            }}
+        """
+        sec_btn_qss = f"""
+            QPushButton {{
+                background-color: {THEME['bg_hover']};
+                color: {THEME['text_primary']};
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 5px 8px;
+                font-size: 10px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                border-color: {THEME['primary']};
+            }}
+        """
+
+        self.edit_sb_url = QLineEdit(self.app.config.get("supabase_url", ""))
+        self.edit_sb_url.setPlaceholderText("Project URL (misal: https://xyz.supabase.co)")
+        self.edit_sb_url.setStyleSheet(input_qss)
+        cfg_l.addWidget(self.edit_sb_url)
+
+        key_row = QHBoxLayout()
+        key_row.setSpacing(4)
+        self.edit_sb_key = QLineEdit(self.app.config.get("supabase_anon_key", ""))
+        self.edit_sb_key.setPlaceholderText("Supabase Anon Key (simpan privat untuk grup Anda)")
+        self.edit_sb_key.setEchoMode(QLineEdit.Password)
+        self.edit_sb_key.setStyleSheet(input_qss)
+        key_row.addWidget(self.edit_sb_key, 1)
+
+        self.btn_toggle_key = QPushButton()
+        self.btn_toggle_key.setIcon(get_qicon("eye", size=14, color=THEME["text_secondary"]))
+        self.btn_toggle_key.setToolTip("Tampilkan Anon Key")
+        self.btn_toggle_key.setCursor(Qt.PointingHandCursor)
+        self.btn_toggle_key.setFixedSize(28, 26)
+        self.btn_toggle_key.setStyleSheet(sec_btn_qss)
+        self.btn_toggle_key.clicked.connect(self._toggle_key_visibility)
+        key_row.addWidget(self.btn_toggle_key)
+        cfg_l.addLayout(key_row)
+
+        self.edit_sb_nick = QLineEdit(self.app.config.get("sync_nickname", ""))
+        self.edit_sb_nick.setPlaceholderText("Nickname Anda (opsional, untuk label kontributor)")
+        self.edit_sb_nick.setStyleSheet(input_qss)
+        self.edit_sb_nick.editingFinished.connect(lambda: self.app.update_sync_nickname(self.edit_sb_nick.text()))
+        cfg_l.addWidget(self.edit_sb_nick)
+
+        # Row Tombol Setup & Invite
+        helper_row = QHBoxLayout()
+        helper_row.setSpacing(4)
+
+        btn_sql = QPushButton(" Salin SQL")
+        btn_sql.setIcon(get_qicon("edit", size=11, color=THEME["text_primary"]))
+        btn_sql.setCursor(Qt.PointingHandCursor)
+        btn_sql.setToolTip("Salin skrip SQL pembuatan tabel saka_words untuk Supabase SQL Editor")
+        btn_sql.setStyleSheet(sec_btn_qss)
+        btn_sql.clicked.connect(self._copy_sql_setup)
+        helper_row.addWidget(btn_sql, 1)
+
+        btn_paste_inv = QPushButton(" Tempel Invite")
+        btn_paste_inv.setIcon(get_qicon("clipboard", size=12, color=THEME["text_primary"]))
+        btn_paste_inv.setCursor(Qt.PointingHandCursor)
+        btn_paste_inv.setToolTip("Mengambil kode invite (saka-db://...) dari clipboard untuk mengisi URL & Key secara otomatis")
+        btn_paste_inv.setStyleSheet(sec_btn_qss)
+        btn_paste_inv.clicked.connect(self._paste_invite_config)
+        helper_row.addWidget(btn_paste_inv, 1)
+
+        btn_copy_inv = QPushButton(" Salin Invite")
+        btn_copy_inv.setIcon(get_qicon("link", size=11, color=THEME["text_primary"]))
+        btn_copy_inv.setCursor(Qt.PointingHandCursor)
+        btn_copy_inv.setToolTip("Salin paket Invite Config untuk dibagikan ke teman grup")
+        btn_copy_inv.setStyleSheet(sec_btn_qss)
+        btn_copy_inv.clicked.connect(self._copy_invite_config)
+        helper_row.addWidget(btn_copy_inv, 1)
+        cfg_l.addLayout(helper_row)
+
+        # Tombol Utama: Tes & Hubungkan
+        self.btn_db_connect = QPushButton(" Tes & Hubungkan")
+        self.btn_db_connect.setIcon(get_qicon("check", size=12, color=THEME["text_dark"]))
+        self.btn_db_connect.setCursor(Qt.PointingHandCursor)
+        self.btn_db_connect.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['primary']};
+                color: {THEME['text_dark']};
+                font-weight: bold;
+                font-size: 11px;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 10px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['accent_neon']};
+            }}
+        """)
+        self.btn_db_connect.clicked.connect(self._on_connect_clicked)
+        cfg_l.addWidget(self.btn_db_connect)
+
+        # Row Tombol Transfer Lokal <-> DB (dengan ikon panah MDI)
+        transfer_row = QHBoxLayout()
+        transfer_row.setSpacing(6)
+
+        def _make_transfer_btn(left_icon: str, icon_color: str, left_txt: str, right_txt: str, tooltip: str):
+            btn = QPushButton()
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFixedHeight(28)
+            btn.setToolTip(tooltip)
+            btn.setStyleSheet(sec_btn_qss)
+            bl = QHBoxLayout(btn)
+            bl.setContentsMargins(8, 0, 8, 0)
+            bl.setSpacing(4)
+            bl.addStretch(1)
+
+            ico_l = QLabel()
+            ico_l.setPixmap(get_qicon(left_icon, size=12, color=icon_color).pixmap(12, 12))
+            ico_l.setAttribute(Qt.WA_TransparentForMouseEvents)
+            ico_l.setStyleSheet("border: none; background: transparent;")
+            bl.addWidget(ico_l)
+
+            lbl_l = QLabel(left_txt)
+            lbl_l.setAttribute(Qt.WA_TransparentForMouseEvents)
+            lbl_l.setStyleSheet(f"color: {THEME['text_primary']}; font-size: 10px; font-weight: 600; border: none; background: transparent;")
+            bl.addWidget(lbl_l)
+
+            ico_arr = QLabel()
+            ico_arr.setPixmap(get_qicon("arrow_forward", size=10, color=THEME["text_secondary"]).pixmap(10, 10))
+            ico_arr.setAttribute(Qt.WA_TransparentForMouseEvents)
+            ico_arr.setStyleSheet("border: none; background: transparent;")
+            bl.addWidget(ico_arr)
+
+            lbl_r = QLabel(right_txt)
+            lbl_r.setAttribute(Qt.WA_TransparentForMouseEvents)
+            lbl_r.setStyleSheet(f"color: {THEME['text_primary']}; font-size: 10px; font-weight: 600; border: none; background: transparent;")
+            bl.addWidget(lbl_r)
+
+            bl.addStretch(1)
+            return btn
+
+        self.btn_db_import = _make_transfer_btn(
+            "cloud_upload", THEME["warning"], "Upload Lokal", "DB",
+            "Upload daftar kata (.txt) & pengaturan MODE lokal ke Database Privat",
+        )
+        self.btn_db_import.clicked.connect(self._on_import_txt_clicked)
+        transfer_row.addWidget(self.btn_db_import, 1)
+
+        self.btn_db_download = _make_transfer_btn(
+            "cloud_download", THEME["info"], "Download DB", "Lokal",
+            "Download daftar kata & pengaturan MODE dari Database Privat ke file lokal (.txt & config.local.json)",
+        )
+        self.btn_db_download.clicked.connect(self._on_download_db_clicked)
+        transfer_row.addWidget(self.btn_db_download, 1)
+        cfg_l.addLayout(transfer_row)
+
+        lbl_priv_note = QLabel("Kredensial tersimpan hanya di config.local.json. Jangan bagikan Anon Key privat ke publik.")
+        lbl_priv_note.setWordWrap(True)
+        lbl_priv_note.setStyleSheet(f"color: {THEME['text_muted']}; font-size: 10px;")
+        cfg_l.addWidget(lbl_priv_note)
+
+        db_layout.addWidget(self.db_config_panel)
+        layout.addWidget(self.db_box)
+        self._refresh_db_mode_ui(expand_panel=(self.app.config.get("storage_mode", "txt") == "supabase"))
+
         # 3. Pendataan Koreksi Sampel Frame (F2)
         kor_box = QFrame()
         kor_box.setObjectName("KorBox")
@@ -3655,3 +4071,211 @@ class QtSystemTabView(QWidget):
             spd_ms = speeds[idx] * 1000
             self.app.tab_live.lbl_speed.setText(f"{spd_ms:.0f}ms")
             self.app.show_toast(f"Kecepatan scan: {spd_ms:.0f}ms")
+
+    # --- Database Sinkronisasi Handlers ---
+    def _refresh_db_mode_ui(self, expand_panel: bool = None, selected_db: bool = None):
+        is_db_active = (self.app.config.get("storage_mode", "txt") == "supabase")
+        show_panel = is_db_active if expand_panel is None else expand_panel
+        is_db_selected = show_panel if selected_db is None else selected_db
+        self.db_config_panel.setVisible(show_panel)
+
+        active_qss = f"""
+            QPushButton {{
+                background-color: {THEME['bg_active'] if 'bg_active' in THEME else THEME['bg_selected']};
+                color: {THEME['primary']};
+                border: 1px solid {THEME['primary']};
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: bold;
+                padding: 4px 8px;
+            }}
+        """
+        idle_qss = f"""
+            QPushButton {{
+                background-color: {THEME['bg_root']};
+                color: {THEME['text_secondary']};
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 500;
+                padding: 4px 8px;
+            }}
+            QPushButton:hover {{
+                border-color: {THEME['border_focus']};
+                color: {THEME['text_primary']};
+            }}
+        """
+        self.btn_mode_txt.setStyleSheet(idle_qss if is_db_selected else active_qss)
+        self.btn_mode_db.setStyleSheet(active_qss if is_db_selected else idle_qss)
+        self.btn_mode_txt.setIcon(get_qicon("book", size=12, color=THEME["text_secondary"] if is_db_selected else THEME["primary"]))
+        self.btn_mode_db.setIcon(get_qicon("supabase", size=12, color=THEME["primary"] if is_db_selected else THEME["text_secondary"]))
+
+    def refresh_db_status(self, state_code: str, detail: str = ""):
+        badge_map = {
+            "txt": ("MODE TXT", THEME["text_secondary"]),
+            "connecting": ("MENYAMBUNG", THEME["warning"]),
+            "syncing": ("SINKRONISASI", THEME["warning"]),
+            "live": ("Terhubung", THEME["primary"]),
+            "offline": ("OFFLINE", THEME["warning"]),
+            "error": ("ERROR", THEME["danger"]),
+        }
+        txt, col = badge_map.get(state_code, ("MODE TXT", THEME["text_secondary"]))
+        self.lbl_db_badge.setText(txt)
+        self.lbl_db_badge.setStyleSheet(f"color: {col}; font-size: 10px; font-weight: bold;")
+        if detail:
+            self.lbl_db_status.setText(detail)
+            self.lbl_db_status.setStyleSheet(
+                f"color: {THEME['danger'] if state_code == 'error' else THEME['text_secondary']}; font-size: 11px;"
+            )
+        self._refresh_db_mode_ui(expand_panel=True if state_code != "txt" or self.db_config_panel.isVisible() else False)
+        self.refresh_db_stats()
+
+    def refresh_db_stats(self, last_sync_str: str = None, last_event_note: str = None):
+        is_db = (self.app.config.get("storage_mode", "txt") == "supabase")
+        self.db_stats_panel.setVisible(is_db)
+        if hasattr(self, "btn_db_resync"):
+            self.btn_db_resync.setVisible(is_db)
+        if not is_db:
+            return
+        wl_cnt = len(self.app.solver.whitelisted_words)
+        bl_cnt = len(self.app.solver.blacklisted_words)
+        cm_cnt = len(self.app.solver.db_custom_set)
+        sync_t = last_sync_str if last_sync_str is not None else getattr(self.app, "_last_db_sync_time", "-")
+        ev_note = last_event_note if last_event_note is not None else getattr(self.app, "_last_db_event_note", "")
+        on_cnt = getattr(self.app, "_online_users_count", 0)
+        on_names = getattr(self.app, "_online_users_names", []) or []
+        if on_cnt > 0:
+            names_str = ", ".join(on_names)
+            self.lbl_stat_online.setText(f"{on_cnt} Online ({names_str})" if names_str else f"{on_cnt} Online")
+            self.lbl_stat_online.setStyleSheet(f"color: {THEME['primary']}; font-size: 10px; font-weight: bold;")
+        else:
+            self.lbl_stat_online.setText("0 Online")
+            self.lbl_stat_online.setStyleSheet(f"color: {THEME['text_muted']}; font-size: 10px; font-weight: 600;")
+
+        self.lbl_stat_wl_val.setText(str(wl_cnt))
+        self.lbl_stat_bl_val.setText(str(bl_cnt))
+        self.lbl_stat_cm_val.setText(str(cm_cnt))
+        self.lbl_stat_sync_time.setText(sync_t or "-")
+        self.lbl_stat_last_act.setText(ev_note or "-")
+
+    def _on_select_txt_mode(self):
+        if self.app.config.get("storage_mode", "txt") != "txt":
+            self.app.switch_to_txt_mode()
+        self._refresh_db_mode_ui(expand_panel=False, selected_db=False)
+
+    def _on_select_db_mode(self):
+        self._refresh_db_mode_ui(expand_panel=True, selected_db=True)
+        url = self.edit_sb_url.text().strip()
+        key = self.edit_sb_key.text().strip()
+        if url and key and self.app.config.get("storage_mode", "txt") != "supabase":
+            self._on_connect_clicked()
+        elif not url or not key:
+            self.lbl_db_status.setText("Isi Project URL & Anon Key (atau Tempel Invite Config), lalu klik Tes & Hubungkan.")
+            self.lbl_db_status.setStyleSheet(f"color: {THEME['warning']}; font-size: 11px;")
+
+    def _toggle_key_visibility(self):
+        if self.edit_sb_key.echoMode() == QLineEdit.Password:
+            self.edit_sb_key.setEchoMode(QLineEdit.Normal)
+            self.btn_toggle_key.setIcon(get_qicon("eye_off", size=14, color=THEME["primary"]))
+            self.btn_toggle_key.setToolTip("Sembunyikan Anon Key")
+        else:
+            self.edit_sb_key.setEchoMode(QLineEdit.Password)
+            self.btn_toggle_key.setIcon(get_qicon("eye", size=14, color=THEME["text_secondary"]))
+            self.btn_toggle_key.setToolTip("Tampilkan Anon Key")
+
+    def _copy_sql_setup(self):
+        from db_sync import SQL_SETUP_SCRIPT
+        QApplication.clipboard().setText(SQL_SETUP_SCRIPT)
+        self.app.show_toast("SQL Setup disalin! Tempel & Run di Supabase SQL Editor.")
+
+    def _copy_invite_config(self):
+        from db_sync import encode_invite_config
+        try:
+            token = encode_invite_config(self.edit_sb_url.text(), self.edit_sb_key.text())
+            QApplication.clipboard().setText(token)
+            self.app.show_toast("Invite Config disalin ke clipboard! Kirim ke teman grup Anda.")
+        except ValueError as exc:
+            self.app.show_toast(str(exc))
+
+    def _paste_invite_config(self):
+        from db_sync import decode_invite_config
+        clip_txt = (QApplication.clipboard().text() or "").strip()
+        raw = ""
+        if clip_txt.startswith("saka-db://") or (clip_txt.startswith("{") and "url" in clip_txt):
+            raw = clip_txt
+        else:
+            val, ok = QInputDialog.getText(
+                self.window(),
+                "Tempel Invite Config",
+                "Clipboard belum berisi kode invite.\nTempel teks Invite Config dari teman (saka-db://...) untuk isi otomatis:",
+            )
+            if not ok or not val.strip():
+                return
+            raw = val.strip()
+        try:
+            url, key = decode_invite_config(raw)
+            self.edit_sb_url.setText(url)
+            self.edit_sb_key.setText(key)
+            self.app.show_toast("Invite Config diterapkan! Klik Tes & Hubungkan.")
+        except ValueError as exc:
+            QMessageBox.warning(self.window(), "Invite Config Tidak Valid", str(exc))
+
+    def _on_connect_clicked(self):
+        from db_sync import normalize_supabase_url
+        try:
+            url = normalize_supabase_url(self.edit_sb_url.text())
+        except ValueError as exc:
+            QMessageBox.warning(self.window(), "URL Tidak Valid", str(exc))
+            return
+        key = self.edit_sb_key.text().strip()
+        nick = self.edit_sb_nick.text().strip()
+        if not url or not key:
+            QMessageBox.warning(self.window(), "Data Belum Lengkap", "Project URL dan Anon Key wajib diisi.")
+            return
+
+        self.edit_sb_url.setText(url)
+        self.btn_db_connect.setEnabled(False)
+        self.btn_db_connect.setText(" Menguji...")
+        self.lbl_db_status.setText("Menguji koneksi ke Supabase...")
+        self.lbl_db_status.setStyleSheet(f"color: {THEME['warning']}; font-size: 11px;")
+
+        def _done(ok: bool, msg: str):
+            self.btn_db_connect.setEnabled(True)
+            self.btn_db_connect.setText(" Tes & Hubungkan")
+            if ok:
+                self.app.activate_database_mode(url, key, nick)
+                self._refresh_db_mode_ui(expand_panel=True)
+                self.app.show_toast("Terhubung ke Database Privat (Real-Time)!")
+            else:
+                self.lbl_db_status.setText(msg)
+                self.lbl_db_status.setStyleSheet(f"color: {THEME['danger']}; font-size: 11px;")
+                QMessageBox.warning(self.window(), "Koneksi Database Gagal", msg)
+
+        self.app.test_database_connection(url, key, _done)
+
+    def _on_import_txt_clicked(self):
+        from db_sync import normalize_supabase_url
+        try:
+            url = normalize_supabase_url(self.edit_sb_url.text())
+        except ValueError as exc:
+            QMessageBox.warning(self.window(), "URL Tidak Valid", str(exc))
+            return
+        key = self.edit_sb_key.text().strip()
+        nick = self.edit_sb_nick.text().strip()
+        if not url or not key:
+            QMessageBox.warning(self.window(), "Data Belum Lengkap", "Isi URL & Anon Key terlebih dahulu.")
+            return
+        self.app.import_txt_to_database(url, key, nick)
+
+    def _on_download_db_clicked(self):
+        from db_sync import normalize_supabase_url
+        try:
+            url = normalize_supabase_url(self.edit_sb_url.text())
+        except ValueError as exc:
+            QMessageBox.warning(self.window(), "URL Tidak Valid", str(exc))
+            return
+        key = self.edit_sb_key.text().strip()
+        if not url or not key:
+            QMessageBox.warning(self.window(), "Data Belum Lengkap", "Isi URL & Anon Key terlebih dahulu.")
+            return
+        self.app.download_database_to_txt(url, key)
