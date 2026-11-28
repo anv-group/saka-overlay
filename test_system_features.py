@@ -14,7 +14,7 @@ from PySide6.QtCore import QCoreApplication
 import config as cfg_mod
 from app_qt import SingleInstanceGuard, SambungKataQtApp
 from qt_components import QtTopTabStrip
-from tab_views_qt import QtSystemTabView
+from tab_views_qt import QtDictionaryTabView, QtSystemTabView
 from updater import GitUpdater
 
 
@@ -205,6 +205,70 @@ class TestSystemFeatures(unittest.TestCase):
         sys_view.update_branch_warning("dev")
         self.assertFalse(sys_view.lbl_branch_exp_warning.isHidden())
         self.assertIn("dev", sys_view.lbl_branch_exp_warning.text())
+
+    def test_explorer_source_filters_checkbox_behavior(self):
+        class DummySolver:
+            def __init__(self):
+                self.whitelisted_words = set()
+                self.blacklisted_words = set()
+                self.storage_mode = "txt"
+                self.last_source_filter = None
+            def search_dictionary(self, query="", search_type="prefix", source_filter="all", limit=40, sort_by="default"):
+                self.last_source_filter = source_filter
+                return [{"word": "baja", "status": "KBBI", "datetime": "", "added_by": ""}], 1
+            def get_word_datetime(self, word, scope="auto"):
+                return ""
+
+        class DummyApp:
+            def __init__(self):
+                self.config = {
+                    "dict_filter_exclusive": False,
+                    "custom_trap_endings": [],
+                    "last_dict_sub_tab": "explorer",
+                }
+                self.solver = DummySolver()
+            def __getattr__(self, name):
+                return lambda *a, **kw: None
+
+        dummy = DummyApp()
+        dict_view = QtDictionaryTabView(dummy)
+
+        # Default: semua aktif
+        self.assertTrue(dict_view.btn_src_all.isChecked())
+        self.assertTrue(dict_view.btn_src_kbbi.isChecked())
+        self.assertTrue(dict_view.btn_src_contek.isChecked())
+        self.assertTrue(dict_view.btn_src_custom.isChecked())
+        self.assertFalse(hasattr(dict_view, "btn_src_both"))
+
+        # Matikan KBBI -> Semua ikut mati, sisanya tetap aktif
+        dict_view.edit_exp_search.setText("ba")
+        dict_view.btn_src_kbbi.click()
+        self.assertFalse(dict_view.btn_src_all.isChecked())
+        self.assertFalse(dict_view.btn_src_kbbi.isChecked())
+        self.assertTrue(dict_view.btn_src_contek.isChecked())
+        self.assertTrue(dict_view.btn_src_custom.isChecked())
+        self.assertEqual(set(dummy.solver.last_source_filter), {"contek", "custom"})
+
+        # Nyalakan KBBI, matikan Kamus+ -> KBBI + Contek Inklusif = ["kbbi", "contek"]
+        dict_view.btn_src_kbbi.click()
+        dict_view.btn_src_custom.click()
+        self.assertEqual(set(dummy.solver.last_source_filter), {"kbbi", "contek"})
+
+        # Aktifkan Eksklusif saat KBBI + Contek sama-sama aktif -> hanya irisan ["both"]
+        dict_view.btn_mode_toggle.click()
+        self.assertEqual(dummy.solver.last_source_filter, ["both"])
+
+        # Kembali ke Inklusif lalu klik Semua saat tidak penuh -> aktifkan semua kembali
+        dict_view.btn_mode_toggle.click()
+        dict_view.btn_src_all.click()
+        self.assertTrue(dict_view.btn_src_all.isChecked())
+        self.assertEqual(dummy.solver.last_source_filter, "all")
+
+        # Klik Semua saat semua aktif -> nonaktifkan semua
+        dict_view.btn_src_all.click()
+        self.assertFalse(dict_view.btn_src_all.isChecked())
+        self.assertEqual(dict_view.selected_sources, set())
+        self.assertEqual(dict_view.lbl_exp_status.text(), "0 kata")
 
 
 class _FakeResp:

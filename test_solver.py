@@ -214,5 +214,16 @@ class TestSambungKataSolver(unittest.TestCase):
         for r in res_tag:
             self.assertTrue(r["word"].endswith("NS") or r["word"].endswith("MP"))
 
+        # 5. Multi-source filter (list/set checkbox model) & empty list
+        res_multi, tot_multi = self.solver.search_dictionary(
+            query="BU", search_type="prefix", source_filter=["kbbi_only", "both"], limit=50
+        )
+        self.assertGreater(tot_multi, 0)
+        for r in res_multi:
+            self.assertTrue("KBBI" in r["status"])
+
+        res_empty, tot_empty = self.solver.search_dictionary(query="BU", source_filter=[], limit=10)
+        self.assertEqual((res_empty, tot_empty), ([], 0))
+
 if __name__ == "__main__":
     unittest.main()

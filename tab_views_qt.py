@@ -1708,7 +1708,7 @@ class QtDictionaryTabView(QWidget):
             self.refresh_whitelist()
         elif curr_sub == "blocklist":
             self.refresh_blocklist()
-        elif self.edit_exp_search.text().strip() or self.src_filter == "custom":
+        elif self.edit_exp_search.text().strip() or self.selected_sources == {"custom"}:
             self._search_dictionary()
 
     def _toggle_show_datetime(self):
@@ -2292,25 +2292,25 @@ class QtDictionaryTabView(QWidget):
         tb2_layout.setContentsMargins(0, 0, 0, 0)
         tb2_layout.setSpacing(4)
 
-        self.src_filter = "all"  # "all", "kbbi", "contek", "both"
+        self._all_src_keys = ("kbbi", "contek", "custom")
+        self.selected_sources = set(self._all_src_keys)
         self.is_exclusive_source = self.app.config.get("dict_filter_exclusive", False)
 
         self.btn_src_all = QPushButton("Semua")
         self.btn_src_kbbi = QPushButton("KBBI")
         self.btn_src_contek = QPushButton("Contek")
-        self.btn_src_both = QPushButton("KBBI + Contek")
         self.btn_src_custom = QPushButton("Kamus+")
 
         for b, sf in [
             (self.btn_src_all, "all"),
             (self.btn_src_kbbi, "kbbi"),
             (self.btn_src_contek, "contek"),
-            (self.btn_src_both, "both"),
             (self.btn_src_custom, "custom"),
         ]:
+            b.setCheckable(True)
             b.setFixedHeight(22)
             b.setCursor(Qt.PointingHandCursor)
-            b.clicked.connect(lambda ch=False, s=sf: self._set_source_filter(s))
+            b.clicked.connect(lambda ch=False, s=sf: self._toggle_source_filter(s))
             tb2_layout.addWidget(b)
 
         # Mode Filter Switch: Inklusif vs Murni Saja (Eksklusif)
@@ -2360,8 +2360,17 @@ class QtDictionaryTabView(QWidget):
         dlg = QtBatchAddDialog("kamus", self.app, on_added_callback=self._search_dictionary, parent=self.window())
         dlg.exec()
 
-    def _set_source_filter(self, sf: str):
-        self.src_filter = sf
+    def _toggle_source_filter(self, sf: str):
+        if sf == "all":
+            if len(self.selected_sources) == len(self._all_src_keys):
+                self.selected_sources.clear()
+            else:
+                self.selected_sources = set(self._all_src_keys)
+        else:
+            if sf in self.selected_sources:
+                self.selected_sources.remove(sf)
+            else:
+                self.selected_sources.add(sf)
         self._update_src_buttons()
         self._search_dictionary()
 
@@ -2376,36 +2385,27 @@ class QtDictionaryTabView(QWidget):
         self.app.show_toast(f"Mode Sumber: {mode_str}")
 
     def _update_src_buttons(self):
-        # Matching Colors:
-        # Semua: Ungu (#c084fc)
-        # KBBI: Ijo (#38d976)
-        # Contek: Biru (#38bdf8)
-        # KBBI + Contek: Ungu (#c084fc)
-        if self.src_filter == "all":
-            self.btn_src_all.setStyleSheet("background-color: rgba(192, 132, 252, 0.25); color: #c084fc; font-size: 10px; font-weight: bold; border: 1px solid #c084fc; border-radius: 3px; padding: 1px 8px;")
-        else:
-            self.btn_src_all.setStyleSheet(f"background-color: {THEME['bg_card']}; color: {THEME['text_muted']}; font-size: 10px; border: 1px solid {THEME['border']}; border-radius: 3px; padding: 1px 8px;")
-
-        if self.src_filter == "kbbi":
-            self.btn_src_kbbi.setStyleSheet("background-color: rgba(56, 217, 118, 0.25); color: #38d976; font-size: 10px; font-weight: bold; border: 1px solid #38d976; border-radius: 3px; padding: 1px 8px;")
-        else:
-            self.btn_src_kbbi.setStyleSheet(f"background-color: {THEME['bg_card']}; color: #556b58; font-size: 10px; border: 1px solid {THEME['border']}; border-radius: 3px; padding: 1px 8px;")
-
-        if self.src_filter == "contek":
-            self.btn_src_contek.setStyleSheet("background-color: rgba(56, 189, 248, 0.25); color: #38bdf8; font-size: 10px; font-weight: bold; border: 1px solid #38bdf8; border-radius: 3px; padding: 1px 8px;")
-        else:
-            self.btn_src_contek.setStyleSheet(f"background-color: {THEME['bg_card']}; color: #556b58; font-size: 10px; border: 1px solid {THEME['border']}; border-radius: 3px; padding: 1px 8px;")
-
-        if self.src_filter == "both":
-            self.btn_src_both.setStyleSheet("background-color: rgba(192, 132, 252, 0.25); color: #c084fc; font-size: 10px; font-weight: bold; border: 1px solid #c084fc; border-radius: 3px; padding: 1px 8px;")
-        else:
-            self.btn_src_both.setStyleSheet(f"background-color: {THEME['bg_card']}; color: #556b58; font-size: 10px; border: 1px solid {THEME['border']}; border-radius: 3px; padding: 1px 8px;")
-
-        if hasattr(self, "btn_src_custom"):
-            if self.src_filter == "custom":
-                self.btn_src_custom.setStyleSheet(f"background-color: rgba(245, 158, 11, 0.22); color: {THEME['warning']}; font-size: 10px; font-weight: bold; border: 1px solid {THEME['warning']}; border-radius: 3px; padding: 1px 8px;")
+        all_active = (len(self.selected_sources) == len(self._all_src_keys))
+        btn_specs = [
+            (self.btn_src_all, all_active, "#c084fc", "rgba(192, 132, 252, 0.25)", THEME["text_muted"]),
+            (self.btn_src_kbbi, "kbbi" in self.selected_sources, "#38d976", "rgba(56, 217, 118, 0.25)", "#556b58"),
+            (self.btn_src_contek, "contek" in self.selected_sources, "#38bdf8", "rgba(56, 189, 248, 0.25)", "#556b58"),
+            (getattr(self, "btn_src_custom", None), "custom" in self.selected_sources, THEME["warning"], "rgba(245, 158, 11, 0.22)", "#556b58"),
+        ]
+        for btn, is_active, fg_on, bg_on, fg_off in btn_specs:
+            if btn is None:
+                continue
+            btn.setChecked(is_active)
+            if is_active:
+                btn.setStyleSheet(
+                    f"background-color: {bg_on}; color: {fg_on}; font-size: 10px; "
+                    f"font-weight: bold; border: 1px solid {fg_on}; border-radius: 3px; padding: 1px 8px;"
+                )
             else:
-                self.btn_src_custom.setStyleSheet(f"background-color: {THEME['bg_card']}; color: #556b58; font-size: 10px; border: 1px solid {THEME['border']}; border-radius: 3px; padding: 1px 8px;")
+                btn.setStyleSheet(
+                    f"background-color: {THEME['bg_card']}; color: {fg_off}; font-size: 10px; "
+                    f"border: 1px solid {THEME['border']}; border-radius: 3px; padding: 1px 8px;"
+                )
 
         if hasattr(self, "btn_mode_toggle"):
             if self.is_exclusive_source:
@@ -2465,19 +2465,44 @@ class QtDictionaryTabView(QWidget):
 
     def _search_dictionary(self):
         query = self.edit_exp_search.text().strip().lower()
-        if not query and self.src_filter != "custom":
+        if not self.selected_sources:
+            while self.layout_exp_items.count():
+                item = self.layout_exp_items.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            self.lbl_exp_status.setText("0 kata")
+            lbl_empty = QLabel("Pilih minimal satu sumber kamus di atas.")
+            lbl_empty.setAlignment(Qt.AlignCenter)
+            lbl_empty.setStyleSheet(f"color: {THEME['text_muted']}; font-size: 11px; font-style: italic; padding: 30px; border: none;")
+            self.layout_exp_items.addWidget(lbl_empty)
+            return
+
+        if not query and self.selected_sources != {"custom"}:
             self._show_explorer_welcome()
             return
 
         mode_map = {0: "prefix", 1: "suffix", 2: "contains"}
         st = mode_map.get(self.combo_search_mode.currentIndex(), "prefix")
 
-        if self.src_filter == "kbbi":
-            sf = "kbbi_only" if self.is_exclusive_source else "kbbi"
-        elif self.src_filter == "contek":
-            sf = "contek_only" if self.is_exclusive_source else "contek"
+        has_kbbi = "kbbi" in self.selected_sources
+        has_contek = "contek" in self.selected_sources
+        has_custom = "custom" in self.selected_sources
+
+        if has_kbbi and has_contek and has_custom and not self.is_exclusive_source:
+            sf = "all"
         else:
-            sf = self.src_filter
+            sf = []
+            if has_kbbi and has_contek:
+                if self.is_exclusive_source:
+                    sf.append("both")
+                else:
+                    sf.extend(["kbbi", "contek"])
+            elif has_kbbi:
+                sf.append("kbbi_only" if self.is_exclusive_source else "kbbi")
+            elif has_contek:
+                sf.append("contek_only" if self.is_exclusive_source else "contek")
+            if has_custom:
+                sf.append("custom")
 
         results, total_count = self.app.solver.search_dictionary(
             query=query,
@@ -2570,7 +2595,7 @@ class QtDictionaryTabView(QWidget):
             self._append_word_meta_pills(
                 c_l,
                 w_lower,
-                scope="custom" if self.src_filter == "custom" else "auto",
+                scope="custom" if self.selected_sources == {"custom"} else "auto",
                 added_by=r.get("added_by", ""),
                 dt_str=r.get("datetime", ""),
             )

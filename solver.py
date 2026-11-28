@@ -1097,6 +1097,36 @@ class SambungKataSolver:
         # Gabungkan seluruh basis data kamus (KBBI, Contek, Custom, Whitelist, Blacklist)
         all_pool = set(self.kbbi_set) | set(self.contek_set) | set(self.custom_set) | set(self.words) | self.whitelisted_words | self.blacklisted_words
 
+        if isinstance(source_filter, (list, set, tuple)):
+            sf_set = {str(s).strip().lower() for s in source_filter if str(s).strip()}
+        else:
+            sf_single = str(source_filter or "all").strip().lower()
+            sf_set = {sf_single} if sf_single else {"all"}
+
+        if not sf_set:
+            return [], 0
+
+        custom_pool = self.db_custom_set if self.storage_mode == "supabase" else self.base_custom_set
+        use_all_sources = ("all" in sf_set)
+
+        def _matches_sources(w):
+            if use_all_sources:
+                return True
+            for sf in sf_set:
+                if sf == "kbbi" and w in self.kbbi_set:
+                    return True
+                if sf == "contek" and w in self.contek_set:
+                    return True
+                if sf == "kbbi_only" and (w in self.kbbi_set and w not in self.contek_set):
+                    return True
+                if sf == "contek_only" and (w in self.contek_set and w not in self.kbbi_set):
+                    return True
+                if sf == "both" and (w in self.kbbi_set and w in self.contek_set):
+                    return True
+                if sf == "custom" and w in custom_pool:
+                    return True
+            return False
+
         # Optimasi pemilihan kandidat kata awal jika ada awalan
         if q and search_type == "prefix":
             ch0 = q[0]
@@ -1111,25 +1141,8 @@ class SambungKataSolver:
                 continue
 
             # Filter Sumber (Semua, KBBI, Contek, KBBI Saja, Contek Saja, KBBI + Contek, Kamus+)
-            if source_filter == "kbbi":
-                if w not in self.kbbi_set:
-                    continue
-            elif source_filter == "contek":
-                if w not in self.contek_set:
-                    continue
-            elif source_filter == "kbbi_only":
-                if not (w in self.kbbi_set and w not in self.contek_set):
-                    continue
-            elif source_filter == "contek_only":
-                if not (w in self.contek_set and w not in self.kbbi_set):
-                    continue
-            elif source_filter == "both":
-                if not (w in self.kbbi_set and w in self.contek_set):
-                    continue
-            elif source_filter == "custom":
-                custom_pool = self.db_custom_set if self.storage_mode == "supabase" else self.base_custom_set
-                if w not in custom_pool:
-                    continue
+            if not _matches_sources(w):
+                continue
 
             # Filter Query Teks
             if q:
@@ -1154,7 +1167,7 @@ class SambungKataSolver:
 
             matches.append(w)
 
-        dt_scope = "custom" if source_filter == "custom" else "auto"
+        dt_scope = "custom" if sf_set == {"custom"} else "auto"
         if sort_by == "newest":
             def _newest_key(word_item):
                 ts_val = self._parse_iso_ts(self.get_word_datetime(word_item, scope=dt_scope))
