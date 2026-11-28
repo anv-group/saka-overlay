@@ -1,7 +1,12 @@
+import io
+import json
 import os
+import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
+import zipfile
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QCoreApplication
@@ -10,6 +15,7 @@ import config as cfg_mod
 from app_qt import SingleInstanceGuard, SambungKataQtApp
 from qt_components import QtTopTabStrip
 from tab_views_qt import QtSystemTabView
+from updater import GitUpdater
 
 
 class TestSystemFeatures(unittest.TestCase):
@@ -199,6 +205,129 @@ class TestSystemFeatures(unittest.TestCase):
         sys_view.update_branch_warning("dev")
         self.assertFalse(sys_view.lbl_branch_exp_warning.isHidden())
         self.assertIn("dev", sys_view.lbl_branch_exp_warning.text())
+
+
+class _FakeResp:
+    def __init__(self, status_code=200, json_data=None, content=b"", headers=None):
+        self.status_code = status_code
+        self._json = json_data
+        self._content = content
+        self.headers = headers or {}
+
+    def json(self):
+        return self._json
+
+    def iter_content(self, chunk_size=65536):
+        if self._content:
+            yield self._content
+
+
+class TestNonGitHttpsUpdater(unittest.TestCase):
+    @staticmethod
+    def _build_zip_bytes(files_map, comment_sha="1111222233334444555566667777888899990000"):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            for rel, content in files_map.items():
+                zf.writestr(rel, content)
+            zf.comment = comment_sha.encode("utf-8")
+        return buf.getvalue()
+
+    def test_mode_detection_and_untracked_auto_vs_manual_check(self):
+        with tempfile.TemporaryDirectory() as td:
+            upd = GitUpdater(repo_dir=td, github_repo="anv-group/sambung-kata-overlay")
+            with mock.patch("updater.shutil.which", return_value=None):
+                self.assertEqual(upd.get_updater_mode(), "https")
+                self.assertEqual(upd.get_current_commit()["hash"], "unknown")
+
+                # Auto-check startup pada fresh Download ZIP tidak boleh memicu update
+                auto_res = upd.check_for_updates(target_branch="main", is_auto_check=True)
+                self.assertTrue(auto_res["success"])
+                self.assertFalse(auto_res["has_update"])
+                self.assertTrue(auto_res["is_version_untracked"])
+
+                # Manual check mengambil commit terbaru dari GitHub API
+                commits_payload = [
+                    {
+                        "sha": "abcdef1234567890",
+                        "commit": {
+                            "author": {"name": "alden", "date": "2026-11-28T10:00:00Z"},
+                            "message": "feat: non-git updater\n\ndetails",
+                        },
+                    }
+                ]
+                with mock.patch("updater.requests.get", return_value=_FakeResp(200, commits_payload)):
+                    manual_res = upd.check_for_updates(target_branch="main", is_auto_check=False)
+                self.assertTrue(manual_res["success"])
+                self.assertTrue(manual_res["has_update"])
+                self.assertEqual(manual_res["remote_hash"], "abcdef1")
+                self.assertEqual(manual_res["commits"][0]["message"], "feat: non-git updater")
+
+    def test_apply_update_preserves_user_files_and_seeds_missing_lists(self):
+        with tempfile.TemporaryDirectory() as td:
+            # Siapkan file lokal user yang wajib dilindungi
+            with open(os.path.join(td, "config.json"), "w", encoding="utf-8") as f:
+                json.dump({"supabase_url": "https://secret.supabase.co"}, f)
+            with open(os.path.join(td, "whitelist.csv"), "w", encoding="utf-8") as f:
+                f.write("word,datetime\nkatapribadi,\n")
+            with open(os.path.join(td, "kamus_custom.csv"), "w", encoding="utf-8") as f:
+                f.write("word,datetime\nkatacustom,\n")
+
+            zip_bytes = self._build_zip_bytes(
+                {
+                    "sambung-kata-overlay-main/app_qt.py": "# updated\n",
+                    "sambung-kata-overlay-main/config.json": '{"supabase_url": ""}',
+                    "sambung-kata-overlay-main/whitelist.csv": "word,datetime\ngithubword,\n",
+                    "sambung-kata-overlay-main/blacklist.csv": "word,datetime\nbadword,\n",
+                    "sambung-kata-overlay-main/kamus_custom.csv": "word,datetime\noverwrite,\n",
+                },
+                comment_sha="deadbeef1234567890abcdef1234567890abcdef",
+            )
+
+            def _fake_get(url, **kwargs):
+                if "codeload.github.com" in url:
+                    return _FakeResp(200, content=zip_bytes)
+                # Simulasikan API commits gagal/rate-limit -> fallback ke ZipFile.comment SHA!
+                return _FakeResp(403, headers={"X-RateLimit-Remaining": "0"})
+
+            upd = GitUpdater(repo_dir=td, github_repo="anv-group/sambung-kata-overlay")
+            with mock.patch("updater.shutil.which", return_value=None), mock.patch("updater.requests.get", side_effect=_fake_get):
+                ok, msg = upd.apply_update(target_branch="main")
+
+            self.assertTrue(ok, msg)
+            self.assertIn("Non-Git", msg)
+            with open(os.path.join(td, "app_qt.py"), encoding="utf-8") as f:
+                self.assertEqual(f.read(), "# updated\n")
+            with open(os.path.join(td, "config.json"), encoding="utf-8") as f:
+                self.assertEqual(json.load(f)["supabase_url"], "https://secret.supabase.co")
+            with open(os.path.join(td, "whitelist.csv"), encoding="utf-8") as f:
+                self.assertIn("katapribadi", f.read())
+            # blacklist.csv belum ada sebelumnya -> harus dibuat dari ZIP
+            with open(os.path.join(td, "blacklist.csv"), encoding="utf-8") as f:
+                self.assertIn("badword", f.read())
+            with open(os.path.join(td, "kamus_custom.csv"), encoding="utf-8") as f:
+                self.assertIn("katacustom", f.read())
+
+            curr = upd.get_current_commit()
+            self.assertEqual(curr["hash"], "deadbee")
+            self.assertTrue(curr["is_non_git"])
+
+    def test_apply_update_rejects_zip_slip_and_reports_rate_limit(self):
+        with tempfile.TemporaryDirectory() as td:
+            bad_zip = self._build_zip_bytes({"../../evil.txt": "pwned"})
+            upd = GitUpdater(repo_dir=td, github_repo="anv-group/sambung-kata-overlay")
+
+            with mock.patch("updater.shutil.which", return_value=None):
+                with mock.patch("updater.requests.get", return_value=_FakeResp(200, content=bad_zip)):
+                    ok, msg = upd.apply_update(target_branch="main")
+                self.assertFalse(ok)
+                self.assertIn("tidak aman", msg.lower())
+
+                upd._save_state({"branch": "main", "hash": "abc1234", "full_hash": "abc1234"})
+                rate_resp = _FakeResp(403, headers={"X-RateLimit-Remaining": "0"})
+                with mock.patch("updater.requests.get", return_value=rate_resp):
+                    res = upd.check_for_updates(target_branch="main")
+                self.assertFalse(res["success"])
+                self.assertIn("rate limit", res["error"].lower())
 
 
 if __name__ == "__main__":

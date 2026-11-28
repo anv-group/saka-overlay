@@ -1756,7 +1756,7 @@ class SambungKataQtApp(QMainWindow):
 
         def _worker():
             try:
-                res = self.updater.check_for_updates(target_branch=target_br)
+                res = self.updater.check_for_updates(target_branch=target_br, is_auto_check=True)
             except Exception as exc:
                 res = {"success": False, "has_update": False, "error": str(exc)}
             self._bg_update_checked.emit(res if isinstance(res, dict) else {"success": False, "has_update": False})

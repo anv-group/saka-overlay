@@ -48,6 +48,7 @@ config.json
 config.local.json
 *.local.json
 db_cache.json
+updater_state.json
 
 # Local OCR samples & reference docs
 sample/

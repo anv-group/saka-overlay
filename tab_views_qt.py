@@ -4153,12 +4153,13 @@ class QtSystemTabView(QWidget):
 
         # 1. Baris Informasi Branch Aktif
         curr_b = self.app.updater.get_current_branch()
+        is_non_git = getattr(self.app.updater, "get_updater_mode", lambda: "git")() == "https"
         b_info_row = QHBoxLayout()
         lbl_b_title = QLabel("Branch Aktif:")
         lbl_b_title.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
         b_info_row.addWidget(lbl_b_title)
 
-        self.lbl_branch_status = QLabel(curr_b)
+        self.lbl_branch_status = QLabel(f"{curr_b} (Non-Git)" if is_non_git else curr_b)
         self.lbl_branch_status.setStyleSheet(f"color: {THEME['primary']}; font-size: 12px; font-weight: bold;")
         b_info_row.addWidget(self.lbl_branch_status)
         b_info_row.addStretch(1)
@@ -4382,8 +4383,9 @@ class QtSystemTabView(QWidget):
 
     def refresh_git_info(self):
         curr_b = self.app.updater.get_current_branch()
+        is_non_git = getattr(self.app.updater, "get_updater_mode", lambda: "git")() == "https"
         if hasattr(self, "lbl_branch_status"):
-            self.lbl_branch_status.setText(curr_b)
+            self.lbl_branch_status.setText(f"{curr_b} (Non-Git)" if is_non_git else curr_b)
         if hasattr(self, "combo_branch"):
             self.combo_branch.blockSignals(True)
             avail = self.app.updater.get_available_branches()
@@ -4402,7 +4404,10 @@ class QtSystemTabView(QWidget):
             self.lbl_commit_msg.setText(curr_commit.get("message", ""))
 
     def _open_commit_link(self):
-        url = f"https://github.com/anv-group/sambung-kata-overlay/commit/{self.commit_hash}"
+        if not self.commit_hash or self.commit_hash.lower() == "unknown":
+            url = "https://github.com/anv-group/sambung-kata-overlay"
+        else:
+            url = f"https://github.com/anv-group/sambung-kata-overlay/commit/{self.commit_hash}"
         webbrowser.open(url)
 
     def update_branch_warning(self, branch_name: str):
