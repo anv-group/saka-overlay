@@ -41,6 +41,17 @@ def make_meta_pill(text: str, tooltip: str = "") -> QLabel:
     )
     return lbl
 
+
+class NoWheelComboBox(QComboBox):
+    """QComboBox yang mengabaikan scroll mouse agar tidak mengubah nilai saat menggulir halaman."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFocusPolicy(Qt.StrongFocus)
+
+    def wheelEvent(self, event):
+        event.ignore()
+
 # --- Word Card Widget ---
 class QtWordCardWidget(QFrame):
     """
@@ -2204,7 +2215,7 @@ class QtDictionaryTabView(QWidget):
         tb1_layout.setContentsMargins(0, 0, 0, 0)
         tb1_layout.setSpacing(4)
 
-        self.combo_search_mode = QComboBox()
+        self.combo_search_mode = NoWheelComboBox()
         self.combo_search_mode.addItems(["Awalan", "Akhiran", "Mengandung"])
         self.combo_search_mode.setCurrentIndex(1)
         self.combo_search_mode.setFixedHeight(26)
@@ -3383,7 +3394,7 @@ class QtSystemTabView(QWidget):
         lbl_sp_title.setStyleSheet(f"color: {THEME['text_primary']}; font-size: 12px;")
         sp_row.addWidget(lbl_sp_title)
 
-        self.combo_speed = QComboBox()
+        self.combo_speed = NoWheelComboBox()
         self.combo_speed.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.combo_speed.setMinimumWidth(0)
         self.combo_speed.addItems([
@@ -4161,7 +4172,7 @@ class QtSystemTabView(QWidget):
         lbl_sw.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
         br_row.addWidget(lbl_sw)
 
-        self.combo_branch = QComboBox()
+        self.combo_branch = NoWheelComboBox()
         self.combo_branch.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.combo_branch.setMinimumWidth(0)
         avail_branches = self.app.updater.get_available_branches()
