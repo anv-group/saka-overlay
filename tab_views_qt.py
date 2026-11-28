@@ -2900,6 +2900,8 @@ class QtKoreksiDialog(QDialog):
         hdr.addStretch(1)
 
         btn_folder = QPushButton(" Buka Folder")
+        btn_folder.setAutoDefault(False)
+        btn_folder.setDefault(False)
         btn_folder.setIcon(get_qicon("folder", size=12, color=THEME["text_primary"]))
         btn_folder.setCursor(Qt.PointingHandCursor)
         btn_folder.setStyleSheet(f"""
@@ -2962,6 +2964,8 @@ class QtKoreksiDialog(QDialog):
         """
         for i, rb in enumerate([self.rb_kt, self.rb_td, self.rb_all]):
             rb.setCheckable(True)
+            rb.setAutoDefault(False)
+            rb.setDefault(False)
             rb.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
             rb.setCursor(Qt.PointingHandCursor)
             rb.setStyleSheet(pill_qss)
@@ -3086,6 +3090,8 @@ class QtKoreksiDialog(QDialog):
         act_r.addWidget(self.edit_text, 1)
 
         btn_save = QPushButton(" Simpan (Enter)")
+        btn_save.setAutoDefault(False)
+        btn_save.setDefault(False)
         btn_save.setIcon(get_qicon("check", size=13, color=THEME["text_dark"]))
         btn_save.setCursor(Qt.PointingHandCursor)
         btn_save.setFixedHeight(30)
@@ -3111,6 +3117,8 @@ class QtKoreksiDialog(QDialog):
         # Navigation & Delete Bar
         nav_r = QHBoxLayout()
         self.btn_prev = QPushButton(" Sebelumnya")
+        self.btn_prev.setAutoDefault(False)
+        self.btn_prev.setDefault(False)
         self.btn_prev.setIcon(get_qicon("arrow_back", size=12, color=THEME["text_primary"]))
         self.btn_prev.setToolTip("Sebelumnya (←)")
         self.btn_prev.setCursor(Qt.PointingHandCursor)
@@ -3119,6 +3127,8 @@ class QtKoreksiDialog(QDialog):
         nav_r.addWidget(self.btn_prev)
 
         self.btn_next = QPushButton("Berikutnya ")
+        self.btn_next.setAutoDefault(False)
+        self.btn_next.setDefault(False)
         self.btn_next.setIcon(get_qicon("arrow_forward", size=12, color=THEME["text_primary"]))
         self.btn_next.setLayoutDirection(Qt.RightToLeft)
         self.btn_next.setToolTip("Berikutnya (→)")
@@ -3130,6 +3140,8 @@ class QtKoreksiDialog(QDialog):
         nav_r.addStretch(1)
 
         self.btn_del = QPushButton(" Hapus (Del)")
+        self.btn_del.setAutoDefault(False)
+        self.btn_del.setDefault(False)
         self.btn_del.setIcon(get_qicon("trash", size=12, color=THEME["danger"]))
         self.btn_del.setCursor(Qt.PointingHandCursor)
         self.btn_del.setToolTip("Hapus sampel ini secara instan (Shortcut: Del)")
@@ -3381,6 +3393,8 @@ class QtKoreksiDialog(QDialog):
             event.accept()
         elif key == Qt.Key_Escape:
             self.close()
+            event.accept()
+        elif key in (Qt.Key_Return, Qt.Key_Enter):
             event.accept()
         else:
             super().keyPressEvent(event)
