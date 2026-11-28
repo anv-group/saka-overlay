@@ -45,6 +45,7 @@ DEFAULT_CONFIG = {
     "updater_mode": "prompt",  # "prompt", "auto", "disabled"
     "updater_branch": "main",  # "main", "dev", atau branch kustom lainnya
     "auto_check_update_on_startup": True,
+    "allow_multiple_instances": False,  # Default hanya 1 instance aktif kecuali diaktifkan
     "use_kbbi": True,  # Aktifkan kamus resmi KBBI
     "use_contek": True,  # Aktifkan kamus Contek Sambung Kata (contek-sambungkata.web.id)
     "gameplay_indexing_enabled": True,  # Deteksi feedback gameplay (kata salah, kata sudah digunakan, kata benar)
@@ -176,6 +177,10 @@ def save_config(cfg):
         # Simpan preferensi lokal pengguna ke config.local.json (kebal git pull / update GitHub / checkout)
         local_keys = [
             "dev_mode",
+            "allow_multiple_instances",
+            "auto_check_update_on_startup",
+            "show_word_datetime",
+            "show_word_author",
             "game_mode",
             "mode_santai",
             "brutal_mode_tags",

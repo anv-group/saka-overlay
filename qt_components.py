@@ -17,6 +17,13 @@ class QtTopTabStrip(QWidget):
         super().__init__(parent)
         self.active_tab = "live"
         self.buttons = {}
+        self.badges = {}
+        self._tab_labels = {
+            "live": "LIVE",
+            "tags": "MODE",
+            "kamus": "KAMUS",
+            "system": "SYSTEM",
+        }
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 0)
@@ -37,7 +44,18 @@ class QtTopTabStrip(QWidget):
             btn.clicked.connect(lambda checked=False, tid=tab_id: self.select_tab(tid))
             layout.addWidget(btn)
             self.buttons[tab_id] = btn
+            self.badges[tab_id] = False
 
+        self._update_styles()
+
+    def set_tab_badge(self, tab_id: str, has_badge: bool, tooltip: str = ""):
+        if tab_id not in self.buttons:
+            return
+        self.badges[tab_id] = bool(has_badge)
+        base_lbl = self._tab_labels.get(tab_id, tab_id.upper())
+        btn = self.buttons[tab_id]
+        btn.setText(f" {base_lbl}")
+        btn.setToolTip(tooltip if (has_badge and tooltip) else "")
         self._update_styles()
 
     def select_tab(self, tab_id: str):
@@ -50,18 +68,20 @@ class QtTopTabStrip(QWidget):
     def _update_styles(self):
         for tid, btn in self.buttons.items():
             is_active = (tid == self.active_tab)
+            has_badge = bool(self.badges.get(tid, False))
+            base_ico = "zap" if tid=="live" else "tag" if tid=="tags" else "book" if tid=="kamus" else "settings"
+            ico_name = "update" if has_badge else base_ico
             if is_active:
-                btn.setIcon(get_qicon(
-                    "zap" if tid=="live" else "tag" if tid=="tags" else "book" if tid=="kamus" else "settings",
-                    size=14, color=THEME["primary"]
-                ))
+                ico_color = THEME["warning"] if has_badge else THEME["primary"]
+                txt_color = THEME["warning"] if has_badge else THEME["primary"]
+                btn.setIcon(get_qicon(ico_name, size=14, color=ico_color))
                 btn.setStyleSheet(f"""
                     QPushButton {{
                         background-color: {THEME["bg_card"]};
-                        color: {THEME["primary"]};
-                        font-weight: 500;
+                        color: {txt_color};
+                        font-weight: 600;
                         border: 1px solid {THEME["border_focus"]};
-                        border-bottom: 2px solid {THEME["primary"]};
+                        border-bottom: 2px solid {ico_color};
                         border-top-left-radius: 6px;
                         border-top-right-radius: 6px;
                         border-bottom-left-radius: 0px;
@@ -70,15 +90,14 @@ class QtTopTabStrip(QWidget):
                     }}
                 """)
             else:
-                btn.setIcon(get_qicon(
-                    "zap" if tid=="live" else "tag" if tid=="tags" else "book" if tid=="kamus" else "settings",
-                    size=14, color=THEME["text_secondary"]
-                ))
+                ico_color = THEME["warning"] if has_badge else THEME["text_secondary"]
+                txt_color = THEME["warning"] if has_badge else THEME["text_secondary"]
+                btn.setIcon(get_qicon(ico_name, size=14, color=ico_color))
                 btn.setStyleSheet(f"""
                     QPushButton {{
                         background-color: transparent;
-                        color: {THEME["text_secondary"]};
-                        font-weight: 500;
+                        color: {txt_color};
+                        font-weight: {"bold" if has_badge else "500"};
                         border: 1px solid transparent;
                         border-bottom: 1px solid {THEME["border"]};
                         border-top-left-radius: 6px;

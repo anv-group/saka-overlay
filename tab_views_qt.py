@@ -3566,6 +3566,38 @@ class QtSystemTabView(QWidget):
         lbl_dev_hint.setWordWrap(True)
         ui_layout.addWidget(lbl_dev_hint)
 
+        # Checkbox Izinkan Multi-Instance
+        self.chk_multi_instance = QCheckBox("Izinkan Multi-Instance")
+        self.chk_multi_instance.setChecked(self.app.config.get("allow_multiple_instances", False))
+        self.chk_multi_instance.setCursor(Qt.PointingHandCursor)
+        self.chk_multi_instance.setStyleSheet(f"""
+            QCheckBox {{
+                background: transparent;
+                color: {THEME['text_primary']};
+                font-size: 12px;
+                font-weight: 600;
+                spacing: 8px;
+            }}
+            QCheckBox::indicator {{
+                width: 16px;
+                height: 16px;
+                border: 1px solid {THEME['border']};
+                border-radius: 3px;
+                background-color: {THEME['bg_root']};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {THEME['primary']};
+                border-color: {THEME['primary']};
+            }}
+        """)
+        self.chk_multi_instance.toggled.connect(self.app.set_allow_multiple_instances)
+        ui_layout.addWidget(self.chk_multi_instance)
+
+        lbl_multi_hint = QLabel("Aktif jika ingin membuka lebih dari satu jendela SAKA Overlay bersamaan (default: hanya 1 instance aktif).")
+        lbl_multi_hint.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
+        lbl_multi_hint.setWordWrap(True)
+        ui_layout.addWidget(lbl_multi_hint)
+
         layout.addWidget(ui_box)
 
         # 2b. Sinkronisasi Database Privat (Mode TXT vs Supabase)
@@ -4082,7 +4114,7 @@ class QtSystemTabView(QWidget):
                 border: 1px solid {THEME['border']};
                 border-radius: 6px;
             }}
-            #GitBox QLabel {{
+            #GitBox QLabel, #GitBox QCheckBox {{
                 border: none;
                 background: transparent;
             }}
@@ -4123,6 +4155,7 @@ class QtSystemTabView(QWidget):
         self.combo_branch.addItems(avail_branches)
         if curr_b in avail_branches:
             self.combo_branch.setCurrentIndex(avail_branches.index(curr_b))
+        self.combo_branch.currentTextChanged.connect(self.app.on_updater_branch_selection_changed)
         self.combo_branch.setStyleSheet(f"""
             QComboBox {{
                 background-color: {THEME['bg_root']};
@@ -4156,6 +4189,18 @@ class QtSystemTabView(QWidget):
         br_row.addWidget(btn_switch_br)
         git_layout.addLayout(br_row)
 
+        self.lbl_branch_exp_warning = QLabel(
+            "Peringatan: Branch non-'main' bersifat eksperimental, disarankan tetap di 'main' untuk penggunaan stabil."
+        )
+        self.lbl_branch_exp_warning.setWordWrap(True)
+        self.lbl_branch_exp_warning.setStyleSheet(
+            f"color: {THEME['warning']}; font-size: 10px; font-weight: 600; "
+            f"background-color: rgba(245, 158, 11, 0.10); border: 1px solid {THEME['warning']}; "
+            f"border-radius: 4px; padding: 4px 8px;"
+        )
+        git_layout.addWidget(self.lbl_branch_exp_warning)
+        self.update_branch_warning(self.combo_branch.currentText().strip() or curr_b)
+
         curr_commit = self.app.updater.get_current_commit()
         self.commit_hash = curr_commit.get("hash", "Unknown")
         c_row = QHBoxLayout()
@@ -4173,6 +4218,78 @@ class QtSystemTabView(QWidget):
         self.lbl_commit_msg.setWordWrap(True)
         self.lbl_commit_msg.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
         git_layout.addWidget(self.lbl_commit_msg)
+
+        # Checkbox Notifikasi Update Otomatis
+        self.chk_auto_update_notif = QCheckBox("Notifikasi Update Otomatis")
+        self.chk_auto_update_notif.setChecked(self.app.config.get("auto_check_update_on_startup", True))
+        self.chk_auto_update_notif.setCursor(Qt.PointingHandCursor)
+        self.chk_auto_update_notif.setStyleSheet(f"""
+            QCheckBox {{
+                background: transparent;
+                color: {THEME['text_primary']};
+                font-size: 11px;
+                font-weight: 600;
+                spacing: 8px;
+            }}
+            QCheckBox::indicator {{
+                width: 15px;
+                height: 15px;
+                border: 1px solid {THEME['border']};
+                border-radius: 3px;
+                background-color: {THEME['bg_root']};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {THEME['primary']};
+                border-color: {THEME['primary']};
+            }}
+        """)
+        self.chk_auto_update_notif.toggled.connect(self.app.set_auto_check_update)
+        git_layout.addWidget(self.chk_auto_update_notif)
+
+        # Banner Notifikasi Update Baru (tersembunyi saat sudah versi terbaru)
+        self._pending_update_branch = curr_b
+        self.update_banner = QFrame()
+        self.update_banner.setObjectName("UpdateBanner")
+        self.update_banner.setStyleSheet(f"""
+            #UpdateBanner {{
+                background-color: rgba(245, 158, 11, 0.14);
+                border: 1px solid {THEME['warning']};
+                border-radius: 5px;
+            }}
+            #UpdateBanner QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """)
+        ub_layout = QVBoxLayout(self.update_banner)
+        ub_layout.setContentsMargins(8, 6, 8, 6)
+        ub_layout.setSpacing(6)
+
+        self.lbl_update_banner = QLabel("")
+        self.lbl_update_banner.setWordWrap(True)
+        self.lbl_update_banner.setStyleSheet(f"color: {THEME['warning']}; font-size: 11px; font-weight: 600;")
+        ub_layout.addWidget(self.lbl_update_banner)
+
+        self.btn_apply_update = QPushButton("Terapkan Update Sekarang")
+        self.btn_apply_update.setCursor(Qt.PointingHandCursor)
+        self.btn_apply_update.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['warning']};
+                color: {THEME['text_dark']};
+                font-weight: bold;
+                font-size: 11px;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 10px;
+            }}
+            QPushButton:hover {{
+                background-color: #fbbf24;
+            }}
+        """)
+        self.btn_apply_update.clicked.connect(lambda: self.app.apply_detected_update(self._pending_update_branch))
+        ub_layout.addWidget(self.btn_apply_update)
+        self.update_banner.hide()
+        git_layout.addWidget(self.update_banner)
 
         self.btn_check_update = QPushButton(" Cek Update")
         self.btn_check_update.setIcon(get_qicon("refresh", size=13, color=THEME["text_dark"]))
@@ -4242,12 +4359,15 @@ class QtSystemTabView(QWidget):
         if hasattr(self, "lbl_branch_status"):
             self.lbl_branch_status.setText(curr_b)
         if hasattr(self, "combo_branch"):
+            self.combo_branch.blockSignals(True)
             avail = self.app.updater.get_available_branches()
             if curr_b not in avail:
                 avail.append(curr_b)
             self.combo_branch.clear()
             self.combo_branch.addItems(avail)
             self.combo_branch.setCurrentIndex(avail.index(curr_b))
+            self.combo_branch.blockSignals(False)
+            self.update_branch_warning(curr_b)
         curr_commit = self.app.updater.get_current_commit()
         self.commit_hash = curr_commit.get("hash", "Unknown")
         if hasattr(self, "lbl_commit"):
@@ -4258,6 +4378,38 @@ class QtSystemTabView(QWidget):
     def _open_commit_link(self):
         url = f"https://github.com/anv-group/sambung-kata-overlay/commit/{self.commit_hash}"
         webbrowser.open(url)
+
+    def update_branch_warning(self, branch_name: str):
+        """Tampilkan peringatan eksperimental jika branch terpilih bukan 'main'."""
+        if not hasattr(self, "lbl_branch_exp_warning"):
+            return
+        br = (branch_name or "").strip()
+        if br and br != "main":
+            self.lbl_branch_exp_warning.setText(
+                f"Peringatan: Branch '{br}' bersifat eksperimental (hanya untuk pengujian). "
+                f"Pengguna umum disarankan tetap menggunakan 'main'."
+            )
+            self.lbl_branch_exp_warning.show()
+        else:
+            self.lbl_branch_exp_warning.hide()
+
+    def set_update_available(self, res: dict = None):
+        """Menampilkan atau menyembunyikan banner notifikasi update baru di tab SYSTEM."""
+        if not hasattr(self, "update_banner"):
+            return
+        if res and res.get("has_update"):
+            branch = res.get("branch") or self.app.updater.get_current_branch()
+            behind = int(res.get("behind_count") or 1)
+            commits = res.get("commits") or []
+            self._pending_update_branch = branch
+            preview = ""
+            if commits:
+                c0 = commits[0]
+                preview = f"\n• #{str(c0.get('hash', ''))[:7]}: {c0.get('message', '')}"
+            self.lbl_update_banner.setText(f"Update tersedia di '{branch}' ({behind} commit baru){preview}")
+            self.update_banner.show()
+        else:
+            self.update_banner.hide()
 
     def _on_speed_changed(self, idx):
         speeds = [0.04, 0.08, 0.12, 0.20]

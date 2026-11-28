@@ -215,6 +215,7 @@ class GitUpdater:
             "current_branch": current_branch,
             "is_branch_switch": is_branch_switch,
             "is_same_commit": is_same_commit,
+            "remote_hash": hash_rem[:7] if code_rev_rem == 0 and hash_rem else "",
             "current_commit": current_commit,
             "commits": commits,
             "changed_files": changed_files,

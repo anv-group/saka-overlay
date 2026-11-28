@@ -11,8 +11,8 @@
 ## System & Updater
 
 - [ ] Test updater.
-- [ ] Notifier for new update.
-- [ ] One instance only by default unless enabled.
+- [x] Notifier for new update.
+- [x] One instance only by default unless enabled.
 - [ ] Add logging (info, debug)
 - [ ] Change emoji in SAMPEL panel to something else
 - [x] Tombol Cek Update kurang feedback: tambahkan feedback seperti `"Mengecek <branch>"` atau yang lain.

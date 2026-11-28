@@ -2,6 +2,7 @@ import sys
 import os
 import time
 import json
+import hashlib
 import threading
 from collections import Counter
 from PySide6.QtWidgets import (
@@ -11,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize, QRect
 from PySide6.QtGui import QIcon, QPixmap, QCursor, QKeySequence, QShortcut
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from ctypes import wintypes
 
 from qt_theme import THEME, GLOBAL_QSS, get_qicon
@@ -56,6 +58,78 @@ class ScanWorker(QThread):
         self.wait(1000)
 
 
+class SingleInstanceGuard:
+    """Mengunci agar hanya 1 instance SAKA Overlay yang berjalan (kecuali allow_multiple_instances=True)."""
+
+    def __init__(self, server_name: str = None, repo_dir: str = None):
+        if server_name:
+            self.server_name = server_name
+        else:
+            base = os.path.abspath(repo_dir or os.path.dirname(os.path.abspath(__file__))).lower()
+            digest = hashlib.sha1(base.encode("utf-8")).hexdigest()[:10]
+            self.server_name = f"saka-overlay-{digest}"
+        self.server = None
+        self._on_activate = None
+
+    def try_notify_existing(self, timeout_ms: int = 250) -> bool:
+        """Jika instance aktif ditemukan, kirim sinyal ACTIVATE dan kembalikan True."""
+        sock = QLocalSocket()
+        sock.connectToServer(self.server_name)
+        if sock.waitForConnected(timeout_ms):
+            try:
+                sock.write(b"ACTIVATE\n")
+                sock.flush()
+                sock.waitForBytesWritten(200)
+            except Exception:
+                pass
+            sock.disconnectFromServer()
+            return True
+        QLocalServer.removeServer(self.server_name)
+        return False
+
+    def start_listening(self, on_activate=None) -> bool:
+        """Membuka server IPC lokal untuk mendeteksi percobaan instance kedua."""
+        self._on_activate = on_activate
+        if self.server is not None:
+            return True
+        srv = QLocalServer()
+        srv.newConnection.connect(self._handle_connection)
+        if not srv.listen(self.server_name):
+            QLocalServer.removeServer(self.server_name)
+            if not srv.listen(self.server_name):
+                return False
+        self.server = srv
+        return True
+
+    def _handle_connection(self):
+        if not self.server:
+            return
+        while self.server.hasPendingConnections():
+            conn = self.server.nextPendingConnection()
+            if not conn:
+                continue
+            if conn.bytesAvailable() <= 0:
+                conn.waitForReadyRead(100)
+            payload = bytes(conn.readAll()).decode("utf-8", errors="ignore").strip()
+            conn.disconnectFromServer()
+            conn.deleteLater()
+            if (not payload or payload.startswith("ACTIVATE")) and callable(self._on_activate):
+                self._on_activate()
+
+    def close(self):
+        if self.server is not None:
+            try:
+                self.server.close()
+                self.server.deleteLater()
+            except Exception:
+                pass
+            self.server = None
+        try:
+            QLocalServer.removeServer(self.server_name)
+        except Exception:
+            pass
+
+
 class SambungKataQtApp(QMainWindow):
     """
     Aplikasi Utama SAKA Overlay berbasis PySide6 (Tactical Cyber Bamboo Theme).
@@ -64,9 +138,11 @@ class SambungKataQtApp(QMainWindow):
     _db_test_done = Signal(bool, str, object)
     _db_import_done = Signal(bool, str, str, str, str)
     _db_download_done = Signal(bool, str, object)
+    _bg_update_checked = Signal(dict)
 
-    def __init__(self):
+    def __init__(self, instance_guard: SingleInstanceGuard = None):
         super().__init__()
+        self._instance_guard = instance_guard
         self.setWindowTitle("SAKA Overlay")
         self.setMinimumSize(380, 500)
 
@@ -255,6 +331,17 @@ class SambungKataQtApp(QMainWindow):
 
         # Posisikan window di sisi kanan layar (Default Right-Docked) & Muat Geometri Tersimpan
         self._init_window_geometry()
+
+        # Notifier update otomatis di latar belakang (startup + berkala tiap 30 menit)
+        self._update_check_in_progress = False
+        self._last_notified_update_hash = ""
+        self._confirmed_branch_selection = self.updater.get_current_branch()
+        self._bg_update_checked.connect(self._on_bg_update_checked)
+        self._update_poll_timer = QTimer(self)
+        self._update_poll_timer.timeout.connect(self.check_updates_background)
+        self._update_poll_timer.start(30 * 60 * 1000)
+        if self.config.get("auto_check_update_on_startup", True) and self.config.get("updater_mode", "prompt") != "disabled":
+            QTimer.singleShot(1500, self.check_updates_background)
 
     # --- Scanning & Vision Control ---
     def update_ticker_visibility(self):
@@ -1483,8 +1570,41 @@ class SambungKataQtApp(QMainWindow):
     def toggle_dev_mode(self):
         self.set_dev_mode(not self.dev_mode)
 
+    def bring_to_front(self):
+        """Memunculkan jendela utama saat instance kedua mencoba dijalankan."""
+        if self.isMinimized():
+            self.showNormal()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self.show_toast("SAKA Overlay sudah aktif (Single-Instance)")
+
+    def set_allow_multiple_instances(self, enabled: bool):
+        self.config["allow_multiple_instances"] = bool(enabled)
+        self.save_config_debounced()
+        if enabled:
+            if self._instance_guard is not None:
+                self._instance_guard.close()
+            self.show_toast("Multi-Instance diaktifkan (bisa buka >1 jendela)")
+        else:
+            if self._instance_guard is None:
+                self._instance_guard = SingleInstanceGuard()
+            self._instance_guard.start_listening(on_activate=self.bring_to_front)
+            self.show_toast("Single-Instance diaktifkan (maks 1 jendela)")
+
+    def set_auto_check_update(self, enabled: bool):
+        self.config["auto_check_update_on_startup"] = bool(enabled)
+        self.save_config_debounced()
+        if enabled:
+            self.show_toast("Notifikasi update otomatis diaktifkan")
+            self.check_updates_background()
+        else:
+            self.show_toast("Notifikasi update otomatis dinonaktifkan")
+
     def restart_app(self):
         self.show_toast("Memulai ulang aplikasi...")
+        if self._instance_guard is not None:
+            self._instance_guard.close()
         self.updater.restart_app()
 
     # --- Pendataan Koreksi Sampel (F2) ---
@@ -1501,6 +1621,22 @@ class SambungKataQtApp(QMainWindow):
         except Exception:
             pass
 
+    def _confirm_experimental_branch(self, branch: str, action_label: str = "memilih") -> bool:
+        """Menampilkan peringatan + konfirmasi jika user memilih/beralih ke branch selain 'main'."""
+        if (branch or "").strip() == "main":
+            return True
+        reply = QMessageBox.warning(
+            self,
+            "Peringatan Branch Eksperimental",
+            f"Branch '{branch}' adalah branch EKSPERIMENTAL (bukan rilis stabil 'main').\n\n"
+            f"Pengguna umum disarankan tetap berada di branch 'main'. "
+            f"Fitur di branch selain 'main' dapat belum stabil atau berubah sewaktu-waktu.\n\n"
+            f"Yakin ingin {action_label} branch '{branch}'?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        return reply == QMessageBox.Yes
+
     # --- Git Updater & Branch Switcher ---
     def switch_updater_branch(self, target_branch: str):
         curr = self.updater.get_current_branch()
@@ -1508,23 +1644,48 @@ class SambungKataQtApp(QMainWindow):
             self.show_toast(f"Sudah berada di branch '{curr}'")
             return
 
-        reply = QMessageBox.question(
-            self,
-            "Ganti Branch Git",
-            f"Beralih dari branch '{curr}' ke branch '{target_branch}'?\n\n"
-            f"Aplikasi akan melakukan checkout dan mengunduh pembaruan terbaru dari branch '{target_branch}'.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes
-        )
-        if reply != QMessageBox.Yes:
-            return
+        if target_branch != "main":
+            reply = QMessageBox.warning(
+                self,
+                "Peringatan Branch Eksperimental",
+                f"Branch '{target_branch}' adalah branch EKSPERIMENTAL (bukan rilis stabil 'main').\n"
+                f"Pengguna umum disarankan tetap berada di branch 'main'.\n\n"
+                f"Beralih dari branch '{curr}' ke branch '{target_branch}' dan unduh pembaruannya?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                combo = getattr(getattr(self, "tab_system", None), "combo_branch", None)
+                if combo is not None:
+                    combo.blockSignals(True)
+                    idx = combo.findText(curr)
+                    if idx >= 0:
+                        combo.setCurrentIndex(idx)
+                    combo.blockSignals(False)
+                    self._confirmed_branch_selection = curr
+                    if hasattr(self.tab_system, "update_branch_warning"):
+                        self.tab_system.update_branch_warning(curr)
+                return
+        else:
+            reply = QMessageBox.question(
+                self,
+                "Ganti Branch Git",
+                f"Beralih dari branch '{curr}' ke branch '{target_branch}'?\n\n"
+                f"Aplikasi akan melakukan checkout dan mengunduh pembaruan terbaru dari branch '{target_branch}'.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if reply != QMessageBox.Yes:
+                return
 
         self.show_toast(f"Beralih ke branch '{target_branch}'...")
-        res = self.updater.apply_update(target_branch=target_branch)
-        if res.get("success"):
+        up_res = self.updater.apply_update(target_branch=target_branch)
+        ok, msg = up_res if isinstance(up_res, tuple) else (bool(up_res.get("success")), up_res.get("message", ""))
+        if ok:
+            self._confirmed_branch_selection = target_branch
             self.config["updater_branch"] = target_branch
             self.save_config_debounced()
-            msg = res.get("message", "Branch berhasil diganti.")
+            self._apply_update_badge({"has_update": False})
             restart_reply = QMessageBox.question(
                 self,
                 "Pembaruan Berhasil",
@@ -1537,7 +1698,108 @@ class SambungKataQtApp(QMainWindow):
             else:
                 self.tab_system.refresh_git_info()
         else:
-            QMessageBox.critical(self, "Gagal Ganti Branch", f"Error: {res.get('message', 'Terjadi kesalahan')}")
+            QMessageBox.critical(self, "Gagal Ganti Branch", f"Error: {msg or 'Terjadi kesalahan'}")
+
+    def _get_selected_updater_branch(self) -> str:
+        combo = getattr(getattr(self, "tab_system", None), "combo_branch", None)
+        if combo is not None:
+            txt = combo.currentText().strip()
+            if txt:
+                return txt
+        return self.updater.get_current_branch()
+
+    def on_updater_branch_selection_changed(self, branch_name: str):
+        branch = (branch_name or "").strip()
+        if not branch:
+            return
+        prev_branch = getattr(self, "_confirmed_branch_selection", "") or self.updater.get_current_branch()
+        if branch != "main" and branch != prev_branch:
+            if not self._confirm_experimental_branch(branch, action_label="memilih"):
+                combo = getattr(getattr(self, "tab_system", None), "combo_branch", None)
+                if combo is not None:
+                    combo.blockSignals(True)
+                    idx = combo.findText(prev_branch)
+                    if idx >= 0:
+                        combo.setCurrentIndex(idx)
+                    combo.blockSignals(False)
+                if hasattr(self, "tab_system") and hasattr(self.tab_system, "update_branch_warning"):
+                    self.tab_system.update_branch_warning(prev_branch)
+                return
+
+        self._confirmed_branch_selection = branch
+        if hasattr(self, "tab_system") and hasattr(self.tab_system, "update_branch_warning"):
+            self.tab_system.update_branch_warning(branch)
+        self.config["updater_branch"] = branch
+        self._last_notified_update_hash = ""
+        self._apply_update_badge({"has_update": False})
+        self.save_config_debounced()
+        self.check_updates_background()
+
+    def _apply_update_badge(self, res: dict):
+        has_upd = bool(res and res.get("has_update"))
+        branch = (res or {}).get("branch") or self._get_selected_updater_branch()
+        behind = int((res or {}).get("behind_count") or 0)
+        tip = f"Update baru tersedia di '{branch}' ({behind} commit)" if has_upd else ""
+        if hasattr(self, "top_strip"):
+            self.top_strip.set_tab_badge("system", has_upd, tip)
+        if hasattr(self, "tab_system") and hasattr(self.tab_system, "set_update_available"):
+            self.tab_system.set_update_available(res if has_upd else None)
+
+    def check_updates_background(self):
+        """Memeriksa update git di background thread hanya untuk branch yang dipilih."""
+        if self._update_check_in_progress:
+            return
+        if not self.config.get("auto_check_update_on_startup", True):
+            return
+        if self.config.get("updater_mode", "prompt") == "disabled":
+            return
+        self._update_check_in_progress = True
+        target_br = self._get_selected_updater_branch()
+
+        def _worker():
+            try:
+                res = self.updater.check_for_updates(target_branch=target_br)
+            except Exception as exc:
+                res = {"success": False, "has_update": False, "error": str(exc)}
+            self._bg_update_checked.emit(res if isinstance(res, dict) else {"success": False, "has_update": False})
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_bg_update_checked(self, res: dict):
+        self._update_check_in_progress = False
+        if not res or not res.get("success"):
+            return
+        res_branch = (res.get("branch") or "").strip()
+        selected_branch = self._get_selected_updater_branch()
+        if res_branch and res_branch != selected_branch:
+            return
+        self._apply_update_badge(res)
+        if res.get("has_update"):
+            rem_hash = str(res.get("remote_hash") or "")
+            behind = int(res.get("behind_count") or 1)
+            branch = res_branch or selected_branch
+            if rem_hash != self._last_notified_update_hash:
+                self._last_notified_update_hash = rem_hash
+                self.show_toast(f"Update baru di '{branch}' ({behind} commit). Cek tab SYSTEM.", 4500)
+
+    def apply_detected_update(self, target_branch: str):
+        self.show_toast("Menerapkan pembaruan...")
+        up_res = self.updater.apply_update(target_branch=target_branch)
+        ok, msg = up_res if isinstance(up_res, tuple) else (bool(up_res.get("success")), up_res.get("message", ""))
+        if ok:
+            self._apply_update_badge({"has_update": False})
+            self.tab_system.refresh_git_info()
+            r_rep = QMessageBox.question(
+                self,
+                "Berhasil Diperbarui",
+                f"{msg}\n\nRestart aplikasi sekarang?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if r_rep == QMessageBox.Yes:
+                self.restart_app()
+        else:
+            QMessageBox.critical(self, "Gagal Update", msg or "Error")
 
     def check_updates(self):
         curr_branch = self.updater.get_current_branch()
@@ -1558,11 +1820,13 @@ class SambungKataQtApp(QMainWindow):
                 btn_upd.setText(" Cek Update")
                 btn_upd.setEnabled(True)
         if not res.get("success"):
-            QMessageBox.warning(self, "Cek Update", f"Gagal: {res.get('message', 'Tidak ada koneksi internet')}")
+            QMessageBox.warning(self, "Cek Update", f"Gagal: {res.get('error') or res.get('message', 'Tidak ada koneksi internet')}")
             return
 
+        self._apply_update_badge(res)
+
         if res.get("has_update"):
-            behind = res.get("behind_by", 1)
+            behind = res.get("behind_count", res.get("behind_by", 1))
             commits = res.get("commits", [])
             commit_text = "\n".join([f"• {c['hash'][:7]}: {c['message']}" for c in commits[:5]])
             if len(commits) > 5:
@@ -1576,20 +1840,7 @@ class SambungKataQtApp(QMainWindow):
                 QMessageBox.Yes
             )
             if reply == QMessageBox.Yes:
-                self.show_toast("Menerapkan pembaruan...")
-                up_res = self.updater.apply_update(target_branch=tb)
-                if up_res.get("success"):
-                    r_rep = QMessageBox.question(
-                        self,
-                        "Berhasil Diperbarui",
-                        f"{up_res.get('message')}\n\nRestart aplikasi sekarang?",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.Yes
-                    )
-                    if r_rep == QMessageBox.Yes:
-                        self.restart_app()
-                else:
-                    QMessageBox.critical(self, "Gagal Update", up_res.get("message", "Error"))
+                self.apply_detected_update(tb)
         else:
             QMessageBox.information(self, "Pembaruan", f"Aplikasi Anda sudah versi terbaru di branch '{tb}'!")
 
@@ -1854,6 +2105,8 @@ class SambungKataQtApp(QMainWindow):
             self._flush_local_mode_to_db()
         if hasattr(self, "sync_manager"):
             self.sync_manager.stop()
+        if getattr(self, "_instance_guard", None) is not None:
+            self._instance_guard.close()
         save_config(self.config)
         event.accept()
 
@@ -1861,7 +2114,18 @@ class SambungKataQtApp(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setStyleSheet(GLOBAL_QSS)
-    window = SambungKataQtApp()
+
+    cfg = load_config()
+    guard = None
+    if not cfg.get("allow_multiple_instances", False):
+        guard = SingleInstanceGuard()
+        if guard.try_notify_existing():
+            sys.exit(0)
+        guard.start_listening()
+
+    window = SambungKataQtApp(instance_guard=guard)
+    if guard is not None:
+        guard._on_activate = window.bring_to_front
     window.show()
     sys.exit(app.exec())
 
