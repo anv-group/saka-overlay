@@ -411,3 +411,20 @@ Jika pengguna melaporkan gambar di `sample/kurang_tepat/` atau `sample/tidak_dik
    - **Aturan bentuk:** Apakah perlu aturan baru untuk membedakan huruf tertentu?
 3. Terapkan perbaikan di `ocr_engine.py`.
 4. Jalankan `python test_accuracy.py` untuk memastikan seluruh 88+ sampel lama tetap lulus 100%.
+
+---
+
+## ☁️ 8. Dual-Mode Storage & Sinkronisasi Real-Time Supabase (`db_sync.py`)
+
+Proyek mendukung dua mode penyimpanan yang dapat ditukar langsung (*hot-swap*) di Tab **SYSTEM** (disimpan di `config.local.json`, kebal `git pull`):
+
+1. **`storage_mode = "txt"` (Default / Publik):**
+   - Membaca & menulis langsung ke `whitelist.txt`, `blacklist.txt`, dan `kamus_lengkap.txt`/`kamus_contek.txt`.
+   - Pengaturan Tab **MODE** (`custom_trap_endings`, `brutal_mode_tags`, `saved_default_tags`, `game_mode`, `tier0_sort_mode`) disimpan di `config.local.json`.
+   - Badge status database di title bar disembunyikan.
+2. **`storage_mode = "supabase"` (Database Self-hosted):**
+   - `db_sync.py` (`SupabaseRestClient`, `SupabaseSyncManager`, `DbCacheStore`) berkomunikasi lewat REST + WebSocket Realtime Phoenix (`realtime:saka_sync`) untuk tabel `public.saka_words` dan `public.saka_settings` (`key = 'mode_state'`), mendukung baik *legacy `anon` JWT* maupun *new `sb_publishable_...` key*.
+   - Terpisah penuh dari `.txt` publik; cache lokal & antrean offline `pending_ops`/`pending_mode_state` disimpan di `db_cache.json` (masuk `.gitignore`).
+   - Selama `storage_mode == "supabase"`, `config.py` menjaga agar `MODE_SYNC_KEYS` di `config.local.json` tidak tertimpa oleh state DB.
+   - Mendukung **Realtime Presence** (`User Online`), **Invite Config** (`saka-db://...`), **Upload Lokal → DB**, **Download DB → Lokal**, serta **Flash Indikator** pada `QtCustomTitleBar` (`accent_cyan` untuk remote, `warning` untuk lokal).
+   - Pengujian unit offline (mock HTTP/WebSocket + temp dir + offscreen Qt) berada di `test_db_sync.py` (`python -m unittest test_db_sync.py -v`).
