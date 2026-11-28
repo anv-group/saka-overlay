@@ -225,5 +225,11 @@ class TestSambungKataSolver(unittest.TestCase):
         res_empty, tot_empty = self.solver.search_dictionary(query="BU", source_filter=[], limit=10)
         self.assertEqual((res_empty, tot_empty), ([], 0))
 
+        # 6. Penghitung jumlah kata akhiran & awalan
+        sfx_cnt = self.solver.count_words_by_suffix("NS")
+        pfx_cnt = self.solver.count_words_by_prefix("BUK")
+        self.assertGreater(sfx_cnt, 0)
+        self.assertGreater(pfx_cnt, 0)
+
 if __name__ == "__main__":
     unittest.main()

@@ -46,6 +46,8 @@
     "tier0_sort_mode": "default",
     "show_word_datetime": false,
     "show_word_author": false,
+    "show_tag_suffix_count": true,
+    "show_tag_prefix_count": false,
     "two_tone_text": true,
     "dev_mode": false,
     "storage_mode": "txt",

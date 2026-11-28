@@ -767,6 +767,15 @@ class QtQuickAddDialog(QDialog):
 
 # --- Tab 2: TAGS Tab View ---
 
+def _format_tag_count_text(suffix_count: int, prefix_count: int, show_suffix: bool, show_prefix: bool) -> str:
+    parts = []
+    if show_suffix:
+        parts.append(f"{suffix_count} akhiran")
+    if show_prefix:
+        parts.append(f"{prefix_count} awalan")
+    return f"({' · '.join(parts)})" if parts else ""
+
+
 class QtBrutalRowWidget(QFrame):
     """
     Baris Tag Mode Brutal dengan Model Card Active/Inactive:
@@ -776,7 +785,7 @@ class QtBrutalRowWidget(QFrame):
     """
     row_clicked = Signal(int, bool)  # idx, is_shift
 
-    def __init__(self, idx: int, cat_or_sfx, is_active: bool, word_count: int, parent=None):
+    def __init__(self, idx: int, cat_or_sfx, is_active: bool, count_text: str, parent=None):
         super().__init__(parent)
         self.idx = idx
         if isinstance(cat_or_sfx, dict):
@@ -827,7 +836,7 @@ class QtBrutalRowWidget(QFrame):
         self.lbl_sfx = self.badge_sfx  # Alias for backward compatibility
 
         # 2. Counter Jumlah Kata di Kamus
-        self.lbl_count = QLabel(f"({word_count} kata)")
+        self.lbl_count = QLabel(count_text)
         self.lbl_count.setStyleSheet(f"""
             font-size: 11px;
             font-weight: 500;
@@ -836,6 +845,7 @@ class QtBrutalRowWidget(QFrame):
             background: transparent;
         """)
         layout.addWidget(self.lbl_count)
+        self.lbl_count.setVisible(bool(count_text))
 
         layout.addStretch(1)
 
@@ -911,7 +921,7 @@ class QtCustomTagRowWidget(QFrame):
     """
     Baris Kelola Tag Kustom dengan Drag Handle (≡) untuk reordering instan.
     """
-    def __init__(self, idx: int, cat: dict, word_count: int, parent_view, parent=None):
+    def __init__(self, idx: int, cat: dict, count_text: str, parent_view, parent=None):
         super().__init__(parent)
         self.idx = idx
         self.cat = cat
@@ -955,9 +965,10 @@ class QtCustomTagRowWidget(QFrame):
         self.lbl_sfx = self.badge_sfx  # Alias for backward compatibility
 
         # 3. Counter Jumlah Kata
-        lbl_count = QLabel(f"({word_count} kata)")
+        lbl_count = QLabel(count_text)
         lbl_count.setStyleSheet(f"font-size: 11px; color: {THEME['text_secondary']}; border: none; background: transparent;")
         layout.addWidget(lbl_count)
+        lbl_count.setVisible(bool(count_text))
 
         layout.addStretch(1)
 
@@ -1112,6 +1123,26 @@ class QtTagsTabView(QWidget):
         layout.setSpacing(6)
         layout.addWidget(self.sub_strip)
 
+        self.edit_tag_search = QLineEdit()
+        self.edit_tag_search.setPlaceholderText("Cari tag (mis. NS, AMSI)...")
+        self.edit_tag_search.setClearButtonEnabled(True)
+        self.edit_tag_search.setFixedHeight(26)
+        self.edit_tag_search.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {THEME['bg_root']};
+                color: {THEME['text_primary']};
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 2px 8px;
+                font-size: 11px;
+            }}
+            QLineEdit:focus {{
+                border-color: {THEME['border_focus']};
+            }}
+        """)
+        self.edit_tag_search.textChanged.connect(self._on_tag_search_changed)
+        layout.addWidget(self.edit_tag_search)
+
         self.stack_brutal = QWidget()
         self.stack_custom = QWidget()
 
@@ -1121,6 +1152,12 @@ class QtTagsTabView(QWidget):
         self._build_custom_view()
         self._build_brutal_view()
         self._on_sub_tab_changed("custom")
+
+    def _on_tag_search_changed(self, _text: str):
+        if getattr(self.sub_strip, "active_sub", "custom") == "brutal":
+            self.refresh_brutal_list()
+        else:
+            self.refresh_custom_list()
 
     def _on_sub_tab_changed(self, sub_id):
         if sub_id == "brutal":
@@ -1254,14 +1291,25 @@ class QtTagsTabView(QWidget):
         active_count = sum(1 for c in cats if c.get("suffix", "").upper() in brutal_tags)
         self.lbl_brutal_count.setText(f"({active_count} / {len(cats)} Aktif)")
 
+        query = self.edit_tag_search.text().strip().upper() if hasattr(self, "edit_tag_search") else ""
+        shown = 0
         for idx, cat in enumerate(cats):
             sfx = cat.get("suffix", "").upper()
+            if query and query not in sfx:
+                continue
             is_active = (sfx in brutal_tags)
-            word_count = self.app.solver.count_words_by_suffix(sfx)
+            count_text = self._get_tag_count_label(sfx)
 
-            card = QtBrutalRowWidget(idx, cat, is_active, word_count)
+            card = QtBrutalRowWidget(idx, cat, is_active, count_text)
             card.row_clicked.connect(self._on_brutal_card_clicked)
             self.layout_brutal_items.addWidget(card)
+            shown += 1
+
+        if query and shown == 0:
+            lbl_empty = QLabel(f"Tidak ada tag yang cocok dengan '{query}'.")
+            lbl_empty.setAlignment(Qt.AlignCenter)
+            lbl_empty.setStyleSheet(f"color: {THEME['text_muted']}; font-size: 11px; font-style: italic; padding: 20px; border: none;")
+            self.layout_brutal_items.addWidget(lbl_empty)
 
         self.layout_brutal_items.addStretch(1)
         QTimer.singleShot(0, lambda: sb.setValue(saved_scroll))
@@ -1348,22 +1396,42 @@ class QtTagsTabView(QWidget):
 
         sort_menu.addSeparator()
 
-        act_most_words = sort_menu.addAction("Kata Terbanyak (Banyak ke Sedikit)")
-        act_most_words.triggered.connect(lambda: self.app.on_sort_custom_categories_count(reverse=True))
+        act_most_sfx = sort_menu.addAction("Akhiran Terbanyak (Banyak ke Sedikit)")
+        act_most_sfx.triggered.connect(lambda: self.app.on_sort_custom_categories_count(reverse=True, count_type="suffix"))
 
-        act_least_words = sort_menu.addAction("Kata Terdikit (Sedikit ke Banyak)")
-        act_least_words.triggered.connect(lambda: self.app.on_sort_custom_categories_count(reverse=False))
+        act_least_sfx = sort_menu.addAction("Akhiran Terdikit (Sedikit ke Banyak)")
+        act_least_sfx.triggered.connect(lambda: self.app.on_sort_custom_categories_count(reverse=False, count_type="suffix"))
 
         sort_menu.addSeparator()
 
-        act_longest = sort_menu.addAction("Terpanjang (Huruf Akhiran Terpanjang)")
+        act_most_pfx = sort_menu.addAction("Awalan Terbanyak (Banyak ke Sedikit)")
+        act_most_pfx.triggered.connect(lambda: self.app.on_sort_custom_categories_count(reverse=True, count_type="prefix"))
+
+        act_least_pfx = sort_menu.addAction("Awalan Terdikit (Sedikit ke Banyak)")
+        act_least_pfx.triggered.connect(lambda: self.app.on_sort_custom_categories_count(reverse=False, count_type="prefix"))
+
+        sort_menu.addSeparator()
+
+        act_longest = sort_menu.addAction("Terpanjang (Huruf Terpanjang)")
         act_longest.triggered.connect(lambda: self.app.on_sort_custom_categories_length(reverse=True))
 
-        act_shortest = sort_menu.addAction("Terpendek (Huruf Akhiran Terpendek)")
+        act_shortest = sort_menu.addAction("Terpendek (Huruf Terpendek)")
         act_shortest.triggered.connect(lambda: self.app.on_sort_custom_categories_length(reverse=False))
 
         self.btn_sort_menu.setMenu(sort_menu)
         a_layout.addWidget(self.btn_sort_menu)
+
+        self.btn_tag_meta_gear = QPushButton()
+        self.btn_tag_meta_gear.setIcon(get_qicon("settings", size=12, color=THEME["text_secondary"]))
+        self.btn_tag_meta_gear.setFixedSize(26, 26)
+        self.btn_tag_meta_gear.setCursor(Qt.PointingHandCursor)
+        self.btn_tag_meta_gear.setToolTip("Opsi tampilan jumlah kata tag (Akhiran & Awalan)")
+        self.btn_tag_meta_gear.setStyleSheet(
+            f"QPushButton {{ background-color: {THEME['bg_card']}; border: 1px solid {THEME['border']}; border-radius: 4px; }}"
+            f"QPushButton:hover {{ background-color: {THEME['bg_hover']}; border-color: {THEME['border_focus']}; }}"
+        )
+        self.btn_tag_meta_gear.clicked.connect(self._open_tag_count_menu)
+        a_layout.addWidget(self.btn_tag_meta_gear)
 
         a_layout.addStretch(1)
 
@@ -1406,6 +1474,52 @@ class QtTagsTabView(QWidget):
         self.scroll_custom.setWidget(self.container_custom)
         layout.addWidget(self.scroll_custom, 1)
 
+    def _get_tag_count_label(self, sfx: str) -> str:
+        show_sfx = bool(self.app.config.get("show_tag_suffix_count", True))
+        show_pfx = bool(self.app.config.get("show_tag_prefix_count", False))
+        sfx_cnt = self.app.solver.count_words_by_suffix(sfx) if show_sfx else 0
+        pfx_cnt = self.app.solver.count_words_by_prefix(sfx) if show_pfx else 0
+        return _format_tag_count_text(sfx_cnt, pfx_cnt, show_sfx, show_pfx)
+
+    def _open_tag_count_menu(self):
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {THEME['bg_card']};
+                color: {THEME['text_primary']};
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 4px;
+                font-size: 11px;
+            }}
+            QMenu::item {{
+                padding: 5px 14px 5px 10px;
+                border-radius: 3px;
+            }}
+            QMenu::item:selected {{
+                background-color: {THEME['bg_hover']};
+                color: {THEME['primary']};
+            }}
+        """)
+        act_sfx = menu.addAction("Tampilkan jumlah kata akhiran")
+        act_sfx.setCheckable(True)
+        act_sfx.setChecked(bool(self.app.config.get("show_tag_suffix_count", True)))
+        act_sfx.triggered.connect(lambda: self._toggle_tag_count_option("show_tag_suffix_count", True))
+
+        act_pfx = menu.addAction("Tampilkan jumlah kata awalan")
+        act_pfx.setCheckable(True)
+        act_pfx.setChecked(bool(self.app.config.get("show_tag_prefix_count", False)))
+        act_pfx.triggered.connect(lambda: self._toggle_tag_count_option("show_tag_prefix_count", False))
+
+        pos = self.btn_tag_meta_gear.mapToGlobal(self.btn_tag_meta_gear.rect().bottomLeft())
+        menu.exec(pos)
+
+    def _toggle_tag_count_option(self, key: str, default_val: bool):
+        self.app.config[key] = not bool(self.app.config.get(key, default_val))
+        self.app.save_config_debounced()
+        self.refresh_custom_list()
+        self.refresh_brutal_list()
+
     def refresh_custom_list(self):
         sb = self.scroll_custom.verticalScrollBar()
         saved_scroll = sb.value()
@@ -1418,12 +1532,23 @@ class QtTagsTabView(QWidget):
         cats = self.app.config.get("custom_trap_endings", [])
         self.sub_strip.update_tab_label("custom", f"Kelola ({len(cats)})")
 
+        query = self.edit_tag_search.text().strip().upper() if hasattr(self, "edit_tag_search") else ""
+        shown = 0
         for idx, cat in enumerate(cats):
             sfx = cat.get("suffix", "").upper()
-            word_count = self.app.solver.count_words_by_suffix(sfx)
+            if query and query not in sfx:
+                continue
+            count_text = self._get_tag_count_label(sfx)
 
-            row = QtCustomTagRowWidget(idx, cat, word_count, self)
+            row = QtCustomTagRowWidget(idx, cat, count_text, self)
             self.layout_custom_items.addWidget(row)
+            shown += 1
+
+        if query and shown == 0:
+            lbl_empty = QLabel(f"Tidak ada tag yang cocok dengan '{query}'.")
+            lbl_empty.setAlignment(Qt.AlignCenter)
+            lbl_empty.setStyleSheet(f"color: {THEME['text_muted']}; font-size: 11px; font-style: italic; padding: 20px; border: none;")
+            self.layout_custom_items.addWidget(lbl_empty)
 
         self.layout_custom_items.addStretch(1)
         QTimer.singleShot(0, lambda: sb.setValue(saved_scroll))
@@ -1745,6 +1870,12 @@ class QtDictionaryTabView(QWidget):
             self.edit_filter_bl.setFocus()
         else:
             self.edit_exp_search.setFocus()
+
+    def _on_tag_search_changed(self, _text: str):
+        if getattr(self.sub_strip, "active_sub", "custom") == "brutal":
+            self.refresh_brutal_list()
+        else:
+            self.refresh_custom_list()
 
     def _on_sub_tab_changed(self, sub_id):
         self.stack_wl.hide()
@@ -3680,7 +3811,6 @@ class QtSystemTabView(QWidget):
             }}
         """)
         self.btn_db_resync.clicked.connect(self.app.force_resync_database)
-        self.btn_db_resync.setVisible(self.app.config.get("storage_mode", "txt") == "supabase")
         db_hdr.addWidget(self.btn_db_resync)
 
         self.btn_db_clear_cache = QPushButton()
@@ -3817,8 +3947,8 @@ class QtSystemTabView(QWidget):
         act_l.addWidget(self.lbl_stat_last_act, 1)
         stats_root.addWidget(self.act_box)
 
-        self.db_stats_panel.setVisible(True)
         db_layout.addWidget(self.db_stats_panel)
+        self.db_stats_panel.setVisible(True)
 
         # Panel Konfigurasi Supabase (tampil saat Database (Self-hosted) dipilih)
         self.db_config_panel = QWidget()

@@ -869,6 +869,14 @@ class SambungKataSolver:
             return 0
         return sum(1 for w in self.words if w.endswith(s) and w not in self.blacklisted_words)
 
+    def count_words_by_prefix(self, prefix):
+        """Menghitung berapa banyak kata di kamus aktif yang berawalan prefix tertentu"""
+        p = prefix.strip().lower()
+        if not p:
+            return 0
+        pool = self.words_by_initial.get(p[0], self.words)
+        return sum(1 for w in pool if w.startswith(p) and w not in self.blacklisted_words)
+
     def cari_jawaban(self, awalan_prefix, limit=100, mode_santai=False, custom_endings=None, sort_mode=None, mode_brutal=False):
         """
         Mencari kata yang DIAWALI oleh `awalan_prefix`:

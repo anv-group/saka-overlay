@@ -14,7 +14,14 @@ from PySide6.QtCore import QCoreApplication
 import config as cfg_mod
 from app_qt import SingleInstanceGuard, SambungKataQtApp
 from qt_components import QtTopTabStrip
-from tab_views_qt import QtDictionaryTabView, QtSystemTabView
+from tab_views_qt import (
+    QtBrutalRowWidget,
+    QtCustomTagRowWidget,
+    QtDictionaryTabView,
+    QtSystemTabView,
+    QtTagsTabView,
+    _format_tag_count_text,
+)
 from updater import GitUpdater
 
 
@@ -269,6 +276,89 @@ class TestSystemFeatures(unittest.TestCase):
         self.assertFalse(dict_view.btn_src_all.isChecked())
         self.assertEqual(dict_view.selected_sources, set())
         self.assertEqual(dict_view.lbl_exp_status.text(), "0 kata")
+
+    def test_tag_count_formatting_and_prefix_suffix_sort(self):
+        self.assertEqual(_format_tag_count_text(12, 5, True, False), "(12 akhiran)")
+        self.assertEqual(_format_tag_count_text(12, 5, False, True), "(5 awalan)")
+        self.assertEqual(_format_tag_count_text(12, 5, True, True), "(12 akhiran · 5 awalan)")
+        self.assertEqual(_format_tag_count_text(12, 5, False, False), "")
+
+        class DummySolver:
+            def count_words_by_suffix(self, s):
+                return {"NS": 10, "MP": 30}.get(s, 0)
+            def count_words_by_prefix(self, p):
+                return {"NS": 2, "MP": 1}.get(p, 0)
+            def set_custom_endings(self, cats):
+                pass
+
+        class DummyApp:
+            def __init__(self):
+                self.config = {
+                    "custom_trap_endings": [
+                        {"suffix": "NS", "enabled": True, "color": "#cba6f7"},
+                        {"suffix": "MP", "enabled": True, "color": "#89dceb"},
+                    ]
+                }
+                self.solver = DummySolver()
+                self.last_detected_word = ""
+                self.tab_tags = mock.MagicMock()
+                self.tab_live = mock.MagicMock()
+            def _confirm_sort_tags(self, txt):
+                return True
+            def _on_local_mode_mutated(self):
+                pass
+            def _after_sort_tags(self, cats, desc):
+                return SambungKataQtApp._after_sort_tags(self, cats, desc)
+            def show_toast(self, msg, duration_ms=2500):
+                pass
+
+        d_app = DummyApp()
+        SambungKataQtApp.on_sort_custom_categories_count(d_app, reverse=True, count_type="suffix")
+        self.assertEqual([c["suffix"] for c in d_app.config["custom_trap_endings"]], ["MP", "NS"])
+
+        SambungKataQtApp.on_sort_custom_categories_count(d_app, reverse=True, count_type="prefix")
+        self.assertEqual([c["suffix"] for c in d_app.config["custom_trap_endings"]], ["NS", "MP"])
+
+    def test_mode_tab_tag_search_filters_kelola_and_brutal(self):
+        class DummySolver:
+            def count_words_by_suffix(self, s): return 5
+            def count_words_by_prefix(self, p): return 2
+
+        class DummyApp:
+            def __init__(self):
+                self.config = {
+                    "custom_trap_endings": [
+                        {"suffix": "NS", "enabled": True, "color": "#cba6f7"},
+                        {"suffix": "AMSI", "enabled": True, "color": "#f9e2af"},
+                        {"suffix": "KSO", "enabled": False, "color": "#a6e3a1"},
+                    ],
+                    "brutal_mode_tags": ["AMSI", "KSO"],
+                    "show_tag_suffix_count": True,
+                    "show_tag_prefix_count": False,
+                }
+                self.solver = DummySolver()
+            def __getattr__(self, name):
+                return lambda *a, **kw: None
+
+        tags_view = QtTagsTabView(DummyApp())
+        tags_view.edit_tag_search.setText("am")
+
+        custom_rows = [
+            tags_view.layout_custom_items.itemAt(i).widget()
+            for i in range(tags_view.layout_custom_items.count())
+            if isinstance(tags_view.layout_custom_items.itemAt(i).widget(), QtCustomTagRowWidget)
+        ]
+        self.assertEqual([r.sfx for r in custom_rows], ["AMSI"])
+        self.assertEqual(custom_rows[0].idx, 1)
+
+        tags_view.sub_strip.select_sub_tab("brutal")
+        brutal_rows = [
+            tags_view.layout_brutal_items.itemAt(i).widget()
+            for i in range(tags_view.layout_brutal_items.count())
+            if isinstance(tags_view.layout_brutal_items.itemAt(i).widget(), QtBrutalRowWidget)
+        ]
+        self.assertEqual([r.sfx for r in brutal_rows], ["AMSI"])
+        self.assertEqual(brutal_rows[0].idx, 1)
 
 
 class _FakeResp:

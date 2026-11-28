@@ -1990,12 +1990,14 @@ class SambungKataQtApp(QMainWindow):
         cats.sort(key=lambda c: c.get("suffix", "").upper())
         self._after_sort_tags(cats, "A-Z")
 
-    def on_sort_custom_categories_count(self, reverse=True):
-        txt = "Kata Terbanyak" if reverse else "Kata Terdikit"
+    def on_sort_custom_categories_count(self, reverse=True, count_type="suffix"):
+        label_type = "Awalan" if count_type == "prefix" else "Akhiran"
+        txt = f"Kata {label_type} Terbanyak" if reverse else f"Kata {label_type} Terdikit"
         if not self._confirm_sort_tags(txt):
             return
         cats = self.config.get("custom_trap_endings", [])
-        cats.sort(key=lambda c: self.solver.count_words_by_suffix(c.get("suffix", "")), reverse=reverse)
+        counter = self.solver.count_words_by_prefix if count_type == "prefix" else self.solver.count_words_by_suffix
+        cats.sort(key=lambda c: counter(c.get("suffix", "")), reverse=reverse)
         self._after_sort_tags(cats, txt)
 
     def on_sort_custom_categories_length(self, reverse=True):

@@ -58,6 +58,8 @@ DEFAULT_CONFIG = {
     "tier0_sort_mode": "default",
     "show_word_datetime": False,  # Tampilkan badge datetime di tab KAMUS (default tersembunyi)
     "show_word_author": False,    # Tampilkan badge author di tab KAMUS (default tersembunyi)
+    "show_tag_suffix_count": True,   # Tampilkan jumlah kata akhiran di tab MODE
+    "show_tag_prefix_count": False,  # Tampilkan jumlah kata awalan di tab MODE
     "two_tone_text": True,  # "default" (Panjang 4-7 & Abjad) atau "tag_order" (Sesuai Urutan Tag Kustom)
     "dev_mode": False,  # Mode Pengembang (Menampilkan tombol ⚡ Restart & fitur debug). Default OFF di git.
     "storage_mode": "txt",  # "txt" (Default lokal/publik) atau "supabase" (Database privat real-time)

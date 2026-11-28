@@ -21,6 +21,7 @@ import requests
 
 DEFAULT_GITHUB_REPO = "anv-group/sambung-kata-overlay"
 UPDATER_STATE_FILE = "updater_state.json"
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
 
 PROTECTED_PREFIXES = (
     ".git",
@@ -86,6 +87,7 @@ def _run_git_cmd(args, cwd=None, timeout=15):
             errors="replace",
             cwd=cwd,
             timeout=timeout,
+            creationflags=_CREATE_NO_WINDOW,
         )
         return res.returncode, res.stdout.strip(), res.stderr.strip()
     except subprocess.TimeoutExpired:
@@ -577,6 +579,7 @@ class GitUpdater:
                     [sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--quiet"],
                     cwd=self.repo_dir,
                     timeout=60,
+                    creationflags=_CREATE_NO_WINDOW,
                 )
             except Exception:
                 pass
