@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import os
 import webbrowser
 from PySide6.QtWidgets import (
@@ -9,6 +10,36 @@ from PySide6.QtGui import QDrag, QPixmap, QKeySequence, QShortcut
 from PySide6.QtCore import Qt, Signal, QTimer, QPoint, QMimeData, QEvent
 from qt_theme import THEME, get_qicon, get_badge_qicon, get_ban_qicon
 from qt_components import QtSubTabStrip, QtSegmentedPills
+
+
+def format_word_datetime(iso_str: str) -> tuple[str, str]:
+    """Mengonversi ISO-8601 UTC string menjadi (label_ringkas_lokal, tooltip_lengkap)."""
+    raw = str(iso_str or "").strip()
+    if not raw:
+        return "", ""
+    try:
+        norm = raw[:-1] + "+00:00" if raw.endswith("Z") else raw
+        dt = datetime.fromisoformat(norm)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        local_dt = dt.astimezone()
+        return local_dt.strftime("%d/%m %H:%M"), f"Ditambahkan: {local_dt.strftime('%Y-%m-%d %H:%M:%S')}"
+    except Exception:
+        return "", ""
+
+
+def make_meta_pill(text: str, tooltip: str = "") -> QLabel:
+    """Membuat badge metadata ringkas untuk added_by / datetime."""
+    lbl = QLabel(text)
+    lbl.setFixedHeight(18)
+    if tooltip:
+        lbl.setToolTip(tooltip)
+    lbl.setStyleSheet(
+        f"background-color: {THEME['bg_root']}; color: {THEME['text_secondary']}; "
+        f"border: 1px solid {THEME['border']}; font-size: 9px; font-weight: 600; "
+        f"padding: 1px 5px; border-radius: 3px;"
+    )
+    return lbl
 
 # --- Word Card Widget ---
 class QtWordCardWidget(QFrame):
@@ -1536,12 +1567,18 @@ class QtBatchAddDialog(QDialog):
 
             w_lower = word.lower()
             if self.target_type == "whitelist":
-                self.app.solver.whitelist_word(w_lower)
+                if not self.app.solver.whitelist_word(w_lower):
+                    self.lbl_feedback.setText(f"✕ '{word}' sudah terdaftar di Whitelist!")
+                    self.lbl_feedback.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {THEME['danger']};")
+                    return
                 self.lbl_feedback.setText(f"✓ '{word}' berhasil ditambahkan ke Whitelist!")
                 self.lbl_feedback.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {THEME['primary']};")
                 self.added_session_words.append(word)
             elif self.target_type == "blocklist":
-                self.app.solver.blacklist_word(w_lower)
+                if not self.app.solver.blacklist_word(w_lower):
+                    self.lbl_feedback.setText(f"✕ '{word}' sudah terdaftar di Blocklist!")
+                    self.lbl_feedback.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {THEME['danger']};")
+                    return
                 self.lbl_feedback.setText(f"✓ '{word}' berhasil diblokir!")
                 self.lbl_feedback.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {THEME['danger']};")
                 self.added_session_words.append(word)
@@ -1590,6 +1627,9 @@ class QtDictionaryTabView(QWidget):
         ])
         self.sub_strip.sub_tab_changed.connect(self._on_sub_tab_changed)
 
+        self.show_word_datetime = bool(self.app.config.get("show_word_datetime", False))
+        self.show_word_author = bool(self.app.config.get("show_word_author", False))
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 6, 10, 8)
         layout.setSpacing(6)
@@ -1607,6 +1647,86 @@ class QtDictionaryTabView(QWidget):
         self._build_blocklist_view()
         self._build_explorer_view()
         self._on_sub_tab_changed("whitelist")
+
+    def _create_meta_gear_button(self, height: int = 26) -> QPushButton:
+        btn = QPushButton()
+        btn.setIcon(get_qicon("settings", size=12, color=THEME["text_secondary"]))
+        btn.setFixedSize(height, height)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setToolTip("Opsi tampilan metadata (Waktu & Author)")
+        btn.setStyleSheet(
+            f"QPushButton {{ background-color: {THEME['bg_card']}; border: 1px solid {THEME['border']}; border-radius: 4px; }}"
+            f"QPushButton:hover {{ background-color: {THEME['bg_hover']}; border-color: {THEME['border_focus']}; }}"
+        )
+        btn.clicked.connect(lambda ch=False, b=btn: self._open_meta_menu(b))
+        return btn
+
+    def _open_meta_menu(self, anchor_btn: QPushButton):
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {THEME['bg_card']};
+                color: {THEME['text_primary']};
+                border: 1px solid {THEME['border']};
+                border-radius: 4px;
+                padding: 4px;
+                font-size: 11px;
+            }}
+            QMenu::item {{
+                padding: 5px 14px 5px 10px;
+                border-radius: 3px;
+            }}
+            QMenu::item:selected {{
+                background-color: {THEME['bg_hover']};
+                color: {THEME['primary']};
+            }}
+        """)
+        act_dt = menu.addAction("Tampilkan Waktu")
+        act_dt.setCheckable(True)
+        act_dt.setChecked(self.show_word_datetime)
+        act_dt.triggered.connect(self._toggle_show_datetime)
+
+        act_author = menu.addAction("Tampilkan Author")
+        act_author.setCheckable(True)
+        act_author.setChecked(self.show_word_author)
+        act_author.triggered.connect(self._toggle_show_author)
+
+        menu.exec(anchor_btn.mapToGlobal(QPoint(0, anchor_btn.height() + 2)))
+
+    def _refresh_active_subtab(self):
+        curr_sub = getattr(self.sub_strip, "active_sub", "whitelist")
+        if curr_sub == "whitelist":
+            self.refresh_whitelist()
+        elif curr_sub == "blocklist":
+            self.refresh_blocklist()
+        elif self.edit_exp_search.text().strip() or self.src_filter == "custom":
+            self._search_dictionary()
+
+    def _toggle_show_datetime(self):
+        self.show_word_datetime = not self.show_word_datetime
+        self.app.config["show_word_datetime"] = self.show_word_datetime
+        self.app.save_config_debounced()
+        self._refresh_active_subtab()
+
+    def _toggle_show_author(self):
+        self.show_word_author = not self.show_word_author
+        self.app.config["show_word_author"] = self.show_word_author
+        self.app.save_config_debounced()
+        self._refresh_active_subtab()
+
+    def _append_word_meta_pills(self, row_layout, word: str, scope: str = "auto", added_by: str = "", dt_str: str = ""):
+        if self.show_word_datetime:
+            raw_dt = dt_str or self.app.solver.get_word_datetime(word, scope=scope)
+            dt_short, dt_tip = format_word_datetime(raw_dt)
+            if dt_short:
+                row_layout.addWidget(make_meta_pill(dt_short, dt_tip))
+        if self.show_word_author:
+            author = (added_by or "").strip()
+            if not author and self.app.config.get("storage_mode", "txt") == "supabase":
+                rec = self.app.solver.db_records.get(word.lower(), {})
+                author = (rec.get("added_by") or "").strip()
+            if author:
+                row_layout.addWidget(make_meta_pill(author, f"Ditambahkan oleh {author}"))
 
     def focus_active_search(self):
         curr_sub = getattr(self.sub_strip, "active_sub", "whitelist")
@@ -1653,6 +1773,17 @@ class QtDictionaryTabView(QWidget):
         self.lbl_wl_count.setStyleSheet(f"color: {THEME['warning']}; font-weight: bold; font-size: 11px;")
         h_layout.addWidget(self.lbl_wl_count)
         h_layout.addStretch(1)
+
+        self.wl_sort_mode = "default"
+        self.btn_wl_sort = QPushButton("A-Z")
+        self.btn_wl_sort.setFixedHeight(26)
+        self.btn_wl_sort.setCursor(Qt.PointingHandCursor)
+        self.btn_wl_sort.setToolTip("Urutan daftar: A-Z / Terbaru ditambahkan")
+        self.btn_wl_sort.clicked.connect(self._toggle_wl_sort)
+        self._update_sort_button_style(self.btn_wl_sort, self.wl_sort_mode)
+        h_layout.addWidget(self.btn_wl_sort)
+        self.btn_wl_gear = self._create_meta_gear_button(26)
+        h_layout.addWidget(self.btn_wl_gear)
 
         # Tombol Tambah (tanpa '+')
         btn_add = QPushButton(" Tambah")
@@ -1712,9 +1843,41 @@ class QtDictionaryTabView(QWidget):
         dlg = QtBatchAddDialog("whitelist", self.app, on_added_callback=self.refresh_whitelist, parent=self.window())
         dlg.exec()
 
+    def _update_sort_button_style(self, btn: QPushButton, sort_mode: str):
+        is_newest = (sort_mode == "newest")
+        btn.setText("Terbaru" if is_newest else "A-Z")
+        if is_newest:
+            btn.setStyleSheet(
+                f"background-color: rgba(56, 217, 118, 0.18); color: {THEME['primary']}; "
+                f"font-size: 10px; font-weight: bold; border: 1px solid {THEME['primary']}; "
+                f"border-radius: 4px; padding: 2px 8px;"
+            )
+        else:
+            btn.setStyleSheet(
+                f"background-color: {THEME['bg_card']}; color: {THEME['text_secondary']}; "
+                f"font-size: 10px; font-weight: 500; border: 1px solid {THEME['border']}; "
+                f"border-radius: 4px; padding: 2px 8px;"
+            )
+
+    def _sort_words_by_mode(self, words: list, scope: str, sort_mode: str) -> list:
+        if sort_mode != "newest":
+            return sorted(words)
+        solver = self.app.solver
+        def _key(w):
+            ts_val = solver._parse_iso_ts(solver.get_word_datetime(w, scope=scope))
+            if ts_val is not None:
+                return (0, -ts_val, w)
+            return (1, 0.0, w)
+        return sorted(words, key=_key)
+
+    def _toggle_wl_sort(self):
+        self.wl_sort_mode = "newest" if self.wl_sort_mode == "default" else "default"
+        self._update_sort_button_style(self.btn_wl_sort, self.wl_sort_mode)
+        self.refresh_whitelist()
+
     def refresh_whitelist(self):
         v_scroll = self.scroll_wl.verticalScrollBar().value() if hasattr(self, "scroll_wl") else 0
-        wl_words = sorted(list(self.app.solver.whitelisted_words))
+        wl_words = self._sort_words_by_mode(list(self.app.solver.whitelisted_words), "whitelist", getattr(self, "wl_sort_mode", "default"))
         self.lbl_wl_count.setText(f"WHITELIST ({len(wl_words)})")
         self.sub_strip.update_tab_label("whitelist", f"Whitelist ({len(wl_words)})")
         query = self.edit_filter_wl.text().strip().lower() if hasattr(self, "edit_filter_wl") else ""
@@ -1728,7 +1891,7 @@ class QtDictionaryTabView(QWidget):
 
     def _filter_whitelist_items(self, text):
         query = text.strip().lower()
-        all_words = sorted(list(self.app.solver.whitelisted_words))
+        all_words = self._sort_words_by_mode(list(self.app.solver.whitelisted_words), "whitelist", getattr(self, "wl_sort_mode", "default"))
         if query:
             filtered = [w for w in all_words if query in w.lower()]
         else:
@@ -1779,19 +1942,8 @@ class QtDictionaryTabView(QWidget):
 
             r_l.addStretch(1)
 
-            if self.app.config.get("storage_mode", "txt") == "supabase":
-                rec = self.app.solver.db_records.get(w, {})
-                added_by = (rec.get("added_by") or "").strip()
-                if added_by:
-                    by_lbl = QLabel(added_by)
-                    by_lbl.setFixedHeight(18)
-                    by_lbl.setToolTip(f"Ditambahkan oleh {added_by}")
-                    by_lbl.setStyleSheet(
-                        f"background-color: {THEME['bg_root']}; color: {THEME['text_secondary']}; "
-                        f"border: 1px solid {THEME['border']}; font-size: 9px; font-weight: 600; "
-                        f"padding: 1px 5px; border-radius: 3px;"
-                    )
-                    r_l.addWidget(by_lbl)
+            # Indikator Whitelist row datetime + added_by (sesuai toggle)
+            self._append_word_meta_pills(r_l, w, scope="whitelist")
 
             # Indikator akhiran persis di paling kanan (seperti LIVE)
             for c in cats:
@@ -1853,6 +2005,17 @@ class QtDictionaryTabView(QWidget):
         h_layout.addWidget(self.lbl_bl_count)
         h_layout.addStretch(1)
 
+        self.bl_sort_mode = "default"
+        self.btn_bl_sort = QPushButton("A-Z")
+        self.btn_bl_sort.setFixedHeight(26)
+        self.btn_bl_sort.setCursor(Qt.PointingHandCursor)
+        self.btn_bl_sort.setToolTip("Urutan daftar: A-Z / Terbaru ditambahkan")
+        self.btn_bl_sort.clicked.connect(self._toggle_bl_sort)
+        self._update_sort_button_style(self.btn_bl_sort, self.bl_sort_mode)
+        h_layout.addWidget(self.btn_bl_sort)
+        self.btn_bl_gear = self._create_meta_gear_button(26)
+        h_layout.addWidget(self.btn_bl_gear)
+
         # Tombol Blokir Kata (tanpa '+')
         btn_add = QPushButton(" Tambah")
         btn_add.setIcon(get_qicon("plus", size=12, color="#ffffff"))
@@ -1911,9 +2074,14 @@ class QtDictionaryTabView(QWidget):
         dlg = QtBatchAddDialog("blocklist", self.app, on_added_callback=self.refresh_blocklist, parent=self.window())
         dlg.exec()
 
+    def _toggle_bl_sort(self):
+        self.bl_sort_mode = "newest" if self.bl_sort_mode == "default" else "default"
+        self._update_sort_button_style(self.btn_bl_sort, self.bl_sort_mode)
+        self.refresh_blocklist()
+
     def refresh_blocklist(self):
         v_scroll = self.scroll_bl.verticalScrollBar().value() if hasattr(self, "scroll_bl") else 0
-        bl_words = sorted(list(self.app.solver.blacklisted_words))
+        bl_words = self._sort_words_by_mode(list(self.app.solver.blacklisted_words), "blacklist", getattr(self, "bl_sort_mode", "default"))
         self.lbl_bl_count.setText(f"BLOCKLIST ({len(bl_words)})")
         self.sub_strip.update_tab_label("blocklist", f"Blocklist ({len(bl_words)})")
         query = self.edit_filter_bl.text().strip().lower() if hasattr(self, "edit_filter_bl") else ""
@@ -1927,7 +2095,7 @@ class QtDictionaryTabView(QWidget):
 
     def _filter_blocklist_items(self, text):
         query = text.strip().lower()
-        all_words = sorted(list(self.app.solver.blacklisted_words))
+        all_words = self._sort_words_by_mode(list(self.app.solver.blacklisted_words), "blacklist", getattr(self, "bl_sort_mode", "default"))
         if query:
             filtered = [w for w in all_words if query in w.lower()]
         else:
@@ -1978,19 +2146,8 @@ class QtDictionaryTabView(QWidget):
 
             r_l.addStretch(1)
 
-            if self.app.config.get("storage_mode", "txt") == "supabase":
-                rec = self.app.solver.db_records.get(w, {})
-                added_by = (rec.get("added_by") or "").strip()
-                if added_by:
-                    by_lbl = QLabel(added_by)
-                    by_lbl.setFixedHeight(18)
-                    by_lbl.setToolTip(f"Ditambahkan oleh {added_by}")
-                    by_lbl.setStyleSheet(
-                        f"background-color: {THEME['bg_root']}; color: {THEME['text_secondary']}; "
-                        f"border: 1px solid {THEME['border']}; font-size: 9px; font-weight: 600; "
-                        f"padding: 1px 5px; border-radius: 3px;"
-                    )
-                    r_l.addWidget(by_lbl)
+            # Indikator Blocklist row datetime + added_by (sesuai toggle)
+            self._append_word_meta_pills(r_l, w, scope="blacklist")
 
             # Indikator akhiran persis di paling kanan (seperti LIVE)
             for c in cats:
@@ -2157,6 +2314,17 @@ class QtDictionaryTabView(QWidget):
         self.btn_mode_toggle.clicked.connect(self._toggle_source_mode)
         tb2_layout.addWidget(self.btn_mode_toggle)
 
+        self.exp_sort_mode = "default"
+        self.btn_exp_sort = QPushButton("A-Z")
+        self.btn_exp_sort.setFixedHeight(22)
+        self.btn_exp_sort.setCursor(Qt.PointingHandCursor)
+        self.btn_exp_sort.setToolTip("Urutan hasil: A-Z / Terbaru ditambahkan")
+        self.btn_exp_sort.clicked.connect(self._toggle_exp_sort)
+        self._update_sort_button_style(self.btn_exp_sort, self.exp_sort_mode)
+        tb2_layout.addWidget(self.btn_exp_sort)
+        self.btn_exp_gear = self._create_meta_gear_button(22)
+        tb2_layout.addWidget(self.btn_exp_gear)
+
         self._update_src_buttons()
 
         tb2_layout.addStretch(1)
@@ -2235,6 +2403,11 @@ class QtDictionaryTabView(QWidget):
             else:
                 self.btn_mode_toggle.setStyleSheet(f"background-color: {THEME['bg_card']}; color: {THEME['text_secondary']}; font-size: 10px; font-weight: 500; border: 1px dashed {THEME['border']}; border-radius: 3px; padding: 1px 6px;")
 
+    def _toggle_exp_sort(self):
+        self.exp_sort_mode = "newest" if self.exp_sort_mode == "default" else "default"
+        self._update_sort_button_style(self.btn_exp_sort, self.exp_sort_mode)
+        self._search_dictionary()
+
     def _on_search_params_changed(self):
         self._search_dictionary()
 
@@ -2300,7 +2473,8 @@ class QtDictionaryTabView(QWidget):
             query=query,
             search_type=st,
             source_filter=sf,
-            limit=40
+            limit=40,
+            sort_by=getattr(self, "exp_sort_mode", "default")
         )
 
         while self.layout_exp_items.count():
@@ -2383,17 +2557,13 @@ class QtDictionaryTabView(QWidget):
 
             c_l.addStretch(1)
 
-            exp_added_by = (r.get("added_by") or "").strip()
-            if exp_added_by:
-                by_lbl = QLabel(exp_added_by)
-                by_lbl.setFixedHeight(18)
-                by_lbl.setToolTip(f"Ditambahkan oleh {exp_added_by}")
-                by_lbl.setStyleSheet(
-                    f"background-color: {THEME['bg_root']}; color: {THEME['text_secondary']}; "
-                    f"border: 1px solid {THEME['border']}; font-size: 9px; font-weight: 600; "
-                    f"padding: 1px 5px; border-radius: 3px;"
-                )
-                c_l.addWidget(by_lbl)
+            self._append_word_meta_pills(
+                c_l,
+                w_lower,
+                scope="custom" if self.src_filter == "custom" else "auto",
+                added_by=r.get("added_by", ""),
+                dt_str=r.get("datetime", ""),
+            )
 
             # Tag Suffix Badge (pentok kanan persis LIVE)
             for c in cats:

@@ -134,17 +134,18 @@ class TestSambungKataSolver(unittest.TestCase):
         self.assertEqual(trap_items[0]["kata"].lower(), kata_baru)
         self.assertTrue(trap_items[0]["is_whitelisted"])
 
-        # Bersihkan setelah pengujian
+        # Bersihkan setelah pengujian tanpa menyentuh kamus_lengkap.txt (read-only)
         self.solver.unwhitelist_word(kata_baru)
         self.assertFalse(self.solver.is_whitelisted(kata_baru))
         self.assertTrue(self.solver.has_word(kata_baru))
 
-        # Hapus kata uji dari kamus_lengkap.txt agar file kamus tetap bersih
-        if os.path.exists(self.solver.dictionary_path):
-            with open(self.solver.dictionary_path, "r", encoding="utf-8") as f:
-                lines = [ln for ln in f if ln.strip().lower() != kata_baru]
-            with open(self.solver.dictionary_path, "w", encoding="utf-8") as f:
-                f.writelines(lines)
+        self.solver.custom_timestamps.pop(kata_baru, None)
+        self.solver.base_custom_set.discard(kata_baru)
+        self.solver.custom_set.discard(kata_baru)
+        if self.solver.custom_dict_path and os.path.exists(self.solver.custom_dict_path):
+            self.solver._write_word_csv(self.solver.custom_dict_path, self.solver.custom_timestamps)
+            if not self.solver.custom_timestamps:
+                os.remove(self.solver.custom_dict_path)
 
     def test_tier0_sort_modes_default_and_tag_order(self):
         """Memastikan mode sortir Tier 0 (default: panjang & abjad vs tag_order: urutan tag kustom) bekerja akurat"""

@@ -96,10 +96,11 @@ class SambungKataQtApp(QMainWindow):
         )
         self.solver = SambungKataSolver(
             dictionary_path=os.path.join(base_dir, "kamus_lengkap.txt"),
-            blacklist_path=os.path.join(base_dir, "blacklist.txt"),
-            whitelist_path=os.path.join(base_dir, "whitelist.txt"),
+            blacklist_path=os.path.join(base_dir, "blacklist.csv"),
+            whitelist_path=os.path.join(base_dir, "whitelist.csv"),
             kbbi_path=os.path.join(base_dir, "kamus_kbbi.txt"),
             contek_path=os.path.join(base_dir, "kamus_contek.txt"),
+            custom_dict_path=os.path.join(base_dir, "kamus_custom.csv"),
             use_kbbi=self.config.get("use_kbbi", False),
             use_contek=self.config.get("use_contek", True),
             storage_mode=storage_mode,
@@ -947,7 +948,7 @@ class SambungKataQtApp(QMainWindow):
         lbl_info.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
         dl.addWidget(lbl_info)
 
-        chk_words = QCheckBox(f"Daftar Kata (whitelist.txt & blacklist.txt: {len(records)} kata)")
+        chk_words = QCheckBox(f"Daftar Kata (whitelist.csv, blacklist.csv & kamus_custom.csv: {len(records)} kata)")
         chk_words.setChecked(bool(records))
         chk_words.setEnabled(bool(records))
         dl.addWidget(chk_words)
@@ -957,7 +958,7 @@ class SambungKataQtApp(QMainWindow):
         chk_mode.setChecked(True)
         dl.addWidget(chk_mode)
 
-        lbl_note = QLabel("(File .txt dan pengaturan Mode TXT lokal tidak akan diubah.)")
+        lbl_note = QLabel("(File .csv dan pengaturan Mode Lokal tidak akan diubah.)")
         lbl_note.setStyleSheet(f"color: {THEME['text_muted']}; font-size: 10px;")
         dl.addWidget(lbl_note)
 
@@ -1046,11 +1047,11 @@ class SambungKataQtApp(QMainWindow):
         lbl_info.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px;")
         dl.addWidget(lbl_info)
 
-        chk_words = QCheckBox("Daftar Kata (simpan ke whitelist.txt, blacklist.txt, & kamus)")
+        chk_words = QCheckBox("Daftar Kata (simpan ke whitelist.csv, blacklist.csv, & kamus_custom.csv)")
         chk_words.setChecked(True)
         dl.addWidget(chk_words)
 
-        chk_overwrite = QCheckBox("Timpa penuh whitelist.txt & blacklist.txt (hapus yang tidak ada di DB)")
+        chk_overwrite = QCheckBox("Timpa penuh whitelist.csv & blacklist.csv (hapus yang tidak ada di DB)")
         chk_overwrite.setChecked(False)
         chk_overwrite.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 10px; padding-left: 18px; spacing: 6px; background: transparent;")
         chk_words.toggled.connect(chk_overwrite.setEnabled)
@@ -1156,16 +1157,20 @@ class SambungKataQtApp(QMainWindow):
             self.solver.unwhitelist_word(w)
             self.show_toast(f"'{word.upper()}' dihapus dari Whitelist")
         else:
-            self.solver.whitelist_word(w)
-            self.show_toast(f"'{word.upper()}' ditambahkan ke Whitelist")
+            if self.solver.whitelist_word(w):
+                self.show_toast(f"'{word.upper()}' ditambahkan ke Whitelist")
+            else:
+                self.show_toast(f"'{word.upper()}' sudah ada di Whitelist")
         self._refresh_all_word_views()
 
     def on_block_word(self, word: str):
         if not word:
             return
         w = word.strip().lower()
-        self.solver.blacklist_word(w)
-        self.show_toast(f"'{word.upper()}' diblokir ke Blocklist")
+        if self.solver.blacklist_word(w):
+            self.show_toast(f"'{word.upper()}' diblokir ke Blocklist")
+        else:
+            self.show_toast(f"'{word.upper()}' sudah ada di Blocklist")
         self._refresh_all_word_views()
 
     def on_copy_word(self, word: str):

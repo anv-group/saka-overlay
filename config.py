@@ -57,6 +57,8 @@ DEFAULT_CONFIG = {
     "auto_blacklist_invalid": True,  # Otomatis blacklist kata yang ditolak game Roblox
     "auto_learn_valid": True,  # Otomatis simpan kata valid yang belum ada di kamus
     "tier0_sort_mode": "default",
+    "show_word_datetime": False,  # Tampilkan badge datetime di tab KAMUS (default tersembunyi)
+    "show_word_author": False,    # Tampilkan badge author di tab KAMUS (default tersembunyi)
     "two_tone_text": True,  # "default" (Panjang 4-7 & Abjad) atau "tag_order" (Sesuai Urutan Tag Kustom)
     "dev_mode": False,  # Mode Pengembang (Menampilkan tombol ⚡ Restart & fitur debug). Default OFF di git.
     "storage_mode": "txt",  # "txt" (Default lokal/publik) atau "supabase" (Database privat real-time)

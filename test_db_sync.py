@@ -165,12 +165,13 @@ class TestDbSyncHelpers(unittest.TestCase):
 
 
 class TestSolverDualMode(unittest.TestCase):
-    def _make_temp_solver(self, td, storage_mode="txt", callback=None):
+    def _make_temp_solver(self, td, storage_mode="txt", callback=None, use_csv=True):
         kamus = os.path.join(td, "kamus_lengkap.txt")
         kbbi = os.path.join(td, "kamus_kbbi.txt")
         contek = os.path.join(td, "kamus_contek.txt")
-        wl = os.path.join(td, "whitelist.txt")
-        bl = os.path.join(td, "blacklist.txt")
+        custom_csv = os.path.join(td, "kamus_custom.csv")
+        wl = os.path.join(td, "whitelist.csv" if use_csv else "whitelist.txt")
+        bl = os.path.join(td, "blacklist.csv" if use_csv else "blacklist.txt")
 
         with open(kbbi, "w", encoding="utf-8") as f:
             f.write("buku\nbukit\nbox\n")
@@ -178,10 +179,16 @@ class TestSolverDualMode(unittest.TestCase):
             f.write("buka\nparadox\n")
         with open(kamus, "w", encoding="utf-8") as f:
             f.write("buku\nbukit\nbuka\nbox\nparadox\n")
-        with open(wl, "w", encoding="utf-8") as f:
-            f.write("buka\n")
-        with open(bl, "w", encoding="utf-8") as f:
-            f.write("box\n")
+        if use_csv:
+            with open(wl, "w", encoding="utf-8") as f:
+                f.write("word,datetime\nbuka,\n")
+            with open(bl, "w", encoding="utf-8") as f:
+                f.write("word,datetime\nbox,\n")
+        else:
+            with open(wl, "w", encoding="utf-8") as f:
+                f.write("buka\n")
+            with open(bl, "w", encoding="utf-8") as f:
+                f.write("box\n")
 
         return SambungKataSolver(
             dictionary_path=kamus,
@@ -189,6 +196,7 @@ class TestSolverDualMode(unittest.TestCase):
             whitelist_path=wl,
             kbbi_path=kbbi,
             contek_path=contek,
+            custom_dict_path=custom_csv,
             use_kbbi=True,
             use_contek=True,
             storage_mode=storage_mode,
@@ -203,31 +211,37 @@ class TestSolverDualMode(unittest.TestCase):
             self.assertIn("box", solver.blacklisted_words)
             self.assertEqual(mutations, [])
 
-            # Export txt records
+            # Export csv records
             exported = solver.export_txt_records_for_import(added_by="host")
             exp_map = {r["word"]: r for r in exported}
             self.assertEqual(exp_map["buka"]["status"], "whitelist")
             self.assertEqual(exp_map["box"]["status"], "blocklist")
 
-            # Switch ke supabase dengan snapshot kosong -> tidak tercampur whitelist.txt / blacklist.txt
+            # Switch ke supabase dengan snapshot kosong -> tidak tercampur whitelist.csv / blacklist.csv
             solver.switch_storage_mode("supabase", {})
             self.assertEqual(len(solver.whitelisted_words), 0)
             self.assertEqual(len(solver.blacklisted_words), 0)
 
-            # Mutasi di mode supabase tidak menyentuh file .txt lokal!
-            solver.whitelist_word("buku")
-            solver.blacklist_word("bukit")
+            # Mutasi di mode supabase tidak menyentuh file CSV lokal!
+            self.assertTrue(solver.whitelist_word("buku"))
+            self.assertTrue(solver.blacklist_word("bukit"))
             ok_add, _ = solver.add_word("zztestkata")
             self.assertTrue(ok_add)
             self.assertTrue(solver.has_word("zztestkata"))
+            self.assertTrue(bool(solver.get_word_datetime("buku", scope="whitelist")))
+            self.assertTrue(bool(solver.get_word_datetime("bukit", scope="blacklist")))
+            self.assertTrue(bool(solver.get_word_datetime("zztestkata", scope="custom")))
+            # Duplikat di mode supabase ditolak
+            self.assertFalse(solver.whitelist_word("buku"))
+            self.assertFalse(solver.blacklist_word("bukit"))
 
-            with open(os.path.join(td, "whitelist.txt"), "r", encoding="utf-8") as f:
-                self.assertEqual(f.read().strip(), "buka")
-            with open(os.path.join(td, "blacklist.txt"), "r", encoding="utf-8") as f:
-                self.assertEqual(f.read().strip(), "box")
+            wl_after = solver._read_word_csv(os.path.join(td, "whitelist.csv"))
+            bl_after = solver._read_word_csv(os.path.join(td, "blacklist.csv"))
+            self.assertEqual(set(wl_after.keys()), {"buka"})
+            self.assertEqual(set(bl_after.keys()), {"box"})
 
             # Transisi is_custom: whitelist custom word -> unwhitelist tetap mempertahankan kata di kamus!
-            solver.whitelist_word("zztestkata")
+            self.assertTrue(solver.whitelist_word("zztestkata"))
             self.assertTrue(solver.is_whitelisted("zztestkata"))
             solver.unwhitelist_word("zztestkata")
             self.assertFalse(solver.is_whitelisted("zztestkata"))
@@ -241,13 +255,14 @@ class TestSolverDualMode(unittest.TestCase):
             self.assertTrue(solver.has_word("buku"))
 
             # Remote event INSERT/UPDATE/DELETE dari teman
-            solver.apply_db_event("INSERT", {"word": "temanbaru", "status": "whitelist", "is_custom": True})
+            solver.apply_db_event("INSERT", {"word": "temanbaru", "status": "whitelist", "is_custom": True, "updated_at": "2026-11-28T06:00:00Z"})
             self.assertTrue(solver.is_whitelisted("temanbaru"))
             self.assertTrue(solver.has_word("temanbaru"))
+            self.assertEqual(solver.get_word_datetime("temanbaru", scope="whitelist"), "2026-11-28T06:00:00Z")
             res = solver.cari_jawaban("TE", limit=5)
             self.assertEqual(res[0]["kata"], "temanbaru")
 
-            solver.apply_db_event("UPDATE", {"word": "temanbaru", "status": "blocklist", "is_custom": True})
+            solver.apply_db_event("UPDATE", {"word": "temanbaru", "status": "blocklist", "is_custom": True, "updated_at": "2026-11-28T06:05:00Z"})
             self.assertFalse(solver.is_whitelisted("temanbaru"))
             self.assertIn("temanbaru", solver.blacklisted_words)
             res2 = solver.cari_jawaban("TE", limit=5)
@@ -446,17 +461,23 @@ class TestSolverDualMode(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             solver = self._make_temp_solver(td, storage_mode="supabase")
             db_records = {
-                "faks": {"word": "faks", "status": "whitelist", "is_custom": True},
-                "buka": {"word": "buka", "status": "blocklist", "is_custom": False},
-                "zzunik": {"word": "zzunik", "status": "custom", "is_custom": True},
+                "faks": {"word": "faks", "status": "whitelist", "is_custom": True, "updated_at": "2026-11-28T05:00:00Z"},
+                "buka": {"word": "buka", "status": "blocklist", "is_custom": False, "updated_at": "2026-11-28T05:01:00Z"},
+                "zzunik": {"word": "zzunik", "status": "custom", "is_custom": True, "updated_at": "2026-11-28T05:02:00Z"},
             }
-            # 1. Merge mode: mempertahankan whitelist/blacklist lokal yang tidak bentrok
+            # 1. Merge mode: mempertahankan whitelist/blacklist lokal yang tidak bentrok + timestamp DB
             wl_n, bl_n, cm_n = solver.apply_db_records_to_txt_files(db_records, overwrite_lists=False)
             self.assertEqual(wl_n, 1)  # faks (buka dipindah ke blocklist)
             self.assertEqual(bl_n, 2)  # box + buka
-            self.assertEqual(cm_n, 2)  # faks + zzunik ditambahkan ke kamus_lengkap.txt
+            self.assertEqual(cm_n, 2)  # faks + zzunik ditambahkan ke kamus_custom.csv
+            wl_csv = solver._read_word_csv(os.path.join(td, "whitelist.csv"))
+            bl_csv = solver._read_word_csv(os.path.join(td, "blacklist.csv"))
+            cm_csv = solver._read_word_csv(os.path.join(td, "kamus_custom.csv"))
+            self.assertEqual(wl_csv.get("faks"), "2026-11-28T05:00:00Z")
+            self.assertEqual(bl_csv.get("buka"), "2026-11-28T05:01:00Z")
+            self.assertEqual(cm_csv.get("zzunik"), "2026-11-28T05:02:00Z")
 
-            # 2. Overwrite mode: box (yang tidak ada di DB) ikut dihapus dari blacklist.txt
+            # 2. Overwrite mode: box (yang tidak ada di DB) ikut dihapus dari blacklist.csv
             wl_n2, bl_n2, cm_n2 = solver.apply_db_records_to_txt_files(db_records, overwrite_lists=True)
             self.assertEqual(wl_n2, 1)
             self.assertEqual(bl_n2, 1)  # hanya buka
@@ -475,6 +496,92 @@ class TestSolverDualMode(unittest.TestCase):
             finally:
                 cfg_mod.CONFIG_FILE = orig_main
                 cfg_mod.LOCAL_CONFIG_FILE = orig_local
+
+    def test_csv_migration_readonly_dicts_duplicate_guard_and_newest_sort(self):
+        with tempfile.TemporaryDirectory() as td:
+            kamus = os.path.join(td, "kamus_lengkap.txt")
+            kbbi = os.path.join(td, "kamus_kbbi.txt")
+            contek = os.path.join(td, "kamus_contek.txt")
+            custom_csv = os.path.join(td, "kamus_custom.csv")
+            wl_txt = os.path.join(td, "whitelist.txt")
+            bl_txt = os.path.join(td, "blacklist.txt")
+            wl_csv = os.path.join(td, "whitelist.csv")
+            bl_csv = os.path.join(td, "blacklist.csv")
+
+            with open(kbbi, "w", encoding="utf-8") as f:
+                f.write("buku\nbukit\n")
+            with open(contek, "w", encoding="utf-8") as f:
+                f.write("buka\nparadox\n")
+            with open(kamus, "w", encoding="utf-8") as f:
+                f.write("buku\nbukit\nbuka\nparadox\n")
+            with open(wl_txt, "w", encoding="utf-8") as f:
+                f.write("# header\nbuka\n")
+            with open(bl_txt, "w", encoding="utf-8") as f:
+                f.write("bukit\n")
+
+            def _read_txt(p):
+                with open(p, encoding="utf-8") as f:
+                    return f.read()
+
+            kbbi_before = _read_txt(kbbi)
+            contek_before = _read_txt(contek)
+            kamus_before = _read_txt(kamus)
+
+            solver = SambungKataSolver(
+                dictionary_path=kamus,
+                blacklist_path=bl_csv,
+                whitelist_path=wl_csv,
+                kbbi_path=kbbi,
+                contek_path=contek,
+                custom_dict_path=custom_csv,
+                use_kbbi=True,
+                use_contek=True,
+                storage_mode="txt",
+            )
+
+            # Migrasi otomatis: .txt lama dihapus, .csv terbuat dengan datetime kosong ""
+            self.assertFalse(os.path.exists(wl_txt))
+            self.assertFalse(os.path.exists(bl_txt))
+            self.assertTrue(os.path.exists(wl_csv))
+            self.assertTrue(os.path.exists(bl_csv))
+            self.assertEqual(solver.get_word_datetime("buka", scope="whitelist"), "")
+            self.assertEqual(solver.get_word_datetime("bukit", scope="blacklist"), "")
+
+            # Tambah manual & whitelist kata baru -> masuk kamus_custom.csv, kamus dasar read-only!
+            ok_add, _ = solver.add_word("buxa")
+            self.assertTrue(ok_add)
+            self.assertTrue(os.path.exists(custom_csv))
+            self.assertEqual(_read_txt(kbbi), kbbi_before)
+            self.assertEqual(_read_txt(contek), contek_before)
+            self.assertEqual(_read_txt(kamus), kamus_before)
+
+            ts_buxa = solver.get_word_datetime("buxa", scope="custom")
+            self.assertTrue(bool(ts_buxa))
+
+            # Duplicate guard: re-add ke whitelist / blocklist / kamus ditolak & tidak menimpa timestamp
+            self.assertFalse(solver.whitelist_word("buka"))
+            self.assertEqual(solver.get_word_datetime("buka", scope="whitelist"), "")
+            self.assertFalse(solver.blacklist_word("bukit"))
+            self.assertEqual(solver.get_word_datetime("bukit", scope="blacklist"), "")
+            ok_dup, _ = solver.add_word("buxa")
+            self.assertFalse(ok_dup)
+            self.assertEqual(solver.get_word_datetime("buxa", scope="custom"), ts_buxa)
+
+            # Transisi status (bukit: blocklist -> whitelist) memperbarui datetime
+            self.assertTrue(solver.whitelist_word("bukit"))
+            self.assertNotIn("bukit", solver.blacklisted_words)
+            self.assertIn("bukit", solver.whitelisted_words)
+            self.assertTrue(bool(solver.get_word_datetime("bukit", scope="whitelist")))
+
+            # Sortir Terbaru di search_dictionary: ber-datetime di atas (newest first), tanpa tanggal di bawah
+            solver.custom_timestamps["buold"] = "2026-01-01T00:00:00Z"
+            solver.base_custom_set.add("buold")
+            solver.custom_set.add("buold")
+            solver._add_word_to_active_memory("buold")
+            res_new, _ = solver.search_dictionary(query="bu", search_type="prefix", limit=20, sort_by="newest")
+            words_new = [r["word"] for r in res_new]
+            self.assertLess(words_new.index("BUXA"), words_new.index("BUOLD"))
+            self.assertLess(words_new.index("BUOLD"), words_new.index("BUKU"))
 
     def test_explorer_custom_filter_added_by_and_cache_clear(self):
         with tempfile.TemporaryDirectory() as td:
