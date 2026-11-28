@@ -165,11 +165,9 @@ class QtWordCardWidget(QFrame):
             self.btn_star.setToolTip("Tambah ke Whitelist")
 
         if tipe == "CUSTOM_TRAP":
-            b_name = item.get("badge_name") or item.get("suffix", "").upper()
-            if b_name.lower().startswith("akhiran "):
-                b_name = b_name[8:].strip()
+            sfx = item.get("suffix", "").upper()
             bg = item.get("color", THEME["primary"])
-            self.badge_tier.setText(b_name)
+            self.badge_tier.setText(sfx)
             self.badge_tier.setStyleSheet(f"background-color: {bg}; color: {THEME['text_dark']}; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; border: none;")
         else:
             self.badge_tier.setText("Santai" if deskripsi == "Kata Santai" else "Normal")
@@ -3961,13 +3959,13 @@ class QtSystemTabView(QWidget):
 
         self.btn_db_download = _make_transfer_btn(
             "cloud_download", THEME["info"], "Download DB", "Lokal",
-            "Download daftar kata & pengaturan MODE dari Database Privat ke file lokal (.csv & config.local.json)",
+            "Download daftar kata & pengaturan MODE dari Database Privat ke file lokal (.csv & config.json)",
         )
         self.btn_db_download.clicked.connect(self._on_download_db_clicked)
         transfer_row.addWidget(self.btn_db_download, 1)
         cfg_l.addLayout(transfer_row)
 
-        lbl_priv_note = QLabel("Kredensial tersimpan hanya di config.local.json. Jangan bagikan Anon Key privat ke publik.")
+        lbl_priv_note = QLabel("Kredensial tersimpan hanya di config.json lokal. Jangan bagikan Anon Key privat ke publik.")
         lbl_priv_note.setWordWrap(True)
         lbl_priv_note.setStyleSheet(f"color: {THEME['text_muted']}; font-size: 10px;")
         cfg_l.addWidget(lbl_priv_note)

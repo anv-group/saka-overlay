@@ -325,11 +325,9 @@ class QtMiniTickerBar(QFrame):
 
             # Tag Badge di Ujung Kanan
             if tipe == "CUSTOM_TRAP":
-                b_name = top_item.get("suffix", "").upper() or top_item.get("badge_name", "")
-                if b_name.lower().startswith("akhiran "):
-                    b_name = b_name[8:].strip()
+                sfx = top_item.get("suffix", "").upper()
                 bg = top_item.get("color", THEME["primary"])
-                self.badge_tag.setText(b_name)
+                self.badge_tag.setText(sfx)
                 self.badge_tag.setStyleSheet(f"background-color: {bg}; color: {THEME['text_dark']}; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; border: none;")
                 self.badge_tag.show()
             else:

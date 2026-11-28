@@ -843,19 +843,13 @@ class SambungKataSolver:
                 self.words_by_initial[init1] = []
             self.words_by_initial[init1].append(w)
 
-    @staticmethod
-    def _clean_tag_name(name, suffix):
-        sfx = (suffix or "").strip().upper()
-        cleaned = re.sub(r"(?i)^akhiran\s+", "", str(name or "")).strip()
-        return cleaned or sfx
-
     def set_custom_endings(self, custom_endings):
         """
         Mengatur daftar akhiran kustom (Custom Traps) sebagai satu-satunya sistem tag prioritas.
         Format:
         [
-            {"suffix": "NS", "name": "NS", "enabled": True, "color": "#cba6f7"},
-            {"suffix": "NGK", "name": "NGK", "enabled": True, "color": "#f5c2e7"}
+            {"suffix": "NS", "enabled": True, "color": "#cba6f7"},
+            {"suffix": "NGK", "enabled": True, "color": "#f5c2e7"}
         ]
         atau list of string: ["NS", "NGK"]
         """
@@ -870,7 +864,6 @@ class SambungKataSolver:
                     seen_suffixes.add(s)
                     self.custom_endings.append({
                         "suffix": s,
-                        "name": s.upper(),
                         "enabled": True,
                         "color": "#cba6f7"
                     })
@@ -880,7 +873,6 @@ class SambungKataSolver:
                     seen_suffixes.add(s)
                     self.custom_endings.append({
                         "suffix": s,
-                        "name": self._clean_tag_name(item.get("name"), s),
                         "enabled": bool(item.get("enabled", True)),
                         "color": item.get("color", "#cba6f7")
                     })
@@ -959,7 +951,6 @@ class SambungKataSolver:
                         continue
                     active_custom.append({
                         "suffix": s,
-                        "name": s.upper(),
                         "enabled": True,
                         "color": "#cba6f7",
                         "tag_index": idx
@@ -1067,14 +1058,12 @@ class SambungKataSolver:
         list_custom = []
         for w, rule in jebakan_custom:
             sfx = rule["suffix"].upper()
-            b_name = self._clean_tag_name(rule.get("name"), sfx)
             list_custom.append({
                 "kata": w,
                 "tipe": "CUSTOM_TRAP",
                 "suffix": sfx,
-                "badge_name": b_name,
                 "color": rule.get("color", "#cba6f7"),
-                "deskripsi": b_name,
+                "deskripsi": sfx,
                 "is_whitelisted": (w in self.whitelisted_words)
             })
 
@@ -1212,7 +1201,7 @@ class SambungKataSolver:
             if isinstance(c, dict):
                 sfx = c.get("suffix", "").lower()
                 if sfx:
-                    custom_lookup[sfx] = self._clean_tag_name(c.get("name"), sfx)
+                    custom_lookup[sfx] = sfx.upper()
             elif isinstance(c, str) and c.strip():
                 sfx = c.strip().lower()
                 custom_lookup[sfx] = sfx.upper()

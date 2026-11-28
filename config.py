@@ -1,9 +1,10 @@
 import copy
-import os
 import json
+import os
+import tempfile
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
-LOCAL_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.local.json")
+DEFAULT_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.default.json")
 
 MODE_SYNC_KEYS = (
     "game_mode",
@@ -67,45 +68,81 @@ DEFAULT_CONFIG = {
     "supabase_anon_key": "",
     "sync_nickname": "",
     "custom_trap_endings": [  # Kategori custom akhiran jebakan super
-        {"suffix": "NS", "name": "NS", "enabled": True, "color": "#cba6f7"},
-        {"suffix": "NGK", "name": "NGK", "enabled": True, "color": "#f5c2e7"}
+        {"suffix": "NS", "enabled": True, "color": "#cba6f7"},
+        {"suffix": "NGK", "enabled": True, "color": "#f5c2e7"}
     ]
 }
 
+def _read_json_dict(path: str) -> dict:
+    """Membaca file JSON menjadi dict secara aman; mengembalikan {} jika gagal."""
+    if not path or not os.path.exists(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data if isinstance(data, dict) else {}
+
+
+def _atomic_write_json(path: str, data: dict) -> None:
+    """Menulis JSON secara atomic memakai file sementara di direktori yang sama."""
+    parent = os.path.dirname(os.path.abspath(path))
+    os.makedirs(parent, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(prefix=".cfg_", suffix=".tmp", dir=parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+        os.replace(tmp_path, path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        raise
+
+
 def load_config():
     """
-    Memuat konfigurasi aplikasi dengan sistem multi-layer:
-    1. Nilai bawaan sistem (DEFAULT_CONFIG)
-    2. File bersama (config.json)
-    3. File override lokal pengguna (config.local.json) - Kebal git pull / update GitHub!
+    Memuat konfigurasi aplikasi dengan sistem 2-file:
+    1. Nilai bawaan sistem (DEFAULT_CONFIG) + template GitHub (config.default.json)
+    2. Konfigurasi personal lokal pengguna (config.json - untracked / .gitignore)
+    Jika config.json belum ada (fresh install), file dibuat otomatis dari layer default.
     """
-    config = DEFAULT_CONFIG.copy()
+    config = copy.deepcopy(DEFAULT_CONFIG)
+    base_hotkeys = copy.deepcopy(DEFAULT_HOTKEYS)
 
-    # Layer 1: config.json
-    if os.path.exists(CONFIG_FILE):
+    # Layer 1: config.default.json (Template resmi di GitHub)
+    if os.path.exists(DEFAULT_CONFIG_FILE):
         try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                config.update(data)
+            default_data = _read_json_dict(DEFAULT_CONFIG_FILE)
+            if isinstance(default_data.get("hotkeys"), dict):
+                base_hotkeys.update(default_data["hotkeys"])
+            config.update(default_data)
         except Exception as e:
-            print(f"[!] Error loading config: {e}, using default.")
+            print(f"[!] Error loading default config: {e}, using built-in default.")
 
-    # Layer 2: config.local.json (Local Override - Tidak dilacak oleh git)
-    if os.path.exists(LOCAL_CONFIG_FILE):
+    config["hotkeys"] = copy.deepcopy(base_hotkeys)
+
+    # Fresh install: buat config.json lokal dari template default bila belum ada
+    if not os.path.exists(CONFIG_FILE):
         try:
-            with open(LOCAL_CONFIG_FILE, "r", encoding="utf-8") as f:
-                local_data = json.load(f)
-                config.update(local_data)
+            _atomic_write_json(CONFIG_FILE, config)
         except Exception as e:
-            print(f"[!] Error loading local config override: {e}")
+            print(f"[!] Gagal membuat config.json awal: {e}")
+        return config
 
-    # Pastikan semua kunci hotkey default tersedia
-    merged_hotkeys = DEFAULT_HOTKEYS.copy()
-    if isinstance(config.get("hotkeys"), dict):
-        merged_hotkeys.update(config["hotkeys"])
-    config["hotkeys"] = merged_hotkeys
+    # Layer 2: config.json (Konfigurasi personal lokal pengguna)
+    try:
+        user_data = _read_json_dict(CONFIG_FILE)
+        config.update(user_data)
+        merged_hotkeys = copy.deepcopy(base_hotkeys)
+        if isinstance(user_data.get("hotkeys"), dict):
+            merged_hotkeys.update(user_data["hotkeys"])
+        config["hotkeys"] = merged_hotkeys
+    except Exception as e:
+        print(f"[!] Error loading config: {e}, using default.")
 
     return config
+
 
 def extract_mode_state(cfg: dict) -> dict:
     """Mengambil salinan field pengaturan Tab MODE dari dict konfigurasi."""
@@ -119,27 +156,23 @@ def extract_mode_state(cfg: dict) -> dict:
 
 
 def load_txt_mode_state() -> dict:
-    """Memuat pengaturan MODE lokal khusus Mode File TXT dari config.json + config.local.json."""
+    """Memuat pengaturan MODE lokal khusus Mode File CSV/TXT dari config.json."""
     return extract_mode_state(load_config())
 
 
 def save_txt_mode_state(mode_state: dict) -> bool:
-    """Menyimpan pengaturan MODE (misal hasil Download DB -> Lokal) ke config.local.json untuk Mode File TXT."""
+    """Menyimpan pengaturan MODE (misal hasil Download DB -> Lokal) ke config.json untuk Mode File CSV/TXT."""
     if not isinstance(mode_state, dict):
         return False
     try:
-        local_cfg = {}
-        if os.path.exists(LOCAL_CONFIG_FILE):
-            try:
-                with open(LOCAL_CONFIG_FILE, "r", encoding="utf-8") as f:
-                    local_cfg = json.load(f)
-            except Exception:
-                local_cfg = {}
+        try:
+            local_cfg = _read_json_dict(CONFIG_FILE)
+        except Exception:
+            local_cfg = {}
         for k in MODE_SYNC_KEYS:
             if k in mode_state:
                 local_cfg[k] = copy.deepcopy(mode_state[k])
-        with open(LOCAL_CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(local_cfg, f, indent=4)
+        _atomic_write_json(CONFIG_FILE, local_cfg)
         return True
     except Exception as e:
         print(f"[!] Gagal menyimpan mode TXT lokal: {e}")
@@ -148,78 +181,26 @@ def save_txt_mode_state(mode_state: dict) -> bool:
 
 def save_config(cfg):
     """
-    Menyimpan konfigurasi:
-    1. Menyimpan ke config.json (file konfigurasi umum)
-    2. Menyimpan pengaturan lokal spesifik pengguna ke config.local.json (kebal git update/pull)
-    Saat storage_mode == 'supabase', kunci MODE_SYNC_KEYS di config.local.json tetap
-    dipertahankan untuk Mode File TXT agar tidak tertimpa oleh profil database privat.
+    Menyimpan konfigurasi ke config.json lokal secara atomic.
+    Saat storage_mode == 'supabase', kunci MODE_SYNC_KEYS di config.json tetap
+    dipertahankan untuk Mode File CSV/TXT agar tidak tertimpa oleh profil database privat.
     """
     try:
         is_db_mode = (cfg.get("storage_mode", "txt") == "supabase")
 
-        existing_main = {}
-        if os.path.exists(CONFIG_FILE):
-            try:
-                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                    existing_main = json.load(f)
-            except Exception:
-                existing_main = {}
+        existing_cfg = {}
+        try:
+            existing_cfg = _read_json_dict(CONFIG_FILE)
+        except Exception:
+            existing_cfg = {}
 
-        cfg_to_main = copy.deepcopy(cfg)
+        cfg_to_save = copy.deepcopy(cfg)
         if is_db_mode:
             for mk in MODE_SYNC_KEYS:
-                if mk in existing_main:
-                    cfg_to_main[mk] = existing_main[mk]
+                if mk in existing_cfg:
+                    cfg_to_save[mk] = copy.deepcopy(existing_cfg[mk])
 
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(cfg_to_main, f, indent=4)
-
-        # Simpan preferensi lokal pengguna ke config.local.json (kebal git pull / update GitHub / checkout)
-        local_keys = [
-            "dev_mode",
-            "allow_multiple_instances",
-            "auto_check_update_on_startup",
-            "show_word_datetime",
-            "show_word_author",
-            "game_mode",
-            "mode_santai",
-            "brutal_mode_tags",
-            "saved_normal_tags",
-            "saved_default_tags",
-            "santai_auto_disabled_tags",
-            "tier0_sort_mode",
-            "custom_trap_endings",
-            "screen_area",
-            "gameplay_area",
-            "scan_interval_sec",
-            "auto_copy_top_word",
-            "use_kbbi",
-            "use_contek",
-            "window_geometry",
-            "report_hotkey",
-            "hotkeys",
-            "storage_mode",
-            "supabase_url",
-            "supabase_anon_key",
-            "sync_nickname"
-        ]
-        local_cfg = {}
-        if os.path.exists(LOCAL_CONFIG_FILE):
-            try:
-                with open(LOCAL_CONFIG_FILE, "r", encoding="utf-8") as f:
-                    local_cfg = json.load(f)
-            except Exception:
-                local_cfg = {}
-
-        for k in local_keys:
-            if is_db_mode and k in MODE_SYNC_KEYS and k in local_cfg:
-                continue
-            if k in cfg:
-                local_cfg[k] = cfg[k]
-
-        with open(LOCAL_CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(local_cfg, f, indent=4)
-
+        _atomic_write_json(CONFIG_FILE, cfg_to_save)
         return True
     except Exception as e:
         print(f"[!] Gagal menyimpan config: {e}")

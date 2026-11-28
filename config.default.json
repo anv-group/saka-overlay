@@ -1,0 +1,72 @@
+{
+    "screen_area": {
+        "top": 300,
+        "left": 600,
+        "width": 400,
+        "height": 120
+    },
+    "scan_interval_sec": 0.08,
+    "game_mode": "normal",
+    "mode_santai": false,
+    "brutal_mode_tags": [
+        "AMSI",
+        "KSO",
+        "RHU",
+        "TL",
+        "BD"
+    ],
+    "saved_normal_tags": [],
+    "saved_default_tags": [],
+    "santai_auto_disabled_tags": [],
+    "report_hotkey": "F2",
+    "hotkeys": {
+        "toggle_scan": "F1",
+        "flag_error": "F2",
+        "add_whitelist": "F3",
+        "add_blocklist": "F4",
+        "add_kamus": "F7",
+        "add_tag": "F6",
+        "cycle_mode": ""
+    },
+    "ocr_engine": "winocr",
+    "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+    "updater_mode": "prompt",
+    "updater_branch": "main",
+    "auto_check_update_on_startup": true,
+    "allow_multiple_instances": false,
+    "use_kbbi": true,
+    "use_contek": true,
+    "gameplay_indexing_enabled": true,
+    "gameplay_area": {
+        "left": 740,
+        "top": 250,
+        "width": 440,
+        "height": 400
+    },
+    "auto_blacklist_invalid": true,
+    "auto_learn_valid": true,
+    "tier0_sort_mode": "default",
+    "show_word_datetime": false,
+    "show_word_author": false,
+    "two_tone_text": true,
+    "dev_mode": false,
+    "storage_mode": "txt",
+    "supabase_url": "",
+    "supabase_anon_key": "",
+    "sync_nickname": "",
+    "auto_copy_top_word": false,
+    "dict_filter_exclusive": false,
+    "always_on_top": true,
+    "custom_trap_endings": [
+        {
+            "suffix": "NS",
+            "enabled": true,
+            "color": "#cba6f7"
+        },
+        {
+            "suffix": "NGK",
+            "enabled": true,
+            "color": "#f5c2e7"
+        }
+    ]
+}

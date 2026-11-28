@@ -363,10 +363,10 @@ class TestSolverDualMode(unittest.TestCase):
     def test_config_mode_isolation_between_txt_and_supabase(self):
         with tempfile.TemporaryDirectory() as td:
             orig_main = cfg_mod.CONFIG_FILE
-            orig_local = cfg_mod.LOCAL_CONFIG_FILE
+            orig_default = cfg_mod.DEFAULT_CONFIG_FILE
             try:
                 cfg_mod.CONFIG_FILE = os.path.join(td, "config.json")
-                cfg_mod.LOCAL_CONFIG_FILE = os.path.join(td, "config.local.json")
+                cfg_mod.DEFAULT_CONFIG_FILE = os.path.join(td, "config.default.json")
 
                 txt_cfg = dict(cfg_mod.DEFAULT_CONFIG)
                 txt_cfg["storage_mode"] = "txt"
@@ -387,7 +387,47 @@ class TestSolverDualMode(unittest.TestCase):
                 self.assertEqual(restored_txt["custom_trap_endings"][0]["suffix"], "NS")
             finally:
                 cfg_mod.CONFIG_FILE = orig_main
-                cfg_mod.LOCAL_CONFIG_FILE = orig_local
+                cfg_mod.DEFAULT_CONFIG_FILE = orig_default
+
+    def test_load_config_seeds_from_default_and_merges_new_hotkeys(self):
+        with tempfile.TemporaryDirectory() as td:
+            orig_main = cfg_mod.CONFIG_FILE
+            orig_default = cfg_mod.DEFAULT_CONFIG_FILE
+            try:
+                cfg_mod.CONFIG_FILE = os.path.join(td, "config.json")
+                cfg_mod.DEFAULT_CONFIG_FILE = os.path.join(td, "config.default.json")
+
+                default_payload = dict(cfg_mod.DEFAULT_CONFIG)
+                default_payload["updater_branch"] = "main"
+                default_payload["hotkeys"] = {
+                    **cfg_mod.DEFAULT_HOTKEYS,
+                    "quick_ping": "F9",
+                }
+                with open(cfg_mod.DEFAULT_CONFIG_FILE, "w", encoding="utf-8") as f:
+                    json.dump(default_payload, f)
+
+                # Fresh install: otomatis membuat config.json dari config.default.json
+                seeded = cfg_mod.load_config()
+                self.assertTrue(os.path.exists(cfg_mod.CONFIG_FILE))
+                self.assertEqual(seeded["hotkeys"]["quick_ping"], "F9")
+
+                # User mengubah bind + mengisi kredensial, lalu default menambah hotkey baru
+                user_cfg = dict(seeded)
+                user_cfg["supabase_url"] = "https://example.supabase.co"
+                user_cfg["hotkeys"] = {"toggle_scan": "F10"}
+                self.assertTrue(cfg_mod.save_config(user_cfg))
+
+                default_payload["hotkeys"]["extra_bind"] = "F11"
+                with open(cfg_mod.DEFAULT_CONFIG_FILE, "w", encoding="utf-8") as f:
+                    json.dump(default_payload, f)
+
+                loaded = cfg_mod.load_config()
+                self.assertEqual(loaded["supabase_url"], "https://example.supabase.co")
+                self.assertEqual(loaded["hotkeys"]["toggle_scan"], "F10")
+                self.assertEqual(loaded["hotkeys"]["extra_bind"], "F11")
+            finally:
+                cfg_mod.CONFIG_FILE = orig_main
+                cfg_mod.DEFAULT_CONFIG_FILE = orig_default
 
     def test_presence_state_and_diff_tracking(self):
         pmap = {}
@@ -483,19 +523,19 @@ class TestSolverDualMode(unittest.TestCase):
             self.assertEqual(bl_n2, 1)  # hanya buka
             self.assertEqual(cm_n2, 0)  # sudah masuk sebelumnya
 
-            # 3. save_txt_mode_state menulis ke config.local.json
+            # 3. save_txt_mode_state menulis ke config.json
             orig_main = cfg_mod.CONFIG_FILE
-            orig_local = cfg_mod.LOCAL_CONFIG_FILE
+            orig_default = cfg_mod.DEFAULT_CONFIG_FILE
             try:
                 cfg_mod.CONFIG_FILE = os.path.join(td, "config.json")
-                cfg_mod.LOCAL_CONFIG_FILE = os.path.join(td, "config.local.json")
+                cfg_mod.DEFAULT_CONFIG_FILE = os.path.join(td, "config.default.json")
                 self.assertTrue(cfg_mod.save_txt_mode_state({"game_mode": "santai", "tier0_sort_mode": "tag_order"}))
                 loaded = cfg_mod.load_txt_mode_state()
                 self.assertEqual(loaded["game_mode"], "santai")
                 self.assertEqual(loaded["tier0_sort_mode"], "tag_order")
             finally:
                 cfg_mod.CONFIG_FILE = orig_main
-                cfg_mod.LOCAL_CONFIG_FILE = orig_local
+                cfg_mod.DEFAULT_CONFIG_FILE = orig_default
 
     def test_csv_migration_readonly_dicts_duplicate_guard_and_newest_sort(self):
         with tempfile.TemporaryDirectory() as td:

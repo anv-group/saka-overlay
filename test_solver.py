@@ -38,20 +38,21 @@ class TestSambungKataSolver(unittest.TestCase):
             self.assertFalse(any(x["tipe"] in ("JEBAKAN_X", "JEBAKAN_SULIT") for x in hasil))
 
     def test_custom_ending_traps(self):
-        """Memastikan custom ending categories (seperti NS, NGK) berprioritas super tanpa prefix 'Akhiran '"""
+        """Memastikan custom ending categories (seperti NS, NGK) berprioritas menggunakan suffix langsung"""
         custom_rules = [
-            {"suffix": "NS", "name": "Akhiran NS", "color": "#cba6f7", "enabled": True}
+            {"suffix": "NS", "color": "#cba6f7", "enabled": True}
         ]
         hasil = self.solver.cari_jawaban("LE", limit=10, custom_endings=custom_rules)
 
         custom_traps = [x for x in hasil if x["tipe"] == "CUSTOM_TRAP"]
         self.assertTrue(len(custom_traps) > 0)
         self.assertTrue(custom_traps[0]["kata"].upper().endswith("NS"))
-        self.assertEqual(custom_traps[0]["badge_name"], "NS")
+        self.assertEqual(custom_traps[0]["suffix"], "NS")
+        self.assertEqual(custom_traps[0]["deskripsi"], "NS")
 
         # Uji jika dinonaktifkan (enabled=False)
         custom_disabled = [
-            {"suffix": "NS", "name": "NS", "color": "#cba6f7", "enabled": False}
+            {"suffix": "NS", "color": "#cba6f7", "enabled": False}
         ]
         hasil_dis = self.solver.cari_jawaban("LE", limit=10, custom_endings=custom_disabled)
         custom_dis_traps = [x for x in hasil_dis if x["tipe"] == "CUSTOM_TRAP"]
@@ -71,8 +72,8 @@ class TestSambungKataSolver(unittest.TestCase):
 
         # Pastikan custom endings dengan huruf terlarang (X, Q, F seperti IF) otomatis diabaikan di Mode Santai
         custom_rules = [
-            {"suffix": "IF", "name": "Akhiran IF", "enabled": True, "color": "#89dceb"},
-            {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"}
+            {"suffix": "IF", "enabled": True, "color": "#89dceb"},
+            {"suffix": "NS", "enabled": True, "color": "#cba6f7"}
         ]
         hasil_custom = self.solver.cari_jawaban("A", limit=20, mode_santai=True, custom_endings=custom_rules)
         if_traps = [x for x in hasil_custom if x.get("suffix") == "IF"]
@@ -81,11 +82,11 @@ class TestSambungKataSolver(unittest.TestCase):
     def test_mode_brutal(self):
         """Memastikan Mode Brutal memprioritaskan tag jebakan brutal (AMSI, KSO, RHU, TL, BD) di Tier 0"""
         brutal_rules = [
-            {"suffix": "AMSI", "name": "Akhiran AMSI", "enabled": True, "color": "#f9e2af"},
-            {"suffix": "KSO", "name": "Akhiran KSO", "enabled": True, "color": "#a6e3a1"},
-            {"suffix": "RHU", "name": "Akhiran RHU", "enabled": True, "color": "#fab387"},
-            {"suffix": "TL", "name": "Akhiran TL", "enabled": True, "color": "#94e2d5"},
-            {"suffix": "BD", "name": "Akhiran BD", "enabled": True, "color": "#cba6f7"},
+            {"suffix": "AMSI", "enabled": True, "color": "#f9e2af"},
+            {"suffix": "KSO", "enabled": True, "color": "#a6e3a1"},
+            {"suffix": "RHU", "enabled": True, "color": "#fab387"},
+            {"suffix": "TL", "enabled": True, "color": "#94e2d5"},
+            {"suffix": "BD", "enabled": True, "color": "#cba6f7"},
         ]
         hasil = self.solver.cari_jawaban("AK", limit=20, mode_brutal=True, custom_endings=brutal_rules)
         self.assertTrue(len(hasil) > 0)
@@ -121,7 +122,7 @@ class TestSambungKataSolver(unittest.TestCase):
 
     def test_whitelist_mechanism_and_category_priority(self):
         """Memastikan kata di whitelist menjadi prioritas teratas di kategorinya dan aktif di memori"""
-        custom_x = [{"suffix": "X", "name": "X", "enabled": True, "color": "#f38ba8"}]
+        custom_x = [{"suffix": "X", "enabled": True, "color": "#f38ba8"}]
         kata_baru = "zzwhitelistx"
         self.assertFalse(self.solver.has_word(kata_baru))
         self.solver.whitelist_word(kata_baru)
@@ -150,8 +151,8 @@ class TestSambungKataSolver(unittest.TestCase):
     def test_tier0_sort_modes_default_and_tag_order(self):
         """Memastikan mode sortir Tier 0 (default: panjang & abjad vs tag_order: urutan tag kustom) bekerja akurat"""
         custom_rules = [
-            {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"},
-            {"suffix": "MP", "name": "Akhiran MP", "enabled": True, "color": "#89dceb"}
+            {"suffix": "NS", "enabled": True, "color": "#cba6f7"},
+            {"suffix": "MP", "enabled": True, "color": "#89dceb"}
         ]
 
         # 1. Mode Default: Mengutamakan panjang 4-7 dan urutan abjad antar tag
@@ -171,8 +172,8 @@ class TestSambungKataSolver(unittest.TestCase):
 
         # 3. Mode Tag Order Dibalik: Tag 0 (MP) harus muncul SEMUA sebelum Tag 1 (NS)
         custom_rules_rev = [
-            {"suffix": "MP", "name": "Akhiran MP", "enabled": True, "color": "#89dceb"},
-            {"suffix": "NS", "name": "Akhiran NS", "enabled": True, "color": "#cba6f7"}
+            {"suffix": "MP", "enabled": True, "color": "#89dceb"},
+            {"suffix": "NS", "enabled": True, "color": "#cba6f7"}
         ]
         res_rev = self.solver.cari_jawaban("S", limit=100, custom_endings=custom_rules_rev, sort_mode="tag_order")
         custom_rev = [f"{x['kata']}[{x['suffix']}]" for x in res_rev if x["tipe"] == "CUSTOM_TRAP"]
@@ -185,8 +186,8 @@ class TestSambungKataSolver(unittest.TestCase):
     def test_search_dictionary_prefix_suffix_and_tags(self):
         """Memastikan fitur pencarian kamus (prefix, suffix, contains, dan multi-tag) bekerja akurat"""
         custom_rules = [
-            {"suffix": "NS", "name": "Akhiran NS"},
-            {"suffix": "MP", "name": "Akhiran MP"}
+            {"suffix": "NS"},
+            {"suffix": "MP"}
         ]
         self.solver.set_custom_endings(custom_rules)
 
