@@ -19,7 +19,7 @@ import zipfile
 
 import requests
 
-DEFAULT_GITHUB_REPO = "anv-group/sambung-kata-overlay"
+DEFAULT_GITHUB_REPO = "anv-group/saka-overlay"
 UPDATER_STATE_FILE = "updater_state.json"
 _CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
 

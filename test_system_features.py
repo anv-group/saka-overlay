@@ -435,7 +435,7 @@ class TestNonGitHttpsUpdater(unittest.TestCase):
 
     def test_mode_detection_and_untracked_auto_vs_manual_check(self):
         with tempfile.TemporaryDirectory() as td:
-            upd = GitUpdater(repo_dir=td, github_repo="anv-group/sambung-kata-overlay")
+            upd = GitUpdater(repo_dir=td, github_repo="anv-group/saka-overlay")
             with mock.patch("updater.shutil.which", return_value=None):
                 self.assertEqual(upd.get_updater_mode(), "https")
                 self.assertEqual(upd.get_current_commit()["hash"], "unknown")
@@ -475,11 +475,11 @@ class TestNonGitHttpsUpdater(unittest.TestCase):
 
             zip_bytes = self._build_zip_bytes(
                 {
-                    "sambung-kata-overlay-main/app_qt.py": "# updated\n",
-                    "sambung-kata-overlay-main/config.json": '{"supabase_url": ""}',
-                    "sambung-kata-overlay-main/whitelist.csv": "word,datetime\ngithubword,\n",
-                    "sambung-kata-overlay-main/blacklist.csv": "word,datetime\nbadword,\n",
-                    "sambung-kata-overlay-main/kamus_custom.csv": "word,datetime\noverwrite,\n",
+                    "saka-overlay-main/app_qt.py": "# updated\n",
+                    "saka-overlay-main/config.json": '{"supabase_url": ""}',
+                    "saka-overlay-main/whitelist.csv": "word,datetime\ngithubword,\n",
+                    "saka-overlay-main/blacklist.csv": "word,datetime\nbadword,\n",
+                    "saka-overlay-main/kamus_custom.csv": "word,datetime\noverwrite,\n",
                 },
                 comment_sha="deadbeef1234567890abcdef1234567890abcdef",
             )
@@ -490,7 +490,7 @@ class TestNonGitHttpsUpdater(unittest.TestCase):
                 # Simulasikan API commits gagal/rate-limit -> fallback ke ZipFile.comment SHA!
                 return _FakeResp(403, headers={"X-RateLimit-Remaining": "0"})
 
-            upd = GitUpdater(repo_dir=td, github_repo="anv-group/sambung-kata-overlay")
+            upd = GitUpdater(repo_dir=td, github_repo="anv-group/saka-overlay")
             with mock.patch("updater.shutil.which", return_value=None), mock.patch("updater.requests.get", side_effect=_fake_get):
                 ok, msg = upd.apply_update(target_branch="main")
 
@@ -515,7 +515,7 @@ class TestNonGitHttpsUpdater(unittest.TestCase):
     def test_apply_update_rejects_zip_slip_and_reports_rate_limit(self):
         with tempfile.TemporaryDirectory() as td:
             bad_zip = self._build_zip_bytes({"../../evil.txt": "pwned"})
-            upd = GitUpdater(repo_dir=td, github_repo="anv-group/sambung-kata-overlay")
+            upd = GitUpdater(repo_dir=td, github_repo="anv-group/saka-overlay")
 
             with mock.patch("updater.shutil.which", return_value=None):
                 with mock.patch("updater.requests.get", return_value=_FakeResp(200, content=bad_zip)):

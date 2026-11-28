@@ -15,14 +15,14 @@
   1. Tanpa dependency pihak ketiga baru: hanya memakai stdlib Python (`zipfile`, `shutil`, `tempfile`, `json`) dan `requests>=2.31.0` yang sudah tercantum di `requirements.txt`.
   2. File data personal (`config.json`, `updater_state.json`, `kamus_custom.csv`, `db_cache.json`, `sample/`, `deteksi-gameplay/`) **serta** `whitelist.csv` dan `blacklist.csv` yang sudah ada di disk user **tidak boleh ditimpa** saat ekstrak ZIP.
   3. Untuk instalasi *fresh Download ZIP* yang belum pernah mencatat hash commit lokal, pengecekan otomatis saat startup tidak langsung memunculkan notifikasi/prompt update; user tetap bisa sinkronisasi awal lewat tombol manual **Cek Update** atau **Ganti Branch**.
-- **Di luar cakupan (*Non-Goals*):** Tidak menginstal Git otomatis (`winget`/installer) dan tidak mendukung autentikasi repository privat (repository diasumsikan publik: `anv-group/sambung-kata-overlay`).
+- **Di luar cakupan (*Non-Goals*):** Tidak menginstal Git otomatis (`winget`/installer) dan tidak mendukung autentikasi repository privat (repository diasumsikan publik: `anv-group/saka-overlay`).
 
 ---
 
 ## 2. Assumptions & Non-Functional Requirements
 
 - **Performa:** Request GitHub REST API memakai timeout 8–12 detik; unduhan archive ZIP memakai `stream=True` dengan timeout 60 detik di background thread agar UI PySide6 tidak freeze.
-- **Keamanan & Privasi:** Hanya mengakses host resmi GitHub (`api.github.com` & `codeload.github.com`) untuk repo `anv-group/sambung-kata-overlay`, dengan validasi path ekstraksi (`os.path.realpath`) untuk mencegah *Zip-Slip / path traversal*. Tidak menyimpan kredensial/token GitHub.
+- **Keamanan & Privasi:** Hanya mengakses host resmi GitHub (`api.github.com` & `codeload.github.com`) untuk repo `anv-group/saka-overlay`, dengan validasi path ekstraksi (`os.path.realpath`) untuk mencegah *Zip-Slip / path traversal*. Tidak menyimpan kredensial/token GitHub.
 - **Keandalan (*Reliability*):** Ekstraksi dan persiapan salin dilakukan di direktori staging sementara (`tempfile`) yang selalu dibersihkan di blok `finally`; `updater_state.json` hanya ditulis setelah penyalinan file berhasil. Rate limit GitHub API unauthenticated (60 req/jam per IP) ditangani dengan pesan informatif dan fallback SHA dari `zipfile.ZipFile.comment`.
 - **Kompatibilitas Kontrak:** Struktur return `GitUpdater` (`check_for_updates`, `apply_update`, `get_available_branches`, `get_current_branch`, `get_current_commit`) tetap kompatibel dengan `app_qt.py` dan `tab_views_qt.py`.
 
@@ -46,7 +46,7 @@
 1. **Deteksi Mode di `GitUpdater` (`updater.py`):**
    - `has_git_cli()` memeriksa `shutil.which("git") is not None`.
    - `get_updater_mode()` mengembalikan `"git"` hanya jika `has_git_cli()` dan `is_git_repo()` sama-sama `True`; selain itu `"https"`.
-   - Konstanta target repository: `DEFAULT_GITHUB_REPO = "anv-group/sambung-kata-overlay"` (jika `.git/config` memiliki URL origin GitHub valid meski tanpa CLI `git`, boleh dipakai dengan fallback ke konstanta ini).
+   - Konstanta target repository: `DEFAULT_GITHUB_REPO = "anv-group/saka-overlay"` (jika `.git/config` memiliki URL origin GitHub valid meski tanpa CLI `git`, boleh dipakai dengan fallback ke konstanta ini).
 2. **`updater_state.json` (`.gitignore`):**
    - Disimpan di root aplikasi (sama dengan `repo_dir`), berformat:
      ```json

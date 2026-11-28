@@ -4575,9 +4575,9 @@ class QtSystemTabView(QWidget):
 
     def _open_commit_link(self):
         if not self.commit_hash or self.commit_hash.lower() == "unknown":
-            url = "https://github.com/anv-group/sambung-kata-overlay"
+            url = "https://github.com/anv-group/saka-overlay"
         else:
-            url = f"https://github.com/anv-group/sambung-kata-overlay/commit/{self.commit_hash}"
+            url = f"https://github.com/anv-group/saka-overlay/commit/{self.commit_hash}"
         webbrowser.open(url)
 
     def update_branch_warning(self, branch_name: str):
